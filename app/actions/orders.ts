@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getOtoRates } from "@/lib/oto/rates";
+import { getCustomerSession } from "@/lib/auth";
 import type { Coupon, Carrier, PaymentMethod, Order } from "@/types";
 
 export async function getCheckoutData() {
@@ -180,6 +181,19 @@ export async function createOrderAction(formData: FormData) {
     .single();
 
   if (error) return { error: error.message };
+
+  const customer = await getCustomerSession();
+  if (customer && customer.phone === phone && (city || region || address || latitude || longitude)) {
+    const admin = createAdminClient();
+    const { data: existing } = await admin.from("addresses").select("id").eq("customer_identifier", phone).eq("city", city || null).eq("address", address || null).maybeSingle();
+    if (existing?.id) {
+      await admin.from("addresses").update({ region: region || null, national_address: nationalAddress || null, latitude: latitude || null, longitude: longitude || null, maps_url: mapsUrl || null }).eq("id", existing.id);
+    } else {
+      const { count } = await admin.from("addresses").select("id", { count: "exact", head: true }).eq("customer_identifier", phone);
+      await admin.from("addresses").insert({ customer_identifier: phone, full_name: name, phone, label: "عنوان الطلب", city: city || null, region: region || null, address: address || null, national_address: nationalAddress || null, latitude: latitude || null, longitude: longitude || null, maps_url: mapsUrl || null, is_default: !count });
+    }
+    revalidatePath("/account");
+  }
 
   if (couponCode && finalDiscount > 0) {
     const { data: c } = await supabase.from("coupons").select("used_count").eq("code", couponCode).maybeSingle();

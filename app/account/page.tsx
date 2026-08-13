@@ -12,14 +12,9 @@ import { getCategoriesList } from "@/lib/services/products";
 import { formatCurrency } from "@/lib/format";
 import { Currency } from "@/components/storefront/currency";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { createReturnRequestAction, saveCustomerAddressAction } from "@/app/actions/customer-data";
+import { createReturnRequestAction } from "@/app/actions/customer-data";
 
 export const metadata: Metadata = { title: "حسابي | لمعة" };
-
-async function saveAddressForm(formData: FormData) {
-  "use server";
-  await saveCustomerAddressAction(formData);
-}
 
 async function requestReturnForm(formData: FormData) {
   "use server";
@@ -106,16 +101,7 @@ export default async function AccountPage() {
                 {address.maps_url && <a href={address.maps_url} target="_blank" rel="noreferrer" className="mt-3 inline-flex items-center gap-1 text-xs font-bold text-gold">فتح الخريطة <ExternalLink className="h-3 w-3" /></a>}
               </article>
             ))}
-            <form action={saveAddressForm} className="rounded-2xl border border-dashed border-gold/50 bg-amber-50/40 p-4 space-y-2">
-              <input type="hidden" name="phone" value={session.phone} />
-               <input name="label" placeholder="اسم العنوان: المنزل" className="input-lux" />
-               <input name="city" placeholder="المدينة" className="input-lux" />
-               <input name="region" placeholder="المنطقة" className="input-lux" />
-               <input name="address" placeholder="وصف العنوان" className="input-lux" />
-               <input name="national_address" placeholder="العنوان الوطني (اختياري)" className="input-lux" />
-               <div className="grid grid-cols-2 gap-2"><input name="latitude" placeholder="خط العرض (اختياري)" className="input-lux" /><input name="longitude" placeholder="خط الطول (اختياري)" className="input-lux" /></div>
-               <button className="w-full rounded-xl bg-ink py-2.5 text-sm font-bold text-white">حفظ العنوان</button>
-            </form>
+            {(addresses || []).length === 0 && <p className="rounded-2xl border border-dashed border-sand bg-stone-50 p-4 text-sm text-stone-500">ستُحفظ عناوينك تلقائياً عند إتمام الطلب.</p>}
           </div>
         </section>
 
