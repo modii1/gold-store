@@ -14,6 +14,28 @@ export type CheckoutShippingOption = ShippingQuote & {
   freeAbove?: number | null;
 };
 
+export async function reverseGeocodeAction(latitude: string, longitude: string) {
+  const lat = Number(latitude);
+  const lon = Number(longitude);
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return { error: "إحداثيات الموقع غير صحيحة" };
+
+  try {
+    const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lon}&zoom=18&addressdetails=1&accept-language=ar`, {
+      headers: { "User-Agent": "Lama-Gold-Store/1.0" },
+      cache: "no-store",
+    });
+    if (!response.ok) return { error: "تعذر قراءة عنوان الموقع" };
+    const result = await response.json() as { display_name?: string; address?: Record<string, string> };
+    const address = result.address || {};
+    const city = address.city || address.town || address.village || address.municipality || address.county || "";
+    const region = address.state || address.region || "";
+    const line = [address.road, address.house_number, address.neighbourhood || address.suburb].filter(Boolean).join(" ") || result.display_name || "موقع محدد بالخريطة";
+    return { city, region, address: line, displayName: result.display_name || line };
+  } catch {
+    return { error: "تعذر تحويل الموقع إلى عنوان" };
+  }
+}
+
 export async function getCheckoutRatesAction(city: string, weightKg: number, codAmount: number): Promise<CheckoutShippingOption[]> {
   const normalized = (city || "").trim();
   const carriers = await getCarriers(true);

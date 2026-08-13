@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Loader2, Tag, ShoppingBag, ShieldCheck, Truck, Landmark, Sparkles, MapPin, CheckCircle2 } from "lucide-react";
 import { useCart } from "@/components/storefront/providers";
 import { createOrderAction, validateCouponAction } from "@/app/actions/orders";
-import { getCheckoutRatesAction, type CheckoutShippingOption } from "@/app/actions/shipping";
+import { getCheckoutRatesAction, reverseGeocodeAction, type CheckoutShippingOption } from "@/app/actions/shipping";
 import { Currency } from "@/components/storefront/currency";
 import { cn } from "@/lib/utils";
 import type { Settings, Carrier, PaymentMethod } from "@/types";
@@ -25,6 +25,7 @@ export function CheckoutForm({ settings, shipping, payment }: { settings: Settin
   const [locationLoading, setLocationLoading] = useState(false);
   const [locationReady, setLocationReady] = useState(false);
   const [manualLocation, setManualLocation] = useState(false);
+  const [resolvedAddress, setResolvedAddress] = useState("");
   const [coordinates, setCoordinates] = useState({ latitude: "", longitude: "" });
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -87,11 +88,19 @@ export function CheckoutForm({ settings, shipping, payment }: { settings: Settin
       const latitude = position.coords.latitude.toFixed(7);
       const longitude = position.coords.longitude.toFixed(7);
       setCoordinates({ latitude, longitude });
-      setLocationReady(true);
-      setManualLocation(false);
-      setCity("الموقع المحدد بالخريطة");
-      setError("");
-      setLocationLoading(false);
+      reverseGeocodeAction(latitude, longitude).then((result) => {
+        if ("error" in result) {
+          setManualLocation(true);
+          setError("تم تحديد الموقع لكن تعذر قراءة العنوان، يمكنك إدخاله يدوياً");
+        } else {
+          setLocationReady(true);
+          setManualLocation(false);
+          setCity(result.city);
+          setResolvedAddress(result.address);
+          setError("");
+        }
+        setLocationLoading(false);
+      });
     }, () => { setManualLocation(true); setError("لم يتم تفعيل الموقع، يمكنك إدخال العنوان يدوياً"); setLocationLoading(false); }, { enableHighAccuracy: true, timeout: 12000 });
   };
 
@@ -139,7 +148,7 @@ export function CheckoutForm({ settings, shipping, payment }: { settings: Settin
               <>
                 <input type="hidden" name="city" value={city} />
                 <input type="hidden" name="region" value="" />
-                <input type="hidden" name="address" value={locationReady ? "موقع جغرافي محدد" : ""} />
+                <input type="hidden" name="address" value={resolvedAddress} />
                 <input type="hidden" name="national_address" value="" />
               </>
             )}
@@ -151,6 +160,7 @@ export function CheckoutForm({ settings, shipping, payment }: { settings: Settin
               {locationLoading ? "جار تحديد موقعك..." : locationReady ? "تم تحديد الموقع — اضغطي للتغيير" : "تحديد عنواني من موقعي الحالي"}
             </button>
             {manualLocation && <button type="button" onClick={useCurrentLocation} className="col-span-2 text-xs font-bold text-gold underline">محاولة تحديد الموقع مرة أخرى</button>}
+            {locationReady && <p className="col-span-2 rounded-xl bg-emerald-50 p-3 text-xs font-semibold text-emerald-700">تم تعبئة العنوان تلقائياً: {resolvedAddress}</p>}
             <textarea name="notes" rows={2} placeholder="ملاحظات الطلب (اختياري)" className="col-span-2 input-lux resize-y" />
           </div>
         </section>
