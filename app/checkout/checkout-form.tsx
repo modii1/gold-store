@@ -10,7 +10,7 @@ import { Currency } from "@/components/storefront/currency";
 import { cn } from "@/lib/utils";
 import type { Settings, Carrier, PaymentMethod } from "@/types";
 
-export function CheckoutForm({ settings, shipping, payment }: { settings: Settings; shipping: Carrier[]; payment: PaymentMethod[] }) {
+export function CheckoutForm({ settings, shipping, payment, customer }: { settings: Settings; shipping: Carrier[]; payment: PaymentMethod[]; customer: { name: string; phone: string } | null }) {
   const { items, subtotal, clearCart } = useCart();
   const router = useRouter();
   const [city, setCity] = useState("");
@@ -134,8 +134,8 @@ export function CheckoutForm({ settings, shipping, payment }: { settings: Settin
         <section className="rounded-2xl border border-sand bg-white p-5 md:p-6">
           <h2 className="flex items-center gap-2 font-bold text-ink mb-4"><Truck className="w-5 h-5 text-gold" /> بيانات الشحن</h2>
           <div className="grid grid-cols-2 gap-3">
-            <input name="name" required placeholder="الاسم الكامل *" className="col-span-2 input-lux" />
-            <input name="phone" required type="tel" placeholder="رقم الجوال *" className="col-span-2 input-lux" dir="ltr" />
+            <input name="name" required placeholder="الاسم الكامل *" defaultValue={customer?.name || ""} className="col-span-2 input-lux" />
+            <input name="phone" required type="tel" placeholder="رقم الجوال *" defaultValue={customer?.phone || ""} className="col-span-2 input-lux" dir="ltr" />
             <input name="email" type="email" placeholder="البريد الإلكتروني (اختياري)" className="col-span-2 input-lux" dir="ltr" />
             {manualLocation ? (
               <>

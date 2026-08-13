@@ -4,9 +4,10 @@ import { CheckoutForm } from "./checkout-form";
 import { getSettings } from "@/lib/services/settings";
 import { getCategoriesList } from "@/lib/services/products";
 import { getCheckoutData } from "@/app/actions/orders";
+import { getCustomerSession } from "@/lib/auth";
 
 export default async function CheckoutPage() {
-  const [settings, categories, checkout] = await Promise.all([getSettings(), getCategoriesList(), getCheckoutData()]);
+  const [settings, categories, checkout, customer] = await Promise.all([getSettings(), getCategoriesList(), getCheckoutData(), getCustomerSession()]);
 
   return (
     <>
@@ -14,7 +15,7 @@ export default async function CheckoutPage() {
       <main className="flex-1 mx-auto max-w-5xl px-4 md:px-6 py-8">
         <h1 className="text-2xl md:text-3xl font-bold text-ink">إتمام الطلب</h1>
         <p className="mt-1 text-sm text-stone-500">أدخلي بيانات الشحن واختاري طريقة الدفع</p>
-        <CheckoutForm settings={settings} shipping={checkout.shipping} payment={checkout.payment} />
+        <CheckoutForm settings={settings} shipping={checkout.shipping} payment={checkout.payment} customer={customer} />
       </main>
       <StoreFooter settings={settings} />
     </>
