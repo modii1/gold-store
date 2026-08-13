@@ -16,6 +16,16 @@ import { createReturnRequestAction, saveCustomerAddressAction } from "@/app/acti
 
 export const metadata: Metadata = { title: "حسابي | لمعة" };
 
+async function saveAddressForm(formData: FormData) {
+  "use server";
+  await saveCustomerAddressAction(formData);
+}
+
+async function requestReturnForm(formData: FormData) {
+  "use server";
+  await createReturnRequestAction(formData);
+}
+
 const STATUS: Record<string, { label: string; cls: string }> = {
   pending: { label: "قيد المراجعة", cls: "bg-amber-50 text-amber-700" },
   confirmed: { label: "مؤكد", cls: "bg-sky-50 text-sky-700" },
@@ -96,7 +106,7 @@ export default async function AccountPage() {
                 {address.maps_url && <a href={address.maps_url} target="_blank" rel="noreferrer" className="mt-3 inline-flex items-center gap-1 text-xs font-bold text-gold">فتح الخريطة <ExternalLink className="h-3 w-3" /></a>}
               </article>
             ))}
-            <form action={async (formData) => { await saveCustomerAddressAction(formData); }} className="rounded-2xl border border-dashed border-gold/50 bg-amber-50/40 p-4 space-y-2">
+            <form action={saveAddressForm} className="rounded-2xl border border-dashed border-gold/50 bg-amber-50/40 p-4 space-y-2">
               <input type="hidden" name="phone" value={session.phone} />
               <input name="label" placeholder="اسم العنوان: المنزل" className="input-lux" />
               <input name="city" placeholder="المدينة" className="input-lux" />
@@ -159,7 +169,7 @@ export default async function AccountPage() {
           <div className="mt-4 space-y-3">
             {(returns || []).map((request: any) => <div key={request.id} className="rounded-2xl bg-stone-50 p-4 text-sm"><div className="flex justify-between font-bold"><span>طلب #{request.order_id.slice(0, 8)}</span><span>{request.status}</span></div><p className="mt-1 text-stone-500">{request.reason} {request.details && `— ${request.details}`}</p></div>)}
           </div>
-          {orders.filter((o) => ["delivered", "paid"].includes(o.status)).map((order) => <form key={order.id} action={async (formData) => { await createReturnRequestAction(formData); }} className="mt-3 flex flex-wrap items-center gap-2"><input type="hidden" name="order_id" value={order.id} /><span className="text-sm">طلب #{order.order_number}</span><select name="reason" className="rounded-xl border border-sand px-3 py-2 text-sm"><option>استرجاع المنتج</option><option>منتج تالف</option><option>منتج غير مطابق</option></select><button className="rounded-xl bg-ink px-3 py-2 text-xs font-bold text-white">طلب استرجاع</button></form>)}
+          {orders.filter((o) => ["delivered", "paid"].includes(o.status)).map((order) => <form key={order.id} action={requestReturnForm} className="mt-3 flex flex-wrap items-center gap-2"><input type="hidden" name="order_id" value={order.id} /><span className="text-sm">طلب #{order.order_number}</span><select name="reason" className="rounded-xl border border-sand px-3 py-2 text-sm"><option>استرجاع المنتج</option><option>منتج تالف</option><option>منتج غير مطابق</option></select><button className="rounded-xl bg-ink px-3 py-2 text-xs font-bold text-white">طلب استرجاع</button></form>)}
         </section>
       </main>
       <StoreFooter settings={settings} />
