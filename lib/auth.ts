@@ -10,7 +10,8 @@ export async function setAdminSession() {
   const cookieStore = await cookies();
   cookieStore.set("admin_session", "ok", {
     httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
+    secure: true,
+    sameSite: "lax",
     maxAge: 60 * 60 * 12,
     path: "/",
   });
@@ -68,7 +69,8 @@ export async function setCustomerSession(customer: { id: string; name: string; p
   const token = signCustomerToken({ ...customer, exp: Date.now() + 1000 * 60 * 60 * 24 * 30 });
   cookieStore.set("customer_session", token, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
+    secure: true,
+    sameSite: "lax",
     maxAge: 60 * 60 * 24 * 30,
     path: "/",
   });
