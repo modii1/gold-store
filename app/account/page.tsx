@@ -35,11 +35,19 @@ export default async function AccountPage() {
     getCategoriesList(),
     getOrdersByPhoneAction(session.phone),
   ]);
-  const admin = createAdminClient();
-  const [{ data: addresses }, { data: returns }] = await Promise.all([
-    admin.from("addresses").select("*").eq("customer_identifier", session.phone).order("is_default", { ascending: false }).order("created_at", { ascending: false }),
-    admin.from("return_requests").select("id,order_id,reason,details,status,admin_note,created_at").eq("customer_identifier", session.phone).order("created_at", { ascending: false }),
-  ]);
+  let addresses: any[] = [];
+  let returns: any[] = [];
+  try {
+    const admin = createAdminClient();
+    const result = await Promise.all([
+      admin.from("addresses").select("*").eq("customer_identifier", session.phone).order("is_default", { ascending: false }).order("created_at", { ascending: false }),
+      admin.from("return_requests").select("id,order_id,reason,details,status,admin_note,created_at").eq("customer_identifier", session.phone).order("created_at", { ascending: false }),
+    ]);
+    addresses = result[0].data || [];
+    returns = result[1].data || [];
+  } catch {
+    // The account page remains usable if optional customer tables are unavailable.
+  }
 
   return (
     <>
