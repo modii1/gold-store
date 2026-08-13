@@ -24,6 +24,7 @@ export function CheckoutForm({ settings, shipping, payment }: { settings: Settin
   const [error, setError] = useState("");
   const [locationLoading, setLocationLoading] = useState(false);
   const [locationReady, setLocationReady] = useState(false);
+  const [manualLocation, setManualLocation] = useState(false);
   const [coordinates, setCoordinates] = useState({ latitude: "", longitude: "" });
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -80,16 +81,18 @@ export function CheckoutForm({ settings, shipping, payment }: { settings: Settin
   };
 
   const useCurrentLocation = () => {
-    if (!navigator.geolocation) { setError("المتصفح لا يدعم تحديد الموقع"); return; }
+    if (!navigator.geolocation) { setManualLocation(true); setError("المتصفح لا يدعم تحديد الموقع، يمكنك إدخال العنوان يدوياً"); return; }
     setLocationLoading(true);
     navigator.geolocation.getCurrentPosition((position) => {
       const latitude = position.coords.latitude.toFixed(7);
       const longitude = position.coords.longitude.toFixed(7);
       setCoordinates({ latitude, longitude });
       setLocationReady(true);
+      setManualLocation(false);
+      setCity("الموقع المحدد بالخريطة");
       setError("");
       setLocationLoading(false);
-    }, () => { setError("تعذر تحديد موقعك. اسمحي للموقع من إعدادات المتصفح."); setLocationLoading(false); }, { enableHighAccuracy: true, timeout: 12000 });
+    }, () => { setManualLocation(true); setError("لم يتم تفعيل الموقع، يمكنك إدخال العنوان يدوياً"); setLocationLoading(false); }, { enableHighAccuracy: true, timeout: 12000 });
   };
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -125,10 +128,21 @@ export function CheckoutForm({ settings, shipping, payment }: { settings: Settin
             <input name="name" required placeholder="الاسم الكامل *" className="col-span-2 input-lux" />
             <input name="phone" required type="tel" placeholder="رقم الجوال *" className="col-span-2 input-lux" dir="ltr" />
             <input name="email" type="email" placeholder="البريد الإلكتروني (اختياري)" className="col-span-2 input-lux" dir="ltr" />
-            <input name="city" placeholder="المدينة" value={city} onChange={(e) => setCity(e.target.value)} className="input-lux" />
-            <input name="region" placeholder="المنطقة" className="input-lux" />
-            <input name="address" required placeholder="العنوان *" className="col-span-2 input-lux" />
-            <input name="national_address" placeholder="العنوان الوطني (اختياري)" className="col-span-2 input-lux" dir="ltr" />
+            {manualLocation ? (
+              <>
+                <input name="city" placeholder="المدينة" value={city} onChange={(e) => setCity(e.target.value)} className="input-lux" />
+                <input name="region" placeholder="المنطقة" className="input-lux" />
+                <input name="address" required placeholder="العنوان *" className="col-span-2 input-lux" />
+                <input name="national_address" placeholder="العنوان الوطني (اختياري)" className="col-span-2 input-lux" dir="ltr" />
+              </>
+            ) : (
+              <>
+                <input type="hidden" name="city" value={city} />
+                <input type="hidden" name="region" value="" />
+                <input type="hidden" name="address" value={locationReady ? "موقع جغرافي محدد" : ""} />
+                <input type="hidden" name="national_address" value="" />
+              </>
+            )}
             <input type="hidden" name="latitude" value={coordinates.latitude} />
             <input type="hidden" name="longitude" value={coordinates.longitude} />
             <input type="hidden" name="maps_url" value={coordinates.latitude && coordinates.longitude ? `https://maps.google.com/?q=${coordinates.latitude},${coordinates.longitude}` : ""} />
@@ -136,6 +150,7 @@ export function CheckoutForm({ settings, shipping, payment }: { settings: Settin
               {locationLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : locationReady ? <CheckCircle2 className="h-4 w-4" /> : <MapPin className="h-4 w-4" />}
               {locationLoading ? "جار تحديد موقعك..." : locationReady ? "تم تحديد الموقع — اضغطي للتغيير" : "تحديد عنواني من موقعي الحالي"}
             </button>
+            {manualLocation && <button type="button" onClick={useCurrentLocation} className="col-span-2 text-xs font-bold text-gold underline">محاولة تحديد الموقع مرة أخرى</button>}
             <textarea name="notes" rows={2} placeholder="ملاحظات الطلب (اختياري)" className="col-span-2 input-lux resize-y" />
           </div>
         </section>
