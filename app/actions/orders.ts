@@ -77,6 +77,9 @@ export async function createOrderAction(formData: FormData) {
   const region = (formData.get("region") as string).trim() || null;
   const address = (formData.get("address") as string).trim() || null;
   const nationalAddress = (formData.get("national_address") as string).trim() || null;
+  const latitude = Number(formData.get("latitude")) || null;
+  const longitude = Number(formData.get("longitude")) || null;
+  const mapsUrl = (formData.get("maps_url") as string)?.trim() || null;
   const notes = (formData.get("notes") as string).trim() || null;
   const shippingId = formData.get("shipping_method") as string;
   const paymentName = (formData.get("payment_method") as string) || null;
@@ -157,7 +160,10 @@ export async function createOrderAction(formData: FormData) {
       customer_city: city,
       region,
       address,
-      national_address: nationalAddress,
+       national_address: nationalAddress,
+       latitude,
+       longitude,
+       maps_url: mapsUrl,
       items,
       total: Math.max(0, total),
       shipping_cost: finalShipping,

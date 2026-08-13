@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, Tag, ShoppingBag, ShieldCheck, Truck, Landmark, Sparkles } from "lucide-react";
+import { Loader2, Tag, ShoppingBag, ShieldCheck, Truck, Landmark, Sparkles, MapPin, CheckCircle2 } from "lucide-react";
 import { useCart } from "@/components/storefront/providers";
 import { createOrderAction, validateCouponAction } from "@/app/actions/orders";
 import { getCheckoutRatesAction, type CheckoutShippingOption } from "@/app/actions/shipping";
@@ -22,6 +22,9 @@ export function CheckoutForm({ settings, shipping, payment }: { settings: Settin
   const [applied, setApplied] = useState<{ code: string; amount: number } | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [locationLoading, setLocationLoading] = useState(false);
+  const [locationReady, setLocationReady] = useState(false);
+  const [coordinates, setCoordinates] = useState({ latitude: "", longitude: "" });
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const estWeightKg = useMemo(() => {
@@ -76,6 +79,19 @@ export function CheckoutForm({ settings, shipping, payment }: { settings: Settin
     setError("");
   };
 
+  const useCurrentLocation = () => {
+    if (!navigator.geolocation) { setError("المتصفح لا يدعم تحديد الموقع"); return; }
+    setLocationLoading(true);
+    navigator.geolocation.getCurrentPosition((position) => {
+      const latitude = position.coords.latitude.toFixed(7);
+      const longitude = position.coords.longitude.toFixed(7);
+      setCoordinates({ latitude, longitude });
+      setLocationReady(true);
+      setError("");
+      setLocationLoading(false);
+    }, () => { setError("تعذر تحديد موقعك. اسمحي للموقع من إعدادات المتصفح."); setLocationLoading(false); }, { enableHighAccuracy: true, timeout: 12000 });
+  };
+
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setLoading(true);
@@ -113,6 +129,13 @@ export function CheckoutForm({ settings, shipping, payment }: { settings: Settin
             <input name="region" placeholder="المنطقة" className="input-lux" />
             <input name="address" required placeholder="العنوان *" className="col-span-2 input-lux" />
             <input name="national_address" placeholder="العنوان الوطني (اختياري)" className="col-span-2 input-lux" dir="ltr" />
+            <input type="hidden" name="latitude" value={coordinates.latitude} />
+            <input type="hidden" name="longitude" value={coordinates.longitude} />
+            <input type="hidden" name="maps_url" value={coordinates.latitude && coordinates.longitude ? `https://maps.google.com/?q=${coordinates.latitude},${coordinates.longitude}` : ""} />
+            <button type="button" onClick={useCurrentLocation} className={cn("col-span-2 flex items-center justify-center gap-2 rounded-xl border px-4 py-3 text-sm font-bold transition", locationReady ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-gold/40 bg-amber-50 text-gold-dark hover:bg-amber-100")}>
+              {locationLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : locationReady ? <CheckCircle2 className="h-4 w-4" /> : <MapPin className="h-4 w-4" />}
+              {locationLoading ? "جار تحديد موقعك..." : locationReady ? "تم تحديد الموقع — اضغطي للتغيير" : "تحديد عنواني من موقعي الحالي"}
+            </button>
             <textarea name="notes" rows={2} placeholder="ملاحظات الطلب (اختياري)" className="col-span-2 input-lux resize-y" />
           </div>
         </section>

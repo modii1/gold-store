@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Package, LogOut, Heart, ShoppingBag, Phone } from "lucide-react";
+import { Package, LogOut, Heart, ShoppingBag, Phone, MapPin, ExternalLink, RotateCcw } from "lucide-react";
 import { StoreHeader } from "@/components/storefront/header";
 import { StoreFooter } from "@/components/storefront/footer";
 import { getCustomerSession } from "@/lib/auth";
@@ -11,6 +11,8 @@ import { getSettings } from "@/lib/services/settings";
 import { getCategoriesList } from "@/lib/services/products";
 import { formatCurrency } from "@/lib/format";
 import { Currency } from "@/components/storefront/currency";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { createReturnRequestAction, saveCustomerAddressAction } from "@/app/actions/customer-data";
 
 export const metadata: Metadata = { title: "حسابي | لمعة" };
 
@@ -32,6 +34,11 @@ export default async function AccountPage() {
     getSettings(),
     getCategoriesList(),
     getOrdersByPhoneAction(session.phone),
+  ]);
+  const admin = createAdminClient();
+  const [{ data: addresses }, { data: returns }] = await Promise.all([
+    admin.from("addresses").select("*").eq("customer_identifier", session.phone).order("is_default", { ascending: false }).order("created_at", { ascending: false }),
+    admin.from("return_requests").select("id,order_id,reason,details,status,admin_note,created_at").eq("customer_identifier", session.phone).order("created_at", { ascending: false }),
   ]);
 
   return (
@@ -71,6 +78,28 @@ export default async function AccountPage() {
           </div>
         </section>
 
+        <section className="mt-8 rounded-3xl border border-sand bg-white p-6">
+          <h2 className="flex items-center gap-2 text-lg font-bold text-ink"><MapPin className="h-5 w-5 text-gold" /> عناويني المحفوظة</h2>
+          <div className="mt-4 grid gap-3 md:grid-cols-2">
+            {(addresses || []).map((address: any) => (
+              <article key={address.id} className="rounded-2xl border border-sand p-4">
+                <div className="flex items-center justify-between"><b>{address.label || "عنواني"}</b>{address.is_default && <span className="text-xs font-bold text-emerald-700">الافتراضي</span>}</div>
+                <p className="mt-2 text-sm text-stone-500">{[address.address, address.city, address.region].filter(Boolean).join("، ") || "موقع محدد بالخريطة"}</p>
+                {address.maps_url && <a href={address.maps_url} target="_blank" rel="noreferrer" className="mt-3 inline-flex items-center gap-1 text-xs font-bold text-gold">فتح الخريطة <ExternalLink className="h-3 w-3" /></a>}
+              </article>
+            ))}
+            <form action={async (formData) => { await saveCustomerAddressAction(formData); }} className="rounded-2xl border border-dashed border-gold/50 bg-amber-50/40 p-4 space-y-2">
+              <input type="hidden" name="phone" value={session.phone} />
+              <input name="label" placeholder="اسم العنوان: المنزل" className="input-lux" />
+              <input name="city" placeholder="المدينة" className="input-lux" />
+              <input name="address" placeholder="وصف العنوان" className="input-lux" />
+              <input name="latitude" placeholder="خط العرض" className="input-lux" required />
+              <input name="longitude" placeholder="خط الطول" className="input-lux" required />
+              <button className="w-full rounded-xl bg-ink py-2.5 text-sm font-bold text-white">حفظ عنوان بإحداثيات الموقع</button>
+            </form>
+          </div>
+        </section>
+
         {/* Orders */}
         <section className="mt-8">
           <h2 className="flex items-center gap-2 text-lg font-bold text-ink"><Package className="h-5 w-5 text-gold" /> طلباتي</h2>
@@ -93,7 +122,7 @@ export default async function AccountPage() {
                         <p className="font-bold text-ink">طلب #{o.order_number}</p>
                         <p className="mt-0.5 text-xs text-stone-400" dir="ltr">{new Date(o.created_at).toLocaleDateString("en-GB")}</p>
                       </div>
-                      <span className={`rounded-full px-3 py-1 text-xs font-bold ${st.cls}`}>{st.label}</span>
+                      <div className="flex items-center gap-2"><span className={`rounded-full px-3 py-1 text-xs font-bold ${st.cls}`}>{st.label}</span>{o.tracking_url && <a href={o.tracking_url} target="_blank" rel="noreferrer" className="text-xs font-bold text-gold">تتبع</a>}</div>
                     </div>
                     <div className="mt-4 space-y-2 border-t border-sand pt-4">
                       {(o.items || []).map((item, i) => (
@@ -115,6 +144,14 @@ export default async function AccountPage() {
               })}
             </div>
           )}
+        </section>
+
+        <section className="mt-8 rounded-3xl border border-sand bg-white p-6">
+          <h2 className="flex items-center gap-2 text-lg font-bold text-ink"><RotateCcw className="h-5 w-5 text-gold" /> طلبات الاسترجاع</h2>
+          <div className="mt-4 space-y-3">
+            {(returns || []).map((request: any) => <div key={request.id} className="rounded-2xl bg-stone-50 p-4 text-sm"><div className="flex justify-between font-bold"><span>طلب #{request.order_id.slice(0, 8)}</span><span>{request.status}</span></div><p className="mt-1 text-stone-500">{request.reason} {request.details && `— ${request.details}`}</p></div>)}
+          </div>
+          {orders.filter((o) => ["delivered", "paid"].includes(o.status)).map((order) => <form key={order.id} action={async (formData) => { await createReturnRequestAction(formData); }} className="mt-3 flex flex-wrap items-center gap-2"><input type="hidden" name="order_id" value={order.id} /><span className="text-sm">طلب #{order.order_number}</span><select name="reason" className="rounded-xl border border-sand px-3 py-2 text-sm"><option>استرجاع المنتج</option><option>منتج تالف</option><option>منتج غير مطابق</option></select><button className="rounded-xl bg-ink px-3 py-2 text-xs font-bold text-white">طلب استرجاع</button></form>)}
         </section>
       </main>
       <StoreFooter settings={settings} />
