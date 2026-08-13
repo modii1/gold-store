@@ -10,7 +10,9 @@ import { Currency } from "@/components/storefront/currency";
 import { cn } from "@/lib/utils";
 import type { Settings, Carrier, PaymentMethod } from "@/types";
 
-export function CheckoutForm({ settings, shipping, payment, customer }: { settings: Settings; shipping: Carrier[]; payment: PaymentMethod[]; customer: { name: string; phone: string } | null }) {
+type SavedAddress = { id: string; label: string | null; city: string | null; region: string | null; address: string | null; national_address: string | null; latitude: number | null; longitude: number | null; maps_url: string | null; is_default: boolean };
+
+export function CheckoutForm({ settings, shipping, payment, customer, savedAddresses }: { settings: Settings; shipping: Carrier[]; payment: PaymentMethod[]; customer: { name: string; phone: string } | null; savedAddresses: SavedAddress[] }) {
   const { items, subtotal, clearCart } = useCart();
   const router = useRouter();
   const [city, setCity] = useState("");
@@ -27,6 +29,7 @@ export function CheckoutForm({ settings, shipping, payment, customer }: { settin
   const [manualLocation, setManualLocation] = useState(false);
   const [resolvedAddress, setResolvedAddress] = useState("");
   const [coordinates, setCoordinates] = useState({ latitude: "", longitude: "" });
+  const [selectedAddress, setSelectedAddress] = useState(savedAddresses[0]?.id || "");
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const estWeightKg = useMemo(() => {
@@ -104,6 +107,18 @@ export function CheckoutForm({ settings, shipping, payment, customer }: { settin
     }, () => { setManualLocation(true); setError("لم يتم تفعيل الموقع، يمكنك إدخال العنوان يدوياً"); setLocationLoading(false); }, { enableHighAccuracy: true, timeout: 12000 });
   };
 
+  const chooseAddress = (id: string) => {
+    setSelectedAddress(id);
+    if (!id) { setManualLocation(false); setLocationReady(false); setCoordinates({ latitude: "", longitude: "" }); setResolvedAddress(""); setCity(""); return; }
+    const address = savedAddresses.find((item) => item.id === id);
+    if (!address) return;
+    setCity(address.city || "");
+    setResolvedAddress(address.address || "");
+    setCoordinates({ latitude: address.latitude ? String(address.latitude) : "", longitude: address.longitude ? String(address.longitude) : "" });
+    setLocationReady(Boolean(address.latitude && address.longitude));
+    setManualLocation(!address.latitude || !address.longitude);
+  };
+
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setLoading(true);
@@ -137,6 +152,7 @@ export function CheckoutForm({ settings, shipping, payment, customer }: { settin
             <input name="name" required placeholder="الاسم الكامل *" defaultValue={customer?.name || ""} className="col-span-2 input-lux" />
             <input name="phone" required type="tel" placeholder="رقم الجوال *" defaultValue={customer?.phone || ""} className="col-span-2 input-lux" dir="ltr" />
             <input name="email" type="email" placeholder="البريد الإلكتروني (اختياري)" className="col-span-2 input-lux" dir="ltr" />
+            {customer && savedAddresses.length > 0 && <div className="col-span-2 rounded-2xl border border-gold/30 bg-amber-50/40 p-3"><label className="mb-2 block text-sm font-bold text-stone-700">اختاري عنواناً محفوظاً</label><select value={selectedAddress} onChange={(e) => chooseAddress(e.target.value)} className="input-lux"><option value="">استخدام موقع جديد</option>{savedAddresses.map((address) => <option key={address.id} value={address.id}>{address.label || "عنوان محفوظ"} — {[address.city, address.address].filter(Boolean).join("، ")}</option>)}</select></div>}
             {manualLocation ? (
               <>
                 <input name="city" placeholder="المدينة" value={city} onChange={(e) => setCity(e.target.value)} className="input-lux" />
