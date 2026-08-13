@@ -16,6 +16,9 @@ export function CheckoutForm({ settings, shipping, payment, customer, savedAddre
   const { items, subtotal, clearCart } = useCart();
   const router = useRouter();
   const [city, setCity] = useState("");
+  const [region, setRegion] = useState("");
+  const [nationalAddress, setNationalAddress] = useState("");
+  const [addressText, setAddressText] = useState("");
   const [liveOptions, setLiveOptions] = useState<CheckoutShippingOption[] | null>(null);
   const [ratesLoading, setRatesLoading] = useState(false);
   const [shippingId, setShippingId] = useState<string>(shipping[0]?.id || "");
@@ -31,6 +34,19 @@ export function CheckoutForm({ settings, shipping, payment, customer, savedAddre
   const [coordinates, setCoordinates] = useState({ latitude: "", longitude: "" });
   const [selectedAddress, setSelectedAddress] = useState(savedAddresses[0]?.id || "");
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    const address = savedAddresses[0];
+    if (!address) return;
+    setCity(address.city || "");
+    setRegion(address.region || "");
+    setNationalAddress(address.national_address || "");
+    setAddressText(address.address || "");
+    setResolvedAddress(address.address || "");
+    setCoordinates({ latitude: address.latitude ? String(address.latitude) : "", longitude: address.longitude ? String(address.longitude) : "" });
+    setLocationReady(Boolean(address.latitude && address.longitude));
+    setManualLocation(!address.latitude || !address.longitude);
+  }, [savedAddresses]);
 
   const estWeightKg = useMemo(() => {
     const grams = items.reduce((s, i) => s + (i as any).weight_grams || 500, 0);
@@ -98,8 +114,9 @@ export function CheckoutForm({ settings, shipping, payment, customer, savedAddre
         } else {
           setLocationReady(true);
           setManualLocation(false);
-          setCity(result.city);
-          setResolvedAddress(result.address);
+           setCity(result.city);
+           setResolvedAddress(result.address);
+           setAddressText(result.address);
           setError("");
         }
         setLocationLoading(false);
@@ -109,10 +126,13 @@ export function CheckoutForm({ settings, shipping, payment, customer, savedAddre
 
   const chooseAddress = (id: string) => {
     setSelectedAddress(id);
-    if (!id) { setManualLocation(false); setLocationReady(false); setCoordinates({ latitude: "", longitude: "" }); setResolvedAddress(""); setCity(""); return; }
+    if (!id) { setManualLocation(false); setLocationReady(false); setCoordinates({ latitude: "", longitude: "" }); setResolvedAddress(""); setAddressText(""); setCity(""); setRegion(""); setNationalAddress(""); return; }
     const address = savedAddresses.find((item) => item.id === id);
     if (!address) return;
     setCity(address.city || "");
+    setRegion(address.region || "");
+    setNationalAddress(address.national_address || "");
+    setAddressText(address.address || "");
     setResolvedAddress(address.address || "");
     setCoordinates({ latitude: address.latitude ? String(address.latitude) : "", longitude: address.longitude ? String(address.longitude) : "" });
     setLocationReady(Boolean(address.latitude && address.longitude));
@@ -156,16 +176,16 @@ export function CheckoutForm({ settings, shipping, payment, customer, savedAddre
             {manualLocation ? (
               <>
                 <input name="city" placeholder="المدينة" value={city} onChange={(e) => setCity(e.target.value)} className="input-lux" />
-                <input name="region" placeholder="المنطقة" className="input-lux" />
-                <input name="address" required placeholder="العنوان *" className="col-span-2 input-lux" />
-                <input name="national_address" placeholder="العنوان الوطني (اختياري)" className="col-span-2 input-lux" dir="ltr" />
+                <input name="region" placeholder="المنطقة" value={region} onChange={(e) => setRegion(e.target.value)} className="input-lux" />
+                <input name="address" required placeholder="العنوان *" value={addressText} onChange={(e) => setAddressText(e.target.value)} className="col-span-2 input-lux" />
+                <input name="national_address" placeholder="العنوان الوطني (اختياري)" value={nationalAddress} onChange={(e) => setNationalAddress(e.target.value)} className="col-span-2 input-lux" dir="ltr" />
               </>
             ) : (
               <>
                 <input type="hidden" name="city" value={city} />
-                <input type="hidden" name="region" value="" />
-                <input type="hidden" name="address" value={resolvedAddress} />
-                <input type="hidden" name="national_address" value="" />
+                <input type="hidden" name="region" value={region} />
+                <input type="hidden" name="address" value={addressText || resolvedAddress} />
+                <input type="hidden" name="national_address" value={nationalAddress} />
               </>
             )}
             <input type="hidden" name="latitude" value={coordinates.latitude} />

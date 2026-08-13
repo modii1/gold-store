@@ -108,12 +108,13 @@ export default async function AccountPage() {
             ))}
             <form action={saveAddressForm} className="rounded-2xl border border-dashed border-gold/50 bg-amber-50/40 p-4 space-y-2">
               <input type="hidden" name="phone" value={session.phone} />
-              <input name="label" placeholder="اسم العنوان: المنزل" className="input-lux" />
-              <input name="city" placeholder="المدينة" className="input-lux" />
-              <input name="address" placeholder="وصف العنوان" className="input-lux" />
-              <input name="latitude" placeholder="خط العرض" className="input-lux" required />
-              <input name="longitude" placeholder="خط الطول" className="input-lux" required />
-              <button className="w-full rounded-xl bg-ink py-2.5 text-sm font-bold text-white">حفظ عنوان بإحداثيات الموقع</button>
+               <input name="label" placeholder="اسم العنوان: المنزل" className="input-lux" />
+               <input name="city" placeholder="المدينة" className="input-lux" />
+               <input name="region" placeholder="المنطقة" className="input-lux" />
+               <input name="address" placeholder="وصف العنوان" className="input-lux" />
+               <input name="national_address" placeholder="العنوان الوطني (اختياري)" className="input-lux" />
+               <div className="grid grid-cols-2 gap-2"><input name="latitude" placeholder="خط العرض (اختياري)" className="input-lux" /><input name="longitude" placeholder="خط الطول (اختياري)" className="input-lux" /></div>
+               <button className="w-full rounded-xl bg-ink py-2.5 text-sm font-bold text-white">حفظ العنوان</button>
             </form>
           </div>
         </section>

@@ -6,7 +6,7 @@ import { getCustomerSession } from "@/lib/auth";
 
 export async function saveCustomerAddressAction(formData: FormData) {
   const session = await getCustomerSession();
-  const phone = String(formData.get("phone") || session?.phone || "").trim();
+  const phone = session?.phone || "";
   if (!phone) return { error: "سجلي الدخول أو أدخلي رقم الجوال أولاً" };
 
   const supabase = createAdminClient();
@@ -24,7 +24,6 @@ export async function saveCustomerAddressAction(formData: FormData) {
     maps_url: String(formData.get("maps_url") || "").trim() || null,
     is_default: formData.get("is_default") === "on",
   };
-  if (!address.latitude || !address.longitude) return { error: "حددي موقعك من الخريطة أولاً" };
   if (address.is_default) await supabase.from("addresses").update({ is_default: false }).eq("customer_identifier", phone);
   const { error } = await supabase.from("addresses").insert(address);
   if (error) return { error: error.message };
