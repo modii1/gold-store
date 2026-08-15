@@ -13,6 +13,7 @@ import {
   PackageSearch,
   RefreshCcw,
   RotateCcw,
+  Settings2,
 } from "lucide-react";
 import { timeAgo } from "./notification-bell";
 import { severityMeta, CATEGORY_LABELS } from "./meta";
@@ -139,16 +140,24 @@ export function AdminNotificationsPage() {
             <h1 className="text-2xl font-bold text-stone-900">مركز الإشعارات</h1>
             <p className="mt-1 text-sm text-stone-500">متابعة الإشعارات والتنبيهات وحالة التسليم</p>
           </div>
-          <div className="flex items-center gap-1 rounded-xl border border-stone-200 bg-stone-50 p-1">
-            {PERIODS.map((p) => (
-              <button
-                key={p.days}
-                onClick={() => setPeriod(p.days)}
-                className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${period === p.days ? "bg-white text-gold shadow-sm" : "text-stone-500 hover:text-stone-800"}`}
-              >
-                {p.label}
-              </button>
-            ))}
+          <div className="flex items-center gap-2">
+            <Link
+              href="/admin/settings/notifications"
+              className="flex items-center gap-1.5 rounded-full border border-stone-200 bg-white px-4 py-2 text-xs font-bold text-stone-700 transition hover:bg-stone-50"
+            >
+              <Settings2 className="h-3.5 w-3.5 text-gold" /> إعدادات الإشعارات
+            </Link>
+            <div className="flex items-center gap-1 rounded-xl border border-stone-200 bg-stone-50 p-1">
+              {PERIODS.map((p) => (
+                <button
+                  key={p.days}
+                  onClick={() => setPeriod(p.days)}
+                  className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${period === p.days ? "bg-white text-gold shadow-sm" : "text-stone-500 hover:text-stone-800"}`}
+                >
+                  {p.label}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
 
