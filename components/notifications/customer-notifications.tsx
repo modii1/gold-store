@@ -204,33 +204,37 @@ export function CustomerNotifications() {
 
         {!prefs && <div className="flex justify-center py-8"><Loader2 className="h-5 w-5 animate-spin text-stone-300" /></div>}
         {prefs && (
-          <div className="mt-4 space-y-3">
+          <div className="mt-4">
             <div className="hidden grid-cols-[1fr_repeat(3,1fr)] gap-2 border-b border-sand pb-2 text-center text-[11px] font-bold text-stone-500 md:grid">
               <span className="text-start">التصنيف</span>
               {CHANNELS.map((c) => <span key={c.key}>{c.label}</span>)}
             </div>
             {PREF_CATEGORIES.map((cat) => (
-              <div key={cat.key} className="rounded-2xl bg-cream/60 p-3">
-                <div>
+              <div key={cat.key} className="border-b border-sand py-3 last:border-b-0">
+                <div className="md:hidden">
                   <p className="text-sm font-bold text-ink">{cat.label}</p>
                   <p className="text-[11px] text-stone-500">{cat.desc}</p>
+                  <div className="mt-2 space-y-1.5">
+                    {CHANNELS.map((c) => (
+                      <label key={c.key} className="flex items-center justify-between rounded-xl bg-cream px-3 py-2.5 text-xs font-semibold text-stone-700">
+                        <span>{c.label}</span>
+                        <input
+                          type="checkbox"
+                          checked={Boolean(prefs[cat.key]?.[c.key])}
+                          onChange={(e) =>
+                            setPrefs((p) => (p ? { ...p, [cat.key]: { ...p[cat.key], [c.key]: e.target.checked } } : p))
+                          }
+                          className="h-4 w-4 accent-gold"
+                        />
+                      </label>
+                    ))}
+                  </div>
                 </div>
-                <div className="mt-2 grid grid-cols-1 gap-1.5 md:hidden">
-                  {CHANNELS.map((c) => (
-                    <label key={c.key} className="flex items-center justify-between rounded-xl bg-white px-3 py-2.5 text-xs font-semibold text-stone-700">
-                      <span>{c.label}</span>
-                      <input
-                        type="checkbox"
-                        checked={Boolean(prefs[cat.key]?.[c.key])}
-                        onChange={(e) =>
-                          setPrefs((p) => (p ? { ...p, [cat.key]: { ...p[cat.key], [c.key]: e.target.checked } } : p))
-                        }
-                        className="h-4 w-4 accent-gold"
-                      />
-                    </label>
-                  ))}
-                </div>
-                <div className="mt-2 hidden grid-cols-3 gap-2 md:grid">
+                <div className="hidden items-center gap-2 md:grid md:grid-cols-[1fr_repeat(3,1fr)]">
+                  <div>
+                    <p className="text-sm font-bold text-ink">{cat.label}</p>
+                    <p className="text-[11px] text-stone-500">{cat.desc}</p>
+                  </div>
                   {CHANNELS.map((c) => (
                     <label key={c.key} className="flex items-center justify-center">
                       <input
