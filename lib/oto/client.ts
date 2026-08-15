@@ -127,6 +127,49 @@ export async function otoAccountInfo(): Promise<OtoAccountInfo> {
   return otoFetch<OtoAccountInfo>("/rest/v2/clientInfo");
 }
 
+export type OtoOrderStatus = {
+  success?: boolean;
+  orderId?: string;
+  otoId?: string | number;
+  shipmentId?: string;
+  status?: string;
+  dcStatus?: string;
+  trackingNumber?: string;
+  dcTrackingNumber?: string;
+  trackingUrl?: string;
+  printAWBURL?: string;
+  deliveryCompany?: string;
+  deliveryOptionName?: string;
+  driverName?: string;
+  driverPhone?: string;
+  driverEmail?: string;
+  currentLocation?: { currentCity?: string; currentDistrict?: string; currentBranch?: string };
+  date?: string;
+  otoErrorMessage?: string;
+  errorMessage?: string;
+};
+
+/**
+ * Track a single order in real time.
+ * Accepts either the merchant `orderId` or the OTO-generated `otoId`.
+ */
+export async function otoOrderStatus(params: { orderId?: string | number; otoId?: string | number }): Promise<OtoOrderStatus> {
+  return otoFetch<OtoOrderStatus>("/rest/v2/orderStatus", { method: "POST", body: params });
+}
+
+/**
+ * Full order details including status history and shipment info.
+ * GET with query params: orderId / otoId / ref1 (at least one).
+ */
+export async function otoOrderDetails(params: { orderId?: string | number; otoId?: string | number; ref1?: string | number }): Promise<Record<string, any>> {
+  const qs = new URLSearchParams();
+  if (params.orderId !== undefined) qs.set("orderId", String(params.orderId));
+  if (params.otoId !== undefined) qs.set("otoId", String(params.otoId));
+  if (params.ref1 !== undefined) qs.set("ref1", String(params.ref1));
+  const query = qs.toString();
+  return otoFetch<Record<string, any>>(`/rest/v2/orderDetails${query ? `?${query}` : ""}`);
+}
+
 export async function otoCreateOrder(body: Record<string, unknown>): Promise<{
   success: boolean;
   otoId?: number | string;

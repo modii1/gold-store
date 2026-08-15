@@ -146,13 +146,17 @@ async function handleOrderStatus(supabase: ReturnType<typeof createAdminClient>,
     }
   }
 
+  // Match the existing shipment row by stable identifiers (internal order id,
+  // OTO order id) first, falling back to tracking numbers. Without this, a
+  // status webhook arriving before the tracking number is stored would create
+  // a duplicate shipment row instead of updating the existing one.
   let matchFilter: string;
-  if (body.trackingNumber) {
-    matchFilter = `tracking_number.eq.${body.trackingNumber},dc_tracking_number.eq.${body.trackingNumber}`;
+  if (internalOrderId) {
+    matchFilter = `order_id.eq.${internalOrderId}`;
   } else if (body.otoId) {
     matchFilter = `oto_order_id.eq.${body.otoId}`;
-  } else if (internalOrderId) {
-    matchFilter = `order_id.eq.${internalOrderId}`;
+  } else if (body.trackingNumber) {
+    matchFilter = `tracking_number.eq.${body.trackingNumber},dc_tracking_number.eq.${body.trackingNumber}`;
   } else {
     matchFilter = `oto_order_id.eq.${orderId}`;
   }

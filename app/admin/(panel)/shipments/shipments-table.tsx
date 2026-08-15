@@ -1,9 +1,12 @@
 "use client";
 
-import { useState } from "react";
-import { PackageSearch, ExternalLink, Search } from "lucide-react";
+import { useActionState, useState } from "react";
+import { PackageSearch, ExternalLink, Search, RefreshCcw, CheckCircle2, AlertTriangle, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatDateOnly, pluralizeArabic } from "@/lib/format";
+import { refreshOtoShipmentsAction } from "@/app/actions/shipments";
+
+type SyncResult = { total: number; updated: number; failed: number; skipped: number };
 
 type Shipment = {
   id: string;
@@ -35,9 +38,14 @@ const statusMeta: Record<string, { label: string; cls: string }> = {
   cancelled: { label: "ملغي", cls: "bg-stone-100 text-stone-500" },
 };
 
-export function ShipmentsTable({ shipments }: { shipments: Shipment[] }) {
+export function ShipmentsTable({ shipments, syncResult }: { shipments: Shipment[]; syncResult?: SyncResult | null }) {
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("");
+  const [state, formAction, pending] = useActionState(
+    async (_prev: unknown, _fd: FormData) => refreshOtoShipmentsAction(),
+    null as unknown
+  );
+  const refreshState = state as { success?: boolean; error?: string; updated?: number; failed?: number } | null;
 
   const filtered = shipments.filter((s) => {
     const matchesStatus = !status || s.status === status;
@@ -60,10 +68,40 @@ export function ShipmentsTable({ shipments }: { shipments: Shipment[] }) {
 
   return (
     <div className="space-y-4">
-      <div>
-        <h1 className="text-2xl font-bold text-stone-900">الشحنات</h1>
-        <p className="mt-1 text-sm text-stone-500">تتبع جميع الشحنات المنشأة عبر OTO وحالة كل شحنة لحظياً</p>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold text-stone-900">الشحنات</h1>
+          <p className="mt-1 text-sm text-stone-500">تتبع جميع الشحنات المنشأة عبر OTO وحالة كل شحنة لحظياً</p>
+        </div>
+        <form action={formAction}>
+          <button
+            type="submit"
+            disabled={pending}
+            className="flex items-center gap-2 rounded-full bg-ink px-5 py-2.5 text-xs font-bold text-ivory transition hover:bg-gold disabled:opacity-50"
+          >
+            {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCcw className="h-4 w-4" />}
+            {pending ? "جارٍ المزامنة من OTO..." : "مزامنة من OTO"}
+          </button>
+        </form>
       </div>
+
+      {(syncResult || refreshState) && (
+        <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-emerald-100 bg-emerald-50/60 px-4 py-3 text-xs">
+          <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" />
+          <span className="font-bold text-emerald-700">تمت مزامنة البيانات من OTO:</span>
+          <span className="text-emerald-600">
+            {pluralizeArabic((syncResult?.updated ?? refreshState?.updated ?? 0), "شحنة محدثة", "شحنتان محدثتان", "شحنات محدثة")} ·
+            {pluralizeArabic(syncResult?.total ?? 0, "شحنة مجلوبة", "شحنتان مجلوبتان", "شحنات مجلوبة")}
+          </span>
+          {refreshState?.error && <span className="text-rose-600">· {refreshState.error}</span>}
+        </div>
+      )}
+
+      {refreshState && !refreshState.success && !refreshState.error && (
+        <div className="flex items-center gap-2 rounded-2xl border border-rose-100 bg-rose-50/60 px-4 py-3 text-xs text-rose-600">
+          <AlertTriangle className="h-4 w-4 shrink-0" /> فشلت المزامنة — تأكد من اتصال OTO
+        </div>
+      )}
 
       <div className="flex flex-wrap gap-2">
         <button onClick={() => setStatus("")}
