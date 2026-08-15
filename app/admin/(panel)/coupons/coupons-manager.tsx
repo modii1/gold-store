@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Plus, Trash2, Check, Loader2, Tag } from "lucide-react";
 import { saveCouponAction, deleteCouponAction } from "@/app/actions/coupons-admin";
+import { pluralizeArabic } from "@/lib/format";
 import type { Coupon } from "@/types";
 
 type Row = {
@@ -83,7 +84,7 @@ export function CouponsManager({ coupons }: { coupons: Coupon[] }) {
               <input type="checkbox" checked={row.is_active} onChange={(e) => updateRow(i, { is_active: e.target.checked })} className="accent-gold h-5 w-5" />
             </div>
             {row.used_count !== undefined && row.id && (
-              <p className="text-[11px] text-stone-400">استُخدم {row.used_count} مرة</p>
+              <p className="text-[11px] text-stone-400">استُخدم {row.used_count} {pluralizeArabic(row.used_count, "مرة", "مرتين", "مرات")}</p>
             )}
             <div className="grid grid-cols-2 gap-2">
               <div>
@@ -151,7 +152,7 @@ export function CouponsManager({ coupons }: { coupons: Coupon[] }) {
                   <input value={row.code} onChange={(e) => updateRow(i, { code: e.target.value.toUpperCase() })} placeholder="WELCOME10" dir="ltr"
                     className="w-32 rounded-lg border border-stone-200 px-3 py-2 text-sm" />
                   {row.used_count !== undefined && row.id && (
-                    <p className="mt-1 text-[11px] text-stone-400">استُخدم {row.used_count} مرة</p>
+                    <p className="mt-1 text-[11px] text-stone-400">استُخدم {row.used_count} {pluralizeArabic(row.used_count, "مرة", "مرتين", "مرات")}</p>
                   )}
                 </td>
                 <td className="p-3">

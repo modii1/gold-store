@@ -3,6 +3,7 @@
 import { useActionState } from "react";
 import Link from "next/link";
 import { deleteProductAction } from "@/app/actions/products";
+import { pluralizeArabic } from "@/lib/format";
 import { Currency } from "@/components/storefront/currency";
 import type { Product } from "@/types";
 
@@ -36,7 +37,7 @@ export function ProductCardMobile({ product }: { product: Product }) {
       </div>
       <div className="flex items-center justify-between pt-2 border-t border-stone-100">
         <span className="text-xs text-stone-400">
-          {(product.images?.length || 0)} صور · {(product.videos?.length || 0)} فيديو
+          {(product.images?.length || 0)} {pluralizeArabic(product.images?.length || 0, "صورة", "صورتين", "صور")} · {(product.videos?.length || 0)} {pluralizeArabic(product.videos?.length || 0, "فيديو", "فيديوين", "فيديوهات")}
         </span>
         <div className="flex items-center gap-2">
           <Link href={`/admin/products/edit/${product.id}`} className="rounded-lg bg-amber-50 px-3 py-1.5 text-xs font-bold text-gold hover:bg-amber-100 transition">

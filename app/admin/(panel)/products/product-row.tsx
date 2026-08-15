@@ -4,7 +4,7 @@ import { useActionState } from "react";
 import Link from "next/link";
 import { Pencil, Trash2, PlayCircle, Image as ImageIcon } from "lucide-react";
 import { deleteProductAction } from "@/app/actions/products";
-import { formatCurrency } from "@/lib/format";
+import { formatCurrency, pluralizeArabic } from "@/lib/format";
 import { Currency } from "@/components/storefront/currency";
 import type { Product } from "@/types";
 
@@ -32,8 +32,8 @@ export function ProductRow({ product }: { product: Product }) {
       <td className="p-4 text-stone-500 hidden md:table-cell">{product.category || "-"}</td>
       <td className="p-4 text-stone-500 hidden md:table-cell">
         <span className="flex items-center gap-1.5">
-          <ImageIcon className="w-4 h-4 text-stone-400" /> {product.images?.length || 0}
-          <PlayCircle className="w-4 h-4 text-gold ms-1" /> {product.videos?.length || 0}
+          <ImageIcon className="w-4 h-4 text-stone-400" /> {product.images?.length || 0} {pluralizeArabic(product.images?.length || 0, "صورة", "صورتين", "صور")}
+          <PlayCircle className="w-4 h-4 text-gold ms-1" /> {product.videos?.length || 0} {pluralizeArabic(product.videos?.length || 0, "فيديو", "فيديوين", "فيديوهات")}
         </span>
       </td>
       <td className="p-4">

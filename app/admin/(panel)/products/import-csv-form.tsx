@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, Upload, AlertTriangle, Trash2 } from "lucide-react";
 import { importProductsCsvAction, deleteAllProductsAction } from "@/app/actions/import-admin";
+import { pluralizeArabic } from "@/lib/format";
 
 export function ImportCsvForm() {
   const router = useRouter();
@@ -46,7 +47,7 @@ export function ImportCsvForm() {
 
       {result && (
         <div className="mt-3 rounded-xl bg-emerald-50 p-3 text-sm text-emerald-700">
-          تم إضافة {result.created} منتج وتحديث {result.updated}
+          تم إضافة {result.created} {pluralizeArabic(result.created, "منتج", "منتجين", "منتجات")} وتحديث {result.updated} {pluralizeArabic(result.updated, "منتج", "منتجين", "منتجات")}
           {result.errors.length > 0 && (
             <ul className="mt-2 list-inside list-disc text-xs text-amber-700 max-h-32 overflow-y-auto">
               {result.errors.slice(0, 30).map((er, i) => <li key={i}>{er}</li>)}

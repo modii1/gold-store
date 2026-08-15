@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { ArrowLeft, Mail, Phone, Users } from "lucide-react";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { formatCurrency, formatDateOnly } from "@/lib/format";
+import { formatCurrency, formatDateOnly, pluralizeArabic } from "@/lib/format";
 import { Currency } from "@/components/storefront/currency";
 
 type Customer = {
@@ -56,7 +56,7 @@ export default async function AdminCustomersPage() {
         </div>
         <div className="rounded-2xl border border-amber-100 bg-amber-50 px-5 py-3 text-center">
           <p className="text-xs font-semibold text-stone-500">إجمالي العملاء</p>
-          <p className="mt-1 text-2xl font-bold text-gold">{customerRows.length}</p>
+          <p className="mt-1 text-2xl font-bold text-gold">{customerRows.length} {pluralizeArabic(customerRows.length, "عميل", "عميلين", "عملاء")}</p>
         </div>
       </div>
 

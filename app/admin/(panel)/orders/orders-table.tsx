@@ -5,7 +5,7 @@ import Link from "next/link";
 import { Trash2, ExternalLink, Loader2, CheckCircle2, Truck, PackageCheck, Banknote, Clock, Eye, Tag } from "lucide-react";
 import { updateOrderStatusAction, deleteOrderAction, createShipmentAction, searchOrdersAction } from "@/app/actions/orders-admin";
 import { Currency } from "@/components/storefront/currency";
-import { formatDate } from "@/lib/format";
+import { formatDate, pluralizeArabic } from "@/lib/format";
 import { OrderFilters } from "./order-filters";
 import type { Order, Carrier } from "@/types";
 
@@ -129,7 +129,7 @@ export function OrdersTable({ orders: initialOrders, carriers }: { orders: Order
         </div>
       ) : (
         <>
-          <p className="text-sm text-stone-500">{orders.length} طلب</p>
+          <p className="text-sm text-stone-500">{orders.length} {pluralizeArabic(orders.length, "طلب", "طلبين", "طلبات")}</p>
 
           {/* ============ Mobile cards ============ */}
           <div className="md:hidden space-y-4">
@@ -297,7 +297,7 @@ export function OrdersTable({ orders: initialOrders, carriers }: { orders: Order
                               <p key={i} className="truncate text-xs text-stone-500">{item.name} × {item.qty}</p>
                             ))}
                             {(o.items || []).length > 2 && (
-                              <p className="text-xs text-stone-400">+{(o.items || []).length - 2} منتجات أخرى</p>
+                              <p className="text-xs text-stone-400">+{(o.items || []).length - 2} {pluralizeArabic((o.items || []).length - 2, "منتج", "منتجين", "منتجات")} أخرى</p>
                             )}
                           </div>
                         </td>

@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { PackageSearch, ExternalLink, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { formatDateOnly } from "@/lib/format";
+import { formatDateOnly, pluralizeArabic } from "@/lib/format";
 
 type Shipment = {
   id: string;
@@ -68,7 +68,7 @@ export function ShipmentsTable({ shipments }: { shipments: Shipment[] }) {
       <div className="flex flex-wrap gap-2">
         <button onClick={() => setStatus("")}
           className={cn("rounded-full px-3 py-1.5 text-xs font-bold transition", !status ? "bg-gold text-white" : "bg-white text-stone-600 border border-stone-200")}>
-          الكل ({shipments.length})
+          الكل ({shipments.length} {pluralizeArabic(shipments.length, "شحنة", "شحنتين", "شحنات")})
         </button>
         {Object.entries(statusMeta).map(([key, m]) => (
           <button key={key} onClick={() => setStatus(key)}

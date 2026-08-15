@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { SlidersHorizontal, ChevronLeft, ChevronRight, X } from "lucide-react";
 import { ProductCard } from "./product-card";
 import { cn } from "@/lib/utils";
+import { pluralizeArabic } from "@/lib/format";
 import type { Product, Category } from "@/types";
 
 const SORTS = [
@@ -127,7 +128,7 @@ export function ShopContent({ init, fixedCategory, basePath = "/shop" }: { init:
       <div className="flex items-end justify-between mb-6 gap-4">
         <div>
           <h1 className="text-2xl md:text-3xl font-bold text-ink">{fixedCategory || "جميع المنتجات"}</h1>
-          <p className="mt-1 text-sm text-stone-500">{init.total.toLocaleString("en-US")} منتج</p>
+          <p className="mt-1 text-sm text-stone-500">{init.total.toLocaleString("en-US")} {pluralizeArabic(init.total, "منتج", "منتجين", "منتجات")}</p>
         </div>
         <div className="flex items-center gap-2">
           <button onClick={() => setFiltersOpen(true)} className="md:hidden flex items-center gap-2 rounded-full border border-sand bg-white px-4 py-2 text-sm font-semibold text-ink">

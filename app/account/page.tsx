@@ -9,7 +9,7 @@ import { customerLogoutAction } from "@/app/actions/logout";
 import { getOrdersByPhoneAction } from "@/app/actions/orders";
 import { getSettings } from "@/lib/services/settings";
 import { getCategoriesList } from "@/lib/services/products";
-import { formatDate } from "@/lib/format";
+import { formatDate, pluralizeArabic } from "@/lib/format";
 import { Currency } from "@/components/storefront/currency";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createReturnRequestAction } from "@/app/actions/customer-data";
@@ -217,7 +217,7 @@ export default async function AccountPage() {
                                     {(o.items || []).slice(0, 3).map((item, i) => (
                                       <p key={i} className="truncate text-xs text-stone-500">{item.name} × {item.qty}</p>
                                     ))}
-                                    {(o.items || []).length > 3 && <p className="text-xs text-stone-400">+{(o.items || []).length - 3} منتجات</p>}
+                                    {(o.items || []).length > 3 && <p className="text-xs text-stone-400">+{(o.items || []).length - 3} {pluralizeArabic((o.items || []).length - 3, "منتج", "منتجين", "منتجات")}</p>}
                                   </div>
                                 </td>
                                 <td className="px-5 py-4 align-top">

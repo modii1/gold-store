@@ -15,6 +15,13 @@ function pad(n: number) {
   return String(n).padStart(2, "0");
 }
 
+export function pluralizeArabic(count: number, singular: string, dual: string, plural: string) {
+  if (count === 1) return singular;
+  if (count === 2) return dual;
+  if (count >= 3 && count <= 10) return plural;
+  return singular;
+}
+
 function datePart(d: Date) {
   return `${d.getFullYear()}/${pad(d.getMonth() + 1)}/${pad(d.getDate())}`;
 }

@@ -8,7 +8,7 @@ import { BuyPanel } from "./buy-panel";
 import { getSettings } from "@/lib/services/settings";
 import { getProduct, getProductStats, getRelatedProducts } from "@/lib/services/products";
 import { getCategoriesList } from "@/lib/services/products";
-import { effectivePrice, discountPercent, formatCurrency } from "@/lib/format";
+import { effectivePrice, discountPercent, formatCurrency, pluralizeArabic } from "@/lib/format";
 import { Currency } from "@/components/storefront/currency";
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
@@ -95,7 +95,7 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
               <div className="mt-2 flex flex-wrap items-center gap-3 text-xs">
                 {stats.count > 0 && (
                   <span className="flex items-center gap-1 text-amber-500 font-semibold">
-                    {"★".repeat(Math.round(stats.rating))} <span className="text-stone-400 font-normal">({stats.rating} · {stats.count} تقييم)</span>
+                    {"★".repeat(Math.round(stats.rating))} <span className="text-stone-400 font-normal">({stats.rating} · {stats.count} {pluralizeArabic(stats.count, "تقييم", "تقييمين", "تقييمات")})</span>
                   </span>
                 )}
                 {product.sku && <span className="text-stone-400">SKU: <span dir="ltr">{product.sku}</span></span>}
