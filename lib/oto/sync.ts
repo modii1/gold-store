@@ -20,20 +20,55 @@ type OrderInfo = {
   delivery_option_name: string | null;
 };
 
-function mapStatus(status?: string): string {
-  const s = (status || "").toLowerCase();
-  if (s.includes("delivered")) return "delivered";
-  if (s.includes("return") || s.includes("rto")) return "returned";
-  if (s.includes("cancel")) return "cancelled";
-  if (s.includes("fail") || s.includes("error")) return "failed";
-  // "shipmentOnHoldWarehouse" (suspended by warehouse) must be checked BEFORE
-  // anything containing "ship" — otherwise it wrongly maps to in_transit.
-  if (s.includes("onhold") || s.includes("on_hold") || s.includes("suspend")) return "on_hold";
-  if (s === "new") return "pending";
-  if (s.includes("outfordelivery") || s.includes("out for delivery")) return "in_transit";
-  if (s.includes("transit") || s.includes("pickedup") || s.includes("picked_up") || s.includes("shipped")) return "in_transit";
-  if (s.includes("ship") || s.includes("processing") || s.includes("pick")) return "processing";
+/**
+ * Classify a raw OTO status into a coarse local bucket.
+ *
+ * OTO exposes dozens of granular statuses (shipmentProcessing, outForDelivery,
+ * shipmentOnHoldWarehouse, returnShipmentProcessing, ...). Instead of
+ * registering each one, we classify by keyword families — mirroring OTO's own
+ * dashboard groups (قيد التنفيذ / بانتظار التسليم / جاري الشحن / المعلقة /
+ * المرتجعات). Unknown statuses fall back to "processing" so we never guess a
+ * wrong bucket, and the raw status is always kept for display.
+ */
+const OTO_STATUS_KEYWORDS: { bucket: string; keywords: string[] }[] = [
+  // Terminal / outcome states first (never ambiguous).
+  { bucket: "delivered", keywords: ["delivered", "received-by-customer"] },
+  { bucket: "returned", keywords: ["return", "rto", "reverse"] },
+  { bucket: "cancelled", keywords: ["cancel", "cancelled"] },
+  { bucket: "failed", keywords: ["fail", "error", "notscheduled", "not_scheduled", "unabletoassign", "unable_to_assign"] },
+  // On-hold must be checked BEFORE anything containing "ship"/"transit" —
+  // e.g. "shipmentOnHoldWarehouse" must not map to in_transit.
+  { bucket: "on_hold", keywords: ["onhold", "on_hold", "suspend", "pendingcancel", "pending_cancel", "hold"] },
+  // Actually moving towards the customer.
+  { bucket: "in_transit", keywords: [
+    "outfordelivery", "out for delivery", "out_for_delivery",
+    "shipped", "transit", "pickedup", "picked_up",
+    "waytocustomer", "way_to_customer", "ontheway", "on_the_way",
+    "reached", "arrived", "destination", "leftwarehouse", "left_warehouse", "left_the_warehouse",
+    "arrivewarehouse", "arrive_warehouse", "reachedwarehouse", "reached_warehouse",
+    "airport", "airline", "customs", "clearance", "handedto", "handed_to", "international",
+  ] },
+  // Confirmed & waiting for pickup / delivery slot.
+  { bucket: "awaiting_delivery", keywords: [
+    "awaiting", "readyforpickup", "ready_for_pickup", "ready",
+    "confirmed", "scheduled", "schedule", "confirmedandscheduled",
+    "pickuppoint", "pickup_point", "reachedpickup", "reached_pickup",
+    "underprocessing", "under_processing",
+  ] },
+];
+
+function classifyStatus(status?: string): string {
+  const s = (status || "").trim().toLowerCase();
+  if (!s) return "processing";
+  for (const group of OTO_STATUS_KEYWORDS) {
+    if (group.keywords.some((k) => s.includes(k))) return group.bucket;
+  }
+  // Unknown / not-yet-mapped states are kept safe under "قيد التنفيذ".
   return "processing";
+}
+
+function mapStatus(status?: string): string {
+  return classifyStatus(status);
 }
 export { mapStatus };
 
@@ -43,12 +78,21 @@ export function otoStatusLabel(status?: string | null): string {
   if (s.includes("delivered")) return "تم التوصيل";
   if (s.includes("return")) return "مرتجع";
   if (s.includes("cancel")) return "ملغي";
-  if (s.includes("fail")) return "فشل الشحن";
+  if (s.includes("fail") || s.includes("notscheduled") || s.includes("unabletoassign")) return "فشل الشحن";
   if (s.includes("onhold") || s.includes("on_hold") || s.includes("suspend")) return "معلقة بالمستودع";
+  if (s.includes("pendingcancel") || s.includes("pending_cancel")) return "قيد الانتظار للإلغاء";
   if (s === "new") return "جديدة لدى OTO";
-  if (s.includes("outfordelivery") || s.includes("out for delivery")) return "خارج للتوصيل";
+  if (s.includes("outfordelivery") || s.includes("out for delivery") || s.includes("out_for_delivery")) return "خارج للتوصيل";
   if (s.includes("pickedup") || s.includes("picked_up") || s.includes("shipped")) return "تم الشحن";
-  if (s.includes("transit")) return "في الطريق";
+  if (s.includes("transit") || s.includes("ontheway") || s.includes("on_the_way") || s.includes("waytocustomer")) return "في الطريق";
+  if (s.includes("airport")) return "تم شحنها إلى المطار";
+  if (s.includes("airline")) return "تم تسليمها لشركة الطيران";
+  if (s.includes("customs") || s.includes("clearance")) return "اكتملت إجراءات التخليص الجمركي";
+  if (s.includes("reachedwarehouse") || s.includes("reached_warehouse") || s.includes("arrivewarehouse")) return "وصل المستودع";
+  if (s.includes("leftwarehouse") || s.includes("left_warehouse") || s.includes("left_the_warehouse")) return "غادر المستودع";
+  if (s.includes("readyforpickup") || s.includes("ready_for_pickup") || s.includes("ready")) return "جاهزة للاستلام";
+  if (s.includes("awaiting")) return "بانتظار التسليم";
+  if (s.includes("confirmed") || s.includes("scheduled")) return "مؤكد ومُجَدول للشحن";
   if (s.includes("processing") || s.includes("approve")) return "قيد المعالجة";
   if (s.includes("ship")) return "قيد التجهيز";
   return status ? String(status) : "";

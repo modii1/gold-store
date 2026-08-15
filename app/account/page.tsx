@@ -44,6 +44,7 @@ const RETURN_STATUS: Record<string, { label: string; cls: string }> = {
 const SHIPMENT_STATUS: Record<string, { label: string; cls: string }> = {
   pending: { label: "قيد الانتظار", cls: "bg-stone-100 text-stone-600" },
   processing: { label: "قيد المعالجة", cls: "bg-amber-50 text-amber-700" },
+  awaiting_delivery: { label: "بانتظار التسليم", cls: "bg-cyan-50 text-cyan-700" },
   in_transit: { label: "في الطريق", cls: "bg-blue-50 text-blue-700" },
   on_hold: { label: "معلقة بالمستودع", cls: "bg-violet-50 text-violet-700" },
   delivered: { label: "تم التسليم", cls: "bg-teal-50 text-teal-700" },
