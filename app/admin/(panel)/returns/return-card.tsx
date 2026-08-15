@@ -168,6 +168,17 @@ export function ReturnCard({ request }: { request: ReturnRequest }) {
           </div>
         )}
 
+        {status === "approved" && request.return_status === "error" && !request.oto_return_order_id && (
+          <button
+            onClick={handleApprove}
+            disabled={loading}
+            className="flex items-center gap-2 rounded-xl bg-amber-600 px-5 py-2.5 text-sm font-bold text-white hover:bg-amber-700 transition disabled:opacity-50 w-fit"
+          >
+            {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Truck className="w-4 h-4" />}
+            إعادة محاولة إنشاء شحنة المرتجع
+          </button>
+        )}
+
         {status === "approved" && (
           <div className="flex flex-wrap gap-2">
             <button

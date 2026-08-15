@@ -32,6 +32,14 @@ const STATUS: Record<string, { label: string; cls: string }> = {
   returned: { label: "مرتجع", cls: "bg-rose-50 text-rose-600" },
 };
 
+const RETURN_STATUS: Record<string, { label: string; cls: string }> = {
+  pending: { label: "قيد المراجعة", cls: "bg-amber-50 text-amber-700" },
+  approved: { label: "مقبول", cls: "bg-emerald-50 text-emerald-700" },
+  rejected: { label: "مرفوض", cls: "bg-red-50 text-red-600" },
+  received: { label: "تم الاستلام", cls: "bg-blue-50 text-blue-700" },
+  refunded: { label: "تم رد المبلغ", cls: "bg-stone-100 text-stone-700" },
+};
+
 export default async function AccountPage() {
   const session = await getCustomerSession();
   if (!session) redirect("/login");
@@ -272,14 +280,20 @@ export default async function AccountPage() {
               <h2 className="flex items-center gap-2 text-lg font-bold text-ink"><RotateCcw className="h-5 w-5 text-gold" /> طلبات الاسترجاع</h2>
               <div className="mt-4 space-y-3">
                 {(returns || []).length === 0 && <p className="text-sm text-stone-400">لا توجد طلبات استرجاع.</p>}
-                {(returns || []).map((request: any) => (
-                  <div key={request.id} className="rounded-2xl bg-stone-50 p-4 text-sm">
-                    <div className="flex justify-between font-bold"><span>طلب #{request.order_id.slice(0, 8)}</span><span className="text-gold-dark">{request.status}</span></div>
-                    <p className="mt-1 text-stone-500">{request.reason} {request.details && `— ${request.details}`}</p>
-                    {request.admin_note && <p className="mt-1 text-xs text-stone-400">ملاحظة: {request.admin_note}</p>}
-                    <p className="mt-1 text-xs text-stone-400 text-right" dir="ltr">{formatDate(request.created_at)}</p>
-                  </div>
-                ))}
+                {(returns || []).map((request: any) => {
+                  const rst = RETURN_STATUS[request.status] || { label: request.status, cls: "bg-stone-100 text-stone-700" };
+                  return (
+                    <div key={request.id} className="rounded-2xl bg-stone-50 p-4 text-sm">
+                      <div className="flex justify-between items-center gap-2">
+                        <span className="font-bold">طلب #{request.order_id.slice(0, 8)}</span>
+                        <span className={`rounded-full px-2.5 py-0.5 text-xs font-bold ${rst.cls}`}>{rst.label}</span>
+                      </div>
+                      <p className="mt-1 text-stone-500">{request.reason} {request.details && `— ${request.details}`}</p>
+                      {request.admin_note && <p className="mt-1 text-xs text-stone-400">ملاحظة: {request.admin_note}</p>}
+                      <p className="mt-1 text-xs text-stone-400 text-right" dir="ltr">{formatDate(request.created_at)}</p>
+                    </div>
+                  );
+                })}
               </div>
               {returnableOrders.length > 0 && (
                 <div className="mt-4 border-t border-sand pt-4">

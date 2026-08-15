@@ -39,6 +39,14 @@ export async function createReturnRequestAction(formData: FormData) {
   const supabase = createAdminClient();
   const { data: order } = await supabase.from("orders").select("id,customer_identifier").eq("id", orderId).eq("customer_identifier", session.phone).maybeSingle();
   if (!order) return { error: "الطلب غير موجود" };
+  const { data: existing } = await supabase
+    .from("return_requests")
+    .select("id")
+    .eq("order_id", orderId)
+    .eq("customer_identifier", session.phone)
+    .in("status", ["pending", "approved", "received"])
+    .maybeSingle();
+  if (existing) return { error: "لديك طلب استرجاع قائم لهذا الطلب بالفعل — انتظر الرد عليه" };
   const { error } = await supabase.from("return_requests").insert({
     order_id: orderId,
     customer_identifier: session.phone,
@@ -50,11 +58,24 @@ export async function createReturnRequestAction(formData: FormData) {
   return { success: true };
 }
 
+const RETURN_TRANSITIONS: Record<string, string[]> = {
+  pending: ["approved", "rejected"],
+  approved: ["received", "refunded"],
+  received: ["refunded"],
+  rejected: ["pending"],
+  refunded: [],
+};
+
 export async function updateReturnRequestAction(formData: FormData) {
   const id = String(formData.get("id") || "");
   const status = String(formData.get("status") || "pending");
   if (!id) return { error: "معرف الطلب مطلوب" };
-  const { error } = await createAdminClient().from("return_requests").update({ status, admin_note: String(formData.get("admin_note") || "").trim() || null, updated_at: new Date().toISOString() }).eq("id", id);
+  if (status === "approved") return { error: "الموافقة تنشئ شحنة مرتجع عبر OTO — استخدم زر «موافقة وإنشاء شحنة مرتجع»" };
+  const supabase = createAdminClient();
+  const { data: rr } = await supabase.from("return_requests").select("status").eq("id", id).maybeSingle();
+  const allowed = RETURN_TRANSITIONS[rr?.status || ""] || [];
+  if (!allowed.includes(status)) return { error: "لا يمكن تكرار العملية — هذه الحالة غير مسموحة من الحالة الحالية" };
+  const { error } = await supabase.from("return_requests").update({ status, admin_note: String(formData.get("admin_note") || "").trim() || null, updated_at: new Date().toISOString() }).eq("id", id);
   if (error) return { error: error.message };
   revalidatePath("/admin/returns");
   return { success: true };
@@ -70,7 +91,9 @@ export async function approveReturnRequestAction(returnRequestId: string) {
     .eq("id", returnRequestId)
     .maybeSingle();
   if (rrErr || !rr) return { error: rrErr?.message || "طلب المرتجع غير موجود" };
-  if (rr.status !== "pending") return { error: "هذا الطلب تمت معالجته مسبقاً" };
+  if (rr.oto_return_order_id || rr.return_status === "created") return { error: "تم إنشاء شحنة المرتجع مسبقاً — لا يمكن تكرار العملية" };
+  const canApprove = rr.status === "pending" || (rr.status === "approved" && rr.return_status === "error");
+  if (!canApprove) return { error: "هذا الطلب تمت معالجته مسبقاً" };
 
   const { data: shipment } = await supabase
     .from("shipments")
