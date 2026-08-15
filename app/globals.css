@@ -109,3 +109,11 @@ h1, h2, h3 {
   from { transform: translateX(-100%); }
   to { transform: translateX(0); }
 }
+
+.drawer-in-right {
+  animation: drawerInRight 0.35s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+@keyframes drawerInRight {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}

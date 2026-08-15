@@ -35,7 +35,7 @@ export default async function AdminProductsPage() {
         <div className="overflow-x-auto rounded-2xl border border-amber-100 bg-white">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-stone-100 text-right text-stone-500">
+              <tr className="border-b border-stone-100 text-end text-stone-500">
                 <th className="p-4 font-semibold">المنتج</th>
                 <th className="p-4 font-semibold">السعر</th>
                 <th className="p-4 font-semibold hidden md:table-cell">الفئة</th>

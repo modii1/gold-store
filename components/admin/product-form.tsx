@@ -207,7 +207,7 @@ export function ProductForm({ product }: { product?: Product }) {
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src={img.url} alt="" className="h-full w-full object-cover" />
                   <button type="button" onClick={() => setImages(images.filter((_, idx) => idx !== i))}
-                    className="absolute top-1 left-1 flex h-6 w-6 items-center justify-center rounded-full bg-black/60 text-white md:opacity-0 md:group-hover:opacity-100 transition">
+                    className="absolute top-1 start-1 flex h-6 w-6 items-center justify-center rounded-full bg-black/60 text-white md:opacity-0 md:group-hover:opacity-100 transition">
                     <X className="w-3.5 h-3.5" />
                   </button>
                 </div>

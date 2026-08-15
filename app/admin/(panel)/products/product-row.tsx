@@ -33,7 +33,7 @@ export function ProductRow({ product }: { product: Product }) {
       <td className="p-4 text-stone-500 hidden md:table-cell">
         <span className="flex items-center gap-1.5">
           <ImageIcon className="w-4 h-4 text-stone-400" /> {product.images?.length || 0}
-          <PlayCircle className="w-4 h-4 text-gold ml-1" /> {product.videos?.length || 0}
+          <PlayCircle className="w-4 h-4 text-gold ms-1" /> {product.videos?.length || 0}
         </span>
       </td>
       <td className="p-4">

@@ -45,7 +45,7 @@ export function ProductCard({ product }: { product: Product }) {
           )}
 
           {/* Badges */}
-          <div className="absolute top-3 right-3 flex flex-col gap-1.5 items-end">
+          <div className="absolute top-3 end-3 flex flex-col gap-1.5 items-end">
             {disc > 0 && (
               <span className="rounded-full bg-gold px-2.5 py-0.5 text-[10px] font-bold text-ivory shadow">
                 خصم {disc}%
@@ -64,7 +64,7 @@ export function ProductCard({ product }: { product: Product }) {
           </div>
 
           {hasVideo && (
-            <span className="absolute bottom-3 right-3 flex items-center gap-1 rounded-full bg-ink/70 text-ivory text-[10px] px-2.5 py-1 backdrop-blur">
+            <span className="absolute bottom-3 end-3 flex items-center gap-1 rounded-full bg-ink/70 text-ivory text-[10px] px-2.5 py-1 backdrop-blur">
               <PlayCircle className="w-3.5 h-3.5 text-gold" /> فيديو
             </span>
           )}
@@ -75,7 +75,7 @@ export function ProductCard({ product }: { product: Product }) {
       <button
         onClick={() => toggleFav(product.id)}
         aria-label="إضافة للمفضلة"
-        className="absolute top-3 left-3 flex h-9 w-9 items-center justify-center rounded-full bg-white/85 backdrop-blur shadow border border-sand text-stone-500 hover:text-red-500 transition z-10"
+        className="absolute top-3 start-3 flex h-9 w-9 items-center justify-center rounded-full bg-white/85 backdrop-blur shadow border border-sand text-stone-500 hover:text-red-500 transition z-10"
       >
         <Heart className={cn("w-4 h-4", isFav(product.id) && "fill-red-500 text-red-500")} />
       </button>

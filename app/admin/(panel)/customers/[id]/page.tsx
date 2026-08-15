@@ -62,7 +62,7 @@ export default async function AdminCustomerDetailsPage({ params }: { params: Pro
                 <p className="font-bold text-stone-900">طلب #{order.order_number}</p>
                 <p className="mt-1 text-xs text-stone-400">{new Date(order.created_at).toLocaleString("ar-SA")}</p>
               </div>
-              <div className="text-left"><Currency value={order.total} className="text-lg font-bold text-gold" /><Status status={order.status} /></div>
+              <div className="text-start"><Currency value={order.total} className="text-lg font-bold text-gold" /><Status status={order.status} /></div>
             </div>
             <div className="mt-4 grid gap-3 border-t border-stone-100 pt-4 text-sm text-stone-600 sm:grid-cols-2">
               <p className="flex items-start gap-2"><MapPin className="mt-0.5 h-4 w-4 shrink-0 text-gold" />{[order.address, order.national_address, order.region, order.customer_city].filter(Boolean).join("، ") || "لا يوجد عنوان محفوظ"}</p>

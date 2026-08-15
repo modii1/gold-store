@@ -24,7 +24,7 @@ export default async function OrderSuccessPage({ searchParams }: { searchParams:
           <p className="mt-4 text-sm text-stone-400 leading-relaxed whitespace-pre-line">{settings.payment_instructions}</p>
 
           {settings.bank_name && (
-            <div className="mt-4 rounded-2xl bg-cream/70 p-4 text-sm text-right">
+            <div className="mt-4 rounded-2xl bg-cream/70 p-4 text-sm text-end">
               <p className="font-bold text-ink">بيانات التحويل</p>
               <p className="mt-1 text-stone-600">البنك: {settings.bank_name}</p>
               <p className="text-stone-600">المستفيد: {settings.account_name || "-"}</p>

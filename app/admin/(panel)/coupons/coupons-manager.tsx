@@ -133,7 +133,7 @@ export function CouponsManager({ coupons }: { coupons: Coupon[] }) {
       <div className="hidden md:block overflow-x-auto rounded-2xl border border-amber-100 bg-white">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-stone-100 text-right text-stone-500">
+            <tr className="border-b border-stone-100 text-end text-stone-500">
               <th className="p-3 font-semibold">الكود</th>
               <th className="p-3 font-semibold">النوع</th>
               <th className="p-3 font-semibold">القيمة</th>
@@ -186,7 +186,7 @@ export function CouponsManager({ coupons }: { coupons: Coupon[] }) {
                     {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />} حفظ
                   </button>
                   <button onClick={() => delRow(row)}
-                    className="mr-1 inline-flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-bold text-stone-500 hover:bg-rose-50 hover:text-rose-600 transition">
+                    className="me-1 inline-flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-bold text-stone-500 hover:bg-rose-50 hover:text-rose-600 transition">
                     <Trash2 className="w-3.5 h-3.5" /> حذف
                   </button>
                 </td>

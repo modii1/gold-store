@@ -24,7 +24,7 @@ export function CartDrawer({ settings }: { settings: Settings }) {
   return (
     <div className="fixed inset-0 z-[90]">
       <div className="absolute inset-0 bg-ink/50 fade-in" onClick={closeCart} />
-      <aside className="absolute inset-y-0 left-0 w-full max-w-md bg-ivory shadow-2xl flex flex-col drawer-in">
+      <aside className="absolute inset-y-0 start-0 w-full max-w-md bg-ivory shadow-2xl flex flex-col drawer-in">
         <header className="flex items-center justify-between border-b border-sand bg-white px-5 py-4">
           <h2 className="font-bold text-lg text-ink flex items-center gap-2">
             <ShoppingBag className="w-5 h-5 text-gold" /> سلة التسوق
@@ -61,7 +61,7 @@ export function CartDrawer({ settings }: { settings: Settings }) {
                     <button onClick={() => updateQty(item.product_id, item.qty + 1)} className="h-7 w-7 rounded-md border border-sand flex items-center justify-center text-stone-500 hover:border-gold hover:text-gold transition">
                       <Plus className="w-3.5 h-3.5" />
                     </button>
-                    <button onClick={() => removeFromCart(item.product_id)} className="mr-auto text-stone-300 hover:text-red-500 transition">
+                    <button onClick={() => removeFromCart(item.product_id)} className="me-auto text-stone-300 hover:text-red-500 transition">
                       <Trash2 className="w-4 h-4" />
                     </button>
                   </div>

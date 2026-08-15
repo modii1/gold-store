@@ -31,7 +31,7 @@ function ImagePicker({ label, name, value, onChange }: { label: string; name: st
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={value} alt={label} className="h-28 w-full object-cover" />
           <button type="button" onClick={() => onChange(null)}
-            className="absolute top-2 left-2 flex h-7 w-7 items-center justify-center rounded-full bg-black/60 text-white hover:bg-red-500 transition">
+            className="absolute top-2 start-2 flex h-7 w-7 items-center justify-center rounded-full bg-black/60 text-white hover:bg-red-500 transition">
             <X className="w-4 h-4" />
           </button>
         </div>

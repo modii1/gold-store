@@ -91,7 +91,7 @@ export function ShipmentsTable({ shipments }: { shipments: Shipment[] }) {
         <div className="overflow-x-auto rounded-2xl border border-amber-100 bg-white">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-amber-50 text-right text-xs text-stone-500">
+              <tr className="border-b border-amber-50 text-end text-xs text-stone-500">
                 <th className="px-4 py-3 font-semibold">رقم التتبع</th>
                 <th className="px-4 py-3 font-semibold">الشركة</th>
                 <th className="px-4 py-3 font-semibold">الحالة</th>

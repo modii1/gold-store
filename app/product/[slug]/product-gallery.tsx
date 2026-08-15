@@ -79,14 +79,14 @@ export function ProductGallery({ product }: { product: Product }) {
             )}
             <button
               onClick={() => setZoomed((z) => !z)}
-              className="absolute bottom-4 left-4 flex h-10 w-10 items-center justify-center rounded-full bg-white/85 backdrop-blur text-ink shadow border border-sand hover:text-gold transition"
+              className="absolute bottom-4 start-4 flex h-10 w-10 items-center justify-center rounded-full bg-white/85 backdrop-blur text-ink shadow border border-sand hover:text-gold transition"
               aria-label="تكبير"
             >
               <ZoomIn className="w-5 h-5" />
             </button>
             <button
               onClick={() => setFullscreen(true)}
-              className="absolute bottom-4 right-4 flex h-10 w-10 items-center justify-center rounded-full bg-white/85 backdrop-blur text-ink shadow border border-sand hover:text-gold transition"
+              className="absolute bottom-4 end-4 flex h-10 w-10 items-center justify-center rounded-full bg-white/85 backdrop-blur text-ink shadow border border-sand hover:text-gold transition"
               aria-label="ملء الشاشة"
             >
               <Maximize2 className="w-5 h-5" />
@@ -102,7 +102,7 @@ export function ProductGallery({ product }: { product: Product }) {
         {fullscreen && (
           <button
             onClick={() => setFullscreen(false)}
-            className="absolute top-4 left-4 flex h-10 w-10 items-center justify-center rounded-full bg-white/85 backdrop-blur text-ink shadow"
+            className="absolute top-4 start-4 flex h-10 w-10 items-center justify-center rounded-full bg-white/85 backdrop-blur text-ink shadow"
             aria-label="إغلاق"
           >
             <Maximize2 className="w-5 h-5 rotate-45" />

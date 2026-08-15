@@ -58,7 +58,7 @@ export function StoreHeader({ settings, categories }: { settings: Settings; cate
                 <Link href="/favorites" className="hidden sm:block p-2 text-ink hover:text-gold transition relative" aria-label="المفضلة">
                   <Heart className="w-5 h-5 md:w-6 md:h-6" />
                   {favs.size > 0 && (
-                    <span className="absolute -top-0.5 -left-0.5 h-4 w-4 rounded-full bg-gold text-white text-[9px] flex items-center justify-center font-bold">
+                    <span className="absolute -top-0.5 -start-0.5 h-4 w-4 rounded-full bg-gold text-white text-[9px] flex items-center justify-center font-bold">
                       {favs.size}
                     </span>
                   )}
@@ -66,7 +66,7 @@ export function StoreHeader({ settings, categories }: { settings: Settings; cate
                 <button onClick={openCart} className="p-2 text-ink hover:text-gold transition relative" aria-label="السلة">
                   <ShoppingBag className="w-5 h-5 md:w-6 md:h-6" />
                   {count > 0 && (
-                    <span className="absolute -top-0.5 -left-0.5 h-4 w-4 rounded-full bg-gold text-white text-[9px] flex items-center justify-center font-bold">
+                    <span className="absolute -top-0.5 -start-0.5 h-4 w-4 rounded-full bg-gold text-white text-[9px] flex items-center justify-center font-bold">
                       {count}
                     </span>
                   )}
@@ -81,7 +81,7 @@ export function StoreHeader({ settings, categories }: { settings: Settings; cate
       {menuOpen && (
         <div className="fixed inset-0 z-[80] md:hidden">
           <div className="absolute inset-0 bg-ink/50 fade-in" onClick={() => setMenuOpen(false)} />
-          <aside className="absolute inset-y-0 right-0 w-72 bg-ivory shadow-2xl drawer-in">
+          <aside className="absolute inset-y-0 right-0 w-72 bg-ivory shadow-2xl drawer-in-right">
             <div className="flex items-center justify-between px-4 py-4 border-b border-sand bg-white">
               <p className="font-bold text-ink">القائمة</p>
               <button onClick={() => setMenuOpen(false)} className="text-stone-400 hover:text-ink">

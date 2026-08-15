@@ -131,7 +131,7 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
                   {specs.map((s) => (
                     <div key={s.label} className="flex justify-between border-b border-sand/60 pb-2">
                       <dt className="text-stone-400">{s.label}</dt>
-                      <dd className="font-bold text-ink text-left" dir="ltr">{s.value}</dd>
+                      <dd className="font-bold text-ink text-start" dir="ltr">{s.value}</dd>
                     </div>
                   ))}
                 </dl>

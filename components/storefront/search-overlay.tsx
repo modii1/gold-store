@@ -102,7 +102,7 @@ export function SearchOverlay({ open, onClose }: { open: boolean; onClose: () =>
                       ) : (
                         <div className="h-14 w-14 rounded-lg bg-sand/50" />
                       )}
-                      <div className="flex-1 text-right">
+                      <div className="flex-1 text-end">
                         <p className="text-sm font-bold text-ink">{r.name}</p>
                         <p className="text-xs text-stone-400">
                           {r.category || ""}
