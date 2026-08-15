@@ -9,6 +9,15 @@ type SyncRow = {
   tracking_number: string | null;
   dc_tracking_number: string | null;
   status: string;
+  delivery_company: string | null;
+  delivery_option_name: string | null;
+};
+
+type OrderInfo = {
+  id: string;
+  order_number: number | null;
+  shipping_method: string | null;
+  delivery_option_name: string | null;
 };
 
 function mapStatus(status?: string): string {
@@ -52,7 +61,7 @@ export async function syncOtoShipments(limit = 100): Promise<{ total: number; up
   // missing tracking details — keeps page loads fast while filling gaps.
   const { data, error } = await supabase
     .from("shipments")
-    .select("id, order_id, oto_order_id, tracking_number, dc_tracking_number, status")
+    .select("id, order_id, oto_order_id, tracking_number, dc_tracking_number, status, delivery_company, delivery_option_name")
     .not("oto_order_id", "is", null)
     .not("status", "in", '("delivered","cancelled","returned")')
     .order("created_at", { ascending: false })
@@ -61,6 +70,18 @@ export async function syncOtoShipments(limit = 100): Promise<{ total: number; up
   if (error || !data) return { total: 0, updated: 0, failed: 0, skipped: 0 };
 
   const rows = data as SyncRow[];
+
+  // Pull linked order info (order number, carrier / delivery option) so
+  // shipments always show a useful name even before OTO assigns tracking.
+  const orderIds = Array.from(new Set(rows.map((r) => r.order_id).filter(Boolean))) as string[];
+  const orders = new Map<string, OrderInfo>();
+  if (orderIds.length) {
+    const { data: orderRows } = await supabase
+      .from("orders")
+      .select("id, order_number, shipping_method, delivery_option_name")
+      .in("id", orderIds);
+    (orderRows || []).forEach((o) => orders.set(o.id, o as OrderInfo));
+  }
   let updated = 0;
   let failed = 0;
   let skipped = 0;
@@ -90,10 +111,21 @@ export async function syncOtoShipments(limit = 100): Promise<{ total: number; up
         const eventType = eventTypeFromStatus(info.status || "");
         const externalEventId = `oto.sync.${otoId}.${info.status ?? "status"}.${tracking ?? "x"}`;
 
+        const order = row.order_id ? orders.get(row.order_id) : undefined;
+        const company =
+          info.deliveryCompany ||
+          row.delivery_company ||
+          order?.delivery_option_name ||
+          order?.shipping_method ||
+          null;
+        const optionName = info.deliveryOptionName || row.delivery_option_name || order?.delivery_option_name || order?.shipping_method || null;
+
         const changed =
           info.trackingNumber !== row.tracking_number ||
           info.dcTrackingNumber !== row.dc_tracking_number ||
-          status !== row.status;
+          status !== row.status ||
+          company !== row.delivery_company ||
+          optionName !== row.delivery_option_name;
 
         if (changed) {
           const patch: Record<string, unknown> = {
@@ -104,7 +136,8 @@ export async function syncOtoShipments(limit = 100): Promise<{ total: number; up
             print_awb_url: info.printAWBURL || undefined,
             status,
             dc_status: info.dcStatus || info.status || undefined,
-            delivery_company: info.deliveryCompany || undefined,
+            delivery_company: company || undefined,
+            delivery_option_name: optionName || undefined,
             driver_name: info.driverName || undefined,
             driver_phone: info.driverPhone || undefined,
             updated_at: new Date().toISOString(),

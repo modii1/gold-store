@@ -20,5 +20,23 @@ export default async function AdminShipmentsPage() {
   }
 
   const { data: shipments } = await supabase.from("shipments").select("*").order("created_at", { ascending: false }).limit(200);
-  return <ShipmentsTable shipments={(shipments as any[]) || []} syncResult={syncResult} />;
+
+  // Attach order number + customer name so the table is actionable even when
+  // OTO hasn't assigned tracking details yet.
+  const orderIds = Array.from(new Set(((shipments || []) as { order_id: string | null }[]).map((s) => s.order_id).filter(Boolean)));
+  const orders = new Map<string, { order_number: number | null; customer_name: string | null; customer_city: string | null }>();
+  if (orderIds.length) {
+    const { data: orderRows } = await supabase
+      .from("orders")
+      .select("id, order_number, customer_name, customer_city")
+      .in("id", orderIds);
+    (orderRows || []).forEach((o) => orders.set(o.id, o));
+  }
+
+  const enriched = ((shipments || []) as any[]).map((s) => {
+    const o = s.order_id ? orders.get(s.order_id) : undefined;
+    return { ...s, order_number: o?.order_number ?? null, customer_name: o?.customer_name ?? null, customer_city: o?.customer_city ?? null };
+  });
+
+  return <ShipmentsTable shipments={enriched} syncResult={syncResult} />;
 }

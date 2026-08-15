@@ -11,6 +11,9 @@ type SyncResult = { total: number; updated: number; failed: number; skipped: num
 type Shipment = {
   id: string;
   order_id: string | null;
+  order_number: number | null;
+  customer_name: string | null;
+  customer_city: string | null;
   oto_order_id: number | null;
   delivery_company: string | null;
   delivery_option_name: string | null;
@@ -55,7 +58,9 @@ export function ShipmentsTable({ shipments, syncResult }: { shipments: Shipment[
       String(s.tracking_number || "").toLowerCase().includes(q) ||
       String(s.delivery_company || "").toLowerCase().includes(q) ||
       String(s.delivery_option_name || "").toLowerCase().includes(q) ||
-      String(s.oto_order_id || "").includes(q);
+      String(s.order_number || "").includes(q) ||
+      String(s.oto_order_id || "").includes(q) ||
+      String(s.customer_name || "").toLowerCase().includes(q);
     return matchesStatus && matchesQuery;
   });
 
@@ -118,7 +123,7 @@ export function ShipmentsTable({ shipments, syncResult }: { shipments: Shipment[
 
       <div className="relative">
         <Search className="absolute start-3 top-2.5 w-4 h-4 text-stone-400" />
-        <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="ابحث برقم التتبع أو الشركة..." className={inputCls + " w-full ps-9"} />
+        <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="ابحث برقم الطلب أو التتبع أو الشركة أو العميل..." className={inputCls + " w-full ps-9"} />
       </div>
 
       {filtered.length === 0 ? (
@@ -131,6 +136,8 @@ export function ShipmentsTable({ shipments, syncResult }: { shipments: Shipment[
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-amber-50 text-end text-xs text-stone-500">
+                <th className="px-4 py-3 font-semibold">الطلب</th>
+                <th className="px-4 py-3 font-semibold">العميل</th>
                 <th className="px-4 py-3 font-semibold">رقم التتبع</th>
                 <th className="px-4 py-3 font-semibold">الشركة</th>
                 <th className="px-4 py-3 font-semibold">الحالة</th>
@@ -146,6 +153,14 @@ export function ShipmentsTable({ shipments, syncResult }: { shipments: Shipment[
                 const meta = statusMeta[s.status] || { label: s.status, cls: "bg-stone-100 text-stone-600" };
                 return (
                   <tr key={s.id} className="border-b border-amber-50/50 last:border-0 hover:bg-amber-50/30">
+                    <td className="px-4 py-3 font-bold text-gold-dark">
+                      {s.order_number ? `#${s.order_number}` : s.order_id?.slice(0, 8) || "—"}
+                      {s.oto_order_id ? <span className="block text-[10px] font-normal text-stone-400" dir="ltr">OTO {s.oto_order_id}</span> : null}
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className="font-semibold text-stone-800">{s.customer_name || "—"}</span>
+                      {s.customer_city ? <span className="block text-xs text-stone-400">{s.customer_city}</span> : null}
+                    </td>
                     <td className="px-4 py-3 font-bold text-stone-800" dir="ltr">{s.tracking_number || s.dc_tracking_number || "—"}</td>
                     <td className="px-4 py-3">{s.delivery_option_name || s.delivery_company || "—"}</td>
                     <td className="px-4 py-3">
