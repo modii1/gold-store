@@ -1,0 +1,310 @@
+import { createAdminClient } from "@/lib/supabase/admin";
+import type { EventInput, TemplateVariables, ChannelCode, Category, Severity } from "./types";
+import { ingestEvent, logNotificationEvent } from "./events";
+import { BUILT_IN_TEMPLATES, renderTemplate, renderTemplateTitle, validateTemplateVariables } from "./templates";
+import { builtInRuleFor, matchRule, resolveChannels } from "./rules";
+import { getCustomerPreferences, filterChannelsForCustomer } from "./preferences";
+import { createDeliveries, attemptDelivery } from "./dispatcher";
+
+/**
+ * Notification Engine — the single entry point for producing notifications.
+ *
+ *   Event -> ingest (idempotent) -> template + rules -> notifications ->
+ *   channel deliveries -> dispatch attempts.
+ *
+ * Nothing in the app talks to an SMS/Email provider directly; it always goes
+ * through this engine and the channel adapters.
+ */
+
+type TemplateRow = {
+  event_type: string;
+  name: string;
+  title: string;
+  body: string;
+  severity: string;
+  category: string;
+  channels: ChannelCode[];
+  is_active: boolean;
+};
+
+type RuleRow = {
+  event_type: string;
+  name: string;
+  condition: Record<string, unknown>;
+  channels: ChannelCode[];
+  recipients: string[];
+  is_active: boolean;
+};
+
+type ChannelRow = { code: ChannelCode; enabled: boolean };
+
+async function loadEnabledChannels(): Promise<ChannelCode[]> {
+  const supabase = createAdminClient();
+  const { data } = await supabase.from("notification_channels").select("code, enabled");
+  if (!data) return ["in_app"];
+  return (data as ChannelRow[]).filter((c) => c.enabled).map((c) => c.code);
+}
+
+async function loadTemplate(eventType: string): Promise<TemplateRow> {
+  const supabase = createAdminClient();
+  const { data } = await supabase.from("notification_templates").select("*").eq("event_type", eventType).maybeSingle();
+  if (data) return data as unknown as TemplateRow;
+  const builtIn = BUILT_IN_TEMPLATES.find((t) => t.event_type === eventType);
+  if (builtIn) return builtIn as unknown as TemplateRow;
+  return {
+    event_type: eventType,
+    name: eventType,
+    title: eventType,
+    body: "",
+    severity: "info",
+    category: "system",
+    channels: ["in_app"],
+    is_active: true,
+  };
+}
+
+async function loadRules(): Promise<RuleRow[]> {
+  const supabase = createAdminClient();
+  const { data } = await supabase.from("notification_rules").select("*");
+  const rows = (data as unknown as RuleRow[]) || [];
+  const merged = new Map<string, RuleRow>();
+  for (const eventType of new Set([...BUILT_IN_TEMPLATES.map((t) => t.event_type), ...rows.map((r) => r.event_type)])) {
+    const dbRule = rows.find((r) => r.event_type === eventType);
+    const builtIn = builtInRuleFor(eventType);
+    merged.set(eventType, {
+      event_type: eventType,
+      name: dbRule?.name || builtIn?.name || eventType,
+      condition: dbRule?.condition || builtIn?.condition || {},
+      channels: dbRule?.channels || builtIn?.channels || ["in_app"],
+      recipients: dbRule?.recipients || builtIn?.recipients || ["admin"],
+      is_active: dbRule?.is_active ?? true,
+    });
+  }
+  return [...merged.values()];
+}
+
+async function enrichVariables(base: TemplateVariables, orderId?: string | null, shipmentId?: string | null): Promise<TemplateVariables> {
+  const vars = { ...base };
+  if (orderId) {
+    const supabase = createAdminClient();
+    const { data: order } = await supabase
+      .from("orders")
+      .select("order_number, customer_name, customer_phone, total, email, tracking_number, tracking_url, delivery_status")
+      .eq("id", orderId)
+      .maybeSingle();
+    if (order) {
+      vars.order_number = vars.order_number ?? (order as { order_number: number }).order_number;
+      vars.customer_name = vars.customer_name ?? (order as { customer_name: string }).customer_name;
+      vars.customer_phone = vars.customer_phone ?? (order as { customer_phone: string }).customer_phone;
+      vars.order_total = vars.order_total ?? (order as { total: number }).total;
+      vars.tracking_number = vars.tracking_number ?? (order as { tracking_number: string | null }).tracking_number;
+      vars.tracking_url = vars.tracking_url ?? (order as { tracking_url: string | null }).tracking_url;
+      vars.shipping_status = vars.shipping_status ?? (order as { delivery_status: string | null }).delivery_status;
+      vars.order_id = orderId;
+    }
+  }
+  if (shipmentId) {
+    const supabase = createAdminClient();
+    const { data: shipment } = await supabase
+      .from("shipments")
+      .select("delivery_company, tracking_number, tracking_url")
+      .eq("id", shipmentId)
+      .maybeSingle();
+    if (shipment) {
+      const s = shipment as { delivery_company: string | null; tracking_number: string | null; tracking_url: string | null };
+      vars.carrier_name = vars.carrier_name ?? s.delivery_company;
+      vars.tracking_number = vars.tracking_number ?? s.tracking_number;
+      vars.tracking_url = vars.tracking_url ?? s.tracking_url;
+    }
+  }
+  return vars;
+}
+
+function severityFor(eventType: string): Severity {
+  const t = BUILT_IN_TEMPLATES.find((x) => x.event_type === eventType);
+  return (t?.severity as Severity) || "info";
+}
+
+function categoryFor(eventType: string): Category {
+  const t = BUILT_IN_TEMPLATES.find((x) => x.event_type === eventType);
+  return (t?.category as Category) || "system";
+}
+
+async function createNotificationRow(args: {
+  userType: "admin" | "customer";
+  userId: string;
+  customerId?: string | null;
+  orderId?: string | null;
+  orderNumber?: number | null;
+  shipmentId?: string | null;
+  eventType: string;
+  category: Category;
+  severity: Severity;
+  title: string;
+  message: string;
+  metadata: Record<string, unknown>;
+  actionUrl?: string | null;
+}): Promise<string | null> {
+  const supabase = createAdminClient();
+  const { data, error } = await supabase
+    .from("notifications")
+    .insert({
+      user_type: args.userType,
+      user_id: args.userId,
+      customer_id: args.customerId ?? null,
+      order_id: args.orderId ?? null,
+      order_number: args.orderNumber ?? null,
+      shipment_id: args.shipmentId ?? null,
+      type: args.eventType,
+      category: args.category,
+      severity: args.severity,
+      title: args.title,
+      message: args.message,
+      metadata: args.metadata,
+      action_url: args.actionUrl ?? null,
+      is_read: false,
+    })
+    .select("id")
+    .single();
+  if (error || !data) {
+    console.error("[notifications] insert failed:", error?.message);
+    return null;
+  }
+  return (data as { id: string }).id;
+}
+
+/**
+ * Emit an event end-to-end: ingest (idempotent) + process into notifications.
+ * Returns false when the event was a duplicate (already processed).
+ */
+export async function emitNotification(input: EventInput): Promise<{ inserted: boolean }> {
+  const { inserted, id: eventId } = await ingestEvent(input);
+  if (!inserted || !eventId) return { inserted: false };
+
+  try {
+    let storeName = "المتجر";
+    let supportPhone = "";
+    try {
+      const supabase = createAdminClient();
+      const { data: settings } = await supabase.from("settings").select("site_name, phone").eq("id", 1).maybeSingle();
+      if (settings) {
+        storeName = (settings as { site_name: string }).site_name || storeName;
+        supportPhone = (settings as { phone: string | null }).phone || "";
+      }
+    } catch {}
+
+    await processEvent({
+      eventId,
+      eventType: input.eventType,
+      orderId: input.orderId ?? null,
+      orderNumber: input.orderNumber ?? null,
+      shipmentId: input.shipmentId ?? null,
+      customerIdentifier: input.customerIdentifier ?? null,
+      payload: { ...input.payload, store_name: storeName, support_phone: supportPhone },
+    });
+    return { inserted: true };
+  } catch (e) {
+    console.error("[notifications] processing failed:", e);
+    await logNotificationEvent({ event: "engine.process_error", level: "error", message: (e as Error).message, payload: input.payload });
+    return { inserted: true };
+  }
+}
+
+export async function processEvent(args: {
+  eventId: number;
+  eventType: string;
+  orderId?: string | null;
+  orderNumber?: number | null;
+  shipmentId?: string | null;
+  customerIdentifier?: string | null;
+  payload: Record<string, unknown>;
+}) {
+  const { eventType, orderId, shipmentId, customerIdentifier, payload } = args;
+  const template = await loadTemplate(eventType);
+  const rules = await loadRules();
+  const enabledChannels = await loadEnabledChannels();
+
+  const variables = await enrichVariables(
+    {
+      ...(payload as TemplateVariables),
+      store_name: typeof payload.store_name === "string" ? payload.store_name : null,
+      support_phone: typeof payload.support_phone === "string" ? payload.support_phone : null,
+    },
+    orderId,
+    shipmentId
+  );
+
+  const title = renderTemplateTitle(template.title, variables);
+  const message = renderTemplate(template.body, variables);
+  const severity = template.severity as Severity;
+  const category = template.category as Category;
+  const channels = resolveChannels(eventType, rules as never[], template.channels, variables, enabledChannels);
+
+  // --- Validate template variables (warn in logs if unknown) ---
+  for (const t of [template.title, template.body]) {
+    const unknown = validateTemplateVariables(t);
+    if (unknown.length) {
+      await logNotificationEvent({ event: "template.unknown_variable", level: "warning", message: `قوالب غير معروفة في ${eventType}: ${unknown.join(", ")}` });
+    }
+  }
+
+  // --- Admin recipients (roles) ---
+  const rule = rules.find((r) => r.event_type === eventType && r.is_active && matchRule(r as never, variables));
+  const recipients = rule?.recipients?.length ? rule.recipients : ["admin"];
+
+  const actionUrl = orderId
+    ? shipmentId
+      ? `/admin/shipments`
+      : `/admin/orders/${orderId}`
+    : null;
+
+  for (const role of recipients) {
+    const adminNotificationId = await createNotificationRow({
+      userType: "admin",
+      userId: role,
+      orderId,
+      orderNumber: args.orderNumber,
+      shipmentId,
+      eventType,
+      category,
+      severity,
+      title,
+      message,
+      metadata: { ...payload },
+      actionUrl,
+    });
+    if (adminNotificationId) {
+      await createDeliveries(adminNotificationId, channels);
+    }
+  }
+
+  // --- Customer recipient ---
+  if (customerIdentifier) {
+    const prefs = await getCustomerPreferences(customerIdentifier);
+    const customerChannels = filterChannelsForCustomer(category, channels, prefs);
+    if (customerChannels.length) {
+      const customerNotificationId = await createNotificationRow({
+        userType: "customer",
+        userId: customerIdentifier,
+        customerId: customerIdentifier,
+        orderId,
+        orderNumber: args.orderNumber,
+        shipmentId,
+        eventType,
+        category,
+        severity,
+        title,
+        message,
+        metadata: { ...payload },
+        actionUrl,
+      });
+      if (customerNotificationId) {
+        await createDeliveries(customerNotificationId, customerChannels);
+      }
+    }
+  }
+
+  const supabase = createAdminClient();
+  await supabase.from("notification_events").update({ status: "processed", processed_at: new Date().toISOString() }).eq("id", args.eventId);
+  void attemptDelivery; // dispatcher runs synchronously inside createDeliveries for in_app
+}

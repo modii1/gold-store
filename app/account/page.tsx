@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Package, LogOut, Heart, ShoppingBag, Phone, MapPin, ExternalLink, RotateCcw, Truck, Banknote, Home, LayoutDashboard } from "lucide-react";
+import { Package, LogOut, Heart, ShoppingBag, Phone, MapPin, ExternalLink, RotateCcw, Truck, Banknote, Home, LayoutDashboard, Bell } from "lucide-react";
 import { StoreHeader } from "@/components/storefront/header";
 import { StoreFooter } from "@/components/storefront/footer";
 import { getCustomerSession } from "@/lib/auth";
@@ -120,6 +120,9 @@ export default async function AccountPage() {
                 </a>
                 <Link href="/favorites" className="flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-bold text-stone-700 hover:bg-cream hover:text-ink transition">
                   <Heart className="h-4 w-4 text-gold" /> المفضلة
+                </Link>
+                <Link href="/account/notifications" className="flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-bold text-stone-700 hover:bg-cream hover:text-ink transition">
+                  <Bell className="h-4 w-4 text-gold" /> الإشعارات
                 </Link>
                 <Link href="/shop" className="flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-bold text-stone-700 hover:bg-cream hover:text-ink transition">
                   <Home className="h-4 w-4 text-gold" /> المتجر

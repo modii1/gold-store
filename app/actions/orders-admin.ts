@@ -6,6 +6,7 @@ import { getCarrierByCode, getCarriers } from "@/lib/services/carriers";
 import { createCarrierShipment } from "@/lib/shipping";
 import { otoCreateOrder, getAccessToken } from "@/lib/oto/client";
 import { logOrderStatusChange } from "@/lib/orders/status-log";
+import { emitNotification } from "@/lib/notifications/engine";
 import type { Order, Carrier } from "@/types";
 
 export async function updateOrderStatusAction(formData: FormData) {
@@ -200,6 +201,19 @@ export async function createShipmentAction(formData: FormData) {
           payload: { otoOrderId },
         });
 
+        // Notification Engine — shipment created via OTO
+        const { data: createdShip } = await supabase.from("shipments").select("id").eq("order_id", orderId).maybeSingle();
+        await emitNotification({
+          source: "oto",
+          externalEventId: `shipment.created.${orderId}.${otoOrderId ?? ""}`,
+          eventType: "shipment.created",
+          orderId,
+          orderNumber: o.order_number,
+          shipmentId: createdShip?.id ?? null,
+          customerIdentifier: (o as Order & { customer_identifier?: string }).customer_identifier ?? null,
+          payload: { carrier_name: created.deliveryCompany || "OTO" },
+        });
+
         revalidatePath("/admin/orders");
         revalidatePath("/admin/shipments");
         revalidatePath("/admin/dashboard");
@@ -217,6 +231,15 @@ export async function createShipmentAction(formData: FormData) {
         level: "error",
         message: (e as Error).message,
         payload: { optionId, payload: otoPayload },
+      });
+      await emitNotification({
+        source: "oto",
+        externalEventId: `shipment.failed.${orderId}.${Date.now()}`,
+        eventType: "shipment.failed",
+        orderId,
+        orderNumber: o.order_number,
+        customerIdentifier: (o as Order & { customer_identifier?: string }).customer_identifier ?? null,
+        payload: { carrier_name: "OTO", error_message: (e as Error).message },
       });
       return { error: `فشل إنشاء الشحنة عبر OTO: ${(e as Error).message}` };
     }
@@ -266,10 +289,29 @@ export async function createShipmentAction(formData: FormData) {
       .eq("id", orderId);
     if (updateError) return { error: updateError.message };
 
+    await emitNotification({
+      source: "system",
+      externalEventId: `shipment.created.${orderId}.${result.trackingNumber ?? "direct"}`,
+      eventType: "shipment.created",
+      orderId,
+      orderNumber: o.order_number,
+      customerIdentifier: (o as Order & { customer_identifier?: string }).customer_identifier ?? null,
+      payload: { carrier_name: carrier.name, tracking_number: result.trackingNumber, tracking_url: result.trackingUrl },
+    });
+
     revalidatePath("/admin/orders");
     revalidatePath("/admin/dashboard");
     return { success: true, trackingNumber: result.trackingNumber, trackingUrl: result.trackingUrl };
   } catch (e) {
+    await emitNotification({
+      source: "system",
+      externalEventId: `shipment.failed.${orderId}.${Date.now()}`,
+      eventType: "shipment.failed",
+      orderId,
+      orderNumber: o.order_number,
+      customerIdentifier: (o as Order & { customer_identifier?: string }).customer_identifier ?? null,
+      payload: { carrier_name: carrier.name, error_message: (e as Error).message },
+    });
     return { error: (e as Error).message };
   }
 }

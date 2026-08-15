@@ -5,6 +5,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getCustomerSession } from "@/lib/auth";
 import { otoCreateReturnShipment, getAccessToken } from "@/lib/oto/client";
 import { translateOtoError } from "@/lib/format";
+import { emitNotification } from "@/lib/notifications/engine";
 
 export async function saveCustomerAddressAction(formData: FormData) {
   const session = await getCustomerSession();
@@ -55,6 +56,14 @@ export async function createReturnRequestAction(formData: FormData) {
     details: String(formData.get("details") || "").trim() || null,
   });
   if (error) return { error: error.message };
+  await emitNotification({
+    source: "system",
+    externalEventId: `return.requested.${orderId}.${Date.now()}`,
+    eventType: "return.requested",
+    orderId,
+    customerIdentifier: session.phone,
+    payload: { return_reason: String(formData.get("reason") || "استرجاع").trim() },
+  });
   revalidatePath("/account");
   return { success: true };
 }
@@ -73,11 +82,24 @@ export async function updateReturnRequestAction(formData: FormData) {
   if (!id) return { error: "معرف الطلب مطلوب" };
   if (status === "approved") return { error: "الموافقة تنشئ شحنة مرتجع عبر OTO — استخدم زر «موافقة وإنشاء شحنة مرتجع»" };
   const supabase = createAdminClient();
-  const { data: rr } = await supabase.from("return_requests").select("status").eq("id", id).maybeSingle();
+  const { data: rr } = await supabase.from("return_requests").select("status, customer_identifier, order_id, reason").eq("id", id).maybeSingle();
   const allowed = RETURN_TRANSITIONS[rr?.status || ""] || [];
   if (!allowed.includes(status)) return { error: "لا يمكن تكرار العملية — هذه الحالة غير مسموحة من الحالة الحالية" };
   const { error } = await supabase.from("return_requests").update({ status, admin_note: String(formData.get("admin_note") || "").trim() || null, updated_at: new Date().toISOString() }).eq("id", id);
   if (error) return { error: error.message };
+  if (rr?.customer_identifier) {
+    const eventType = status === "received" ? "return.received" : status === "refunded" ? "return.refunded" : status === "rejected" ? "return.rejected" : null;
+    if (eventType) {
+      await emitNotification({
+        source: "system",
+        externalEventId: `return.${status}.${id}.${Date.now()}`,
+        eventType,
+        orderId: rr.order_id,
+        customerIdentifier: rr.customer_identifier,
+        payload: { return_reason: rr.reason || "استرجاع" },
+      });
+    }
+  }
   revalidatePath("/admin/returns");
   return { success: true };
 }
@@ -176,6 +198,28 @@ export async function approveReturnRequestAction(returnRequestId: string) {
     .update(updateData)
     .eq("id", returnRequestId);
   if (upErr) return { error: upErr.message };
+
+  // Notification Engine — return approved / return shipment created
+  await emitNotification({
+    source: "system",
+    externalEventId: `return.approved.${returnRequestId}`,
+    eventType: "return.approved",
+    orderId: rr.order_id,
+    orderNumber: rr.orders?.order_number,
+    customerIdentifier: rr.customer_identifier,
+    payload: { return_reason: rr.reason || "استرجاع" },
+  });
+  if (otoResult?.success) {
+    await emitNotification({
+      source: "oto",
+      externalEventId: `return.created.${returnRequestId}`,
+      eventType: "return.created",
+      orderId: rr.order_id,
+      orderNumber: rr.orders?.order_number,
+      customerIdentifier: rr.customer_identifier,
+      payload: { carrier_name: shipment?.delivery_company || "OTO", return_reason: rr.reason || "استرجاع" },
+    });
+  }
 
   if (otoResult?.success) {
     await supabase.from("shipping_logs").insert({

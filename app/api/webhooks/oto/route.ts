@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { emitNotification, processEvent } from "@/lib/notifications/engine";
+import { buildEventId, ingestEvent, logNotificationEvent } from "@/lib/notifications/events";
 
 type OtoOrderStatusPayload = {
   orderId?: string;
@@ -68,6 +70,7 @@ export async function POST(req: NextRequest) {
         message: "OTO webhook (غير مصنف)",
         payload: body,
       });
+      await ingestOtoEvent(supabase, "oto.webhook.unknown", body, "system");
     }
   } catch (e) {
     await supabase.from("shipping_logs").insert({
@@ -76,9 +79,52 @@ export async function POST(req: NextRequest) {
       message: (e as Error).message,
       payload: body,
     });
+    await logNotificationEvent({ event: "oto.webhook.processing_error", level: "error", message: (e as Error).message, payload: body });
   }
 
   return NextResponse.json({ success: true });
+}
+
+/**
+ * Idempotency: each OTO event gets a stable external id derived from the
+ * payload. A duplicate webhook is ignored and produces no duplicate
+ * notification or shipping_event.
+ */
+async function ingestOtoEvent(
+  supabase: ReturnType<typeof createAdminClient>,
+  eventType: string,
+  body: Record<string, unknown>,
+  source: string
+) {
+  const orderId = String(body.orderId ?? body.otoId ?? "");
+  const externalEventId = buildEventId("oto", [
+    source,
+    orderId,
+    String(body.status ?? ""),
+    String(body.dcStatus ?? ""),
+    String(body.trackingNumber ?? body.dcTrackingNumber ?? ""),
+    String(body.errorMessage ?? ""),
+  ]);
+
+  const { inserted, id } = await ingestEvent({
+    source: "oto",
+    externalEventId,
+    eventType,
+    orderId: null, // resolved by caller when known
+    shipmentId: null,
+    payload: body as Record<string, unknown>,
+  });
+
+  if (inserted && id) {
+    await processEvent({
+      eventId: id,
+      eventType,
+      orderId: null,
+      orderNumber: body.orderId ? Number(body.orderId) || null : null,
+      shipmentId: null,
+      payload: body as Record<string, unknown>,
+    });
+  }
 }
 
 async function handleOrderStatus(supabase: ReturnType<typeof createAdminClient>, body: OtoOrderStatusPayload) {
@@ -86,12 +132,18 @@ async function handleOrderStatus(supabase: ReturnType<typeof createAdminClient>,
   if (!orderId) return;
 
   let internalOrderId: string | null = null;
+  let customerIdentifier: string | null = null;
+  let internalOrderNumber: number | null = null;
   if (body.orderId) {
     const { data: orders } = await supabase.from("orders")
-      .select("id")
+      .select("id, customer_identifier, order_number")
       .eq("order_number", Number(body.orderId))
       .limit(1);
-    if (orders && orders.length) internalOrderId = orders[0].id;
+    if (orders && orders.length) {
+      internalOrderId = orders[0].id;
+      customerIdentifier = orders[0].customer_identifier || null;
+      internalOrderNumber = orders[0].order_number;
+    }
   }
 
   let matchFilter: string;
@@ -110,6 +162,7 @@ async function handleOrderStatus(supabase: ReturnType<typeof createAdminClient>,
     .or(matchFilter)
     .limit(1);
 
+  const shipmentId = shipments && shipments.length ? shipments[0].id : null;
   const tracking = body.trackingNumber || body.dcTrackingNumber || null;
 
   if (shipments && shipments.length) {
@@ -160,6 +213,45 @@ async function handleOrderStatus(supabase: ReturnType<typeof createAdminClient>,
       }).eq("id", orders[0].id);
     }
   }
+
+  // ---- Notification Engine (idempotent) ----
+  const eventType = eventTypeFromStatus(body.status || body.dcStatus);
+  if (eventType) {
+    const externalEventId = buildEventId("oto", ["orderStatus", orderId, body.status ?? "", body.dcStatus ?? "", tracking ?? ""]);
+    const { inserted, id } = await ingestEvent({
+      source: "oto",
+      externalEventId,
+      eventType,
+      orderId: internalOrderId,
+      orderNumber: internalOrderNumber,
+      shipmentId,
+      customerIdentifier,
+      payload: {
+        ...body,
+        carrier_name: body.deliveryCompany,
+        tracking_number: tracking,
+        tracking_url: body.trackingUrl || body.brandedTrackingURL,
+        shipping_status: body.status || body.dcStatus,
+      } as Record<string, unknown>,
+    });
+    if (inserted && id) {
+      await processEvent({
+        eventId: id,
+        eventType,
+        orderId: internalOrderId,
+        orderNumber: internalOrderNumber,
+        shipmentId,
+        customerIdentifier,
+        payload: {
+          ...body,
+          carrier_name: body.deliveryCompany,
+          tracking_number: tracking,
+          tracking_url: body.trackingUrl || body.brandedTrackingURL,
+          shipping_status: body.status || body.dcStatus,
+        } as Record<string, unknown>,
+      });
+    }
+  }
 }
 
 async function handleShipmentError(supabase: ReturnType<typeof createAdminClient>, body: OtoShipmentErrorPayload) {
@@ -169,6 +261,30 @@ async function handleShipmentError(supabase: ReturnType<typeof createAdminClient
     message: body.errorMessage || "خطأ في إنشاء الشحنة",
     payload: body,
   });
+
+  await emitNotification({
+    source: "oto",
+    externalEventId: buildEventId("oto", ["shipmentError", body.orderId ?? "", body.errorCode ?? "", body.errorMessage ?? ""]),
+    eventType: "shipment.failed",
+    orderNumber: body.orderId ? Number(body.orderId) || null : null,
+    payload: {
+      order_number: body.orderId,
+      carrier_name: body.deliveryCompany || "OTO",
+      error_message: body.errorMessage || "خطأ غير معروف",
+    },
+  });
+}
+
+function eventTypeFromStatus(status?: string): string | null {
+  const s = (status || "").toLowerCase();
+  if (s.includes("delivered")) return "shipment.delivered";
+  if (s.includes("return") || s.includes("rto")) return "return.received";
+  if (s.includes("cancel")) return "shipment.cancelled";
+  if (s.includes("pick")) return "shipment.picked_up";
+  if (s.includes("out for delivery") || s.includes("outfordelivery") || s.includes("delivery out")) return "shipment.out_for_delivery";
+  if (s.includes("transit") || s.includes("ship")) return "shipment.in_transit";
+  if (s.includes("fail")) return "shipment.failed";
+  return null; // processing / unknown => no notification
 }
 
 function mapStatus(status?: string): string {

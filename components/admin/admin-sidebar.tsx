@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Package, ShoppingCart, Settings, Tag, FolderOpen, LogOut, Users, Truck, Zap, PackageSearch, RotateCcw } from "lucide-react";
+import { LayoutDashboard, Package, ShoppingCart, Settings, Tag, FolderOpen, LogOut, Users, Truck, Zap, PackageSearch, RotateCcw, Bell } from "lucide-react";
 import { adminLogoutAction } from "@/app/actions/logout";
 
 const links = [
@@ -12,6 +12,7 @@ const links = [
   { href: "/admin/shipping", label: "الشحن", icon: Truck },
   { href: "/admin/oto", label: "إعدادات OTO", icon: Zap },
   { href: "/admin/shipments", label: "الشحنات", icon: PackageSearch },
+  { href: "/admin/notifications", label: "الإشعارات", icon: Bell },
   { href: "/admin/coupons", label: "أكواد الخصم", icon: Tag },
   { href: "/admin/orders", label: "الطلبات", icon: ShoppingCart },
   { href: "/admin/customers", label: "العملاء", icon: Users },

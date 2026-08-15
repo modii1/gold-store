@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getOtoRates } from "@/lib/oto/rates";
 import { getCustomerSession } from "@/lib/auth";
+import { emitNotification } from "@/lib/notifications/engine";
 import type { Coupon, Carrier, PaymentMethod, Order } from "@/types";
 
 export async function getCheckoutData() {
@@ -181,6 +182,22 @@ export async function createOrderAction(formData: FormData) {
     .single();
 
   if (error) return { error: error.message };
+
+  // Notification Engine — order created (non-blocking, never fails checkout)
+  await emitNotification({
+    source: "system",
+    externalEventId: `order.created.${inserted.id}`,
+    eventType: "order.created",
+    orderId: (inserted as { id: string }).id,
+    orderNumber,
+    customerIdentifier: phone,
+    payload: {
+      customer_name: name,
+      customer_phone: phone,
+      order_number: orderNumber,
+      order_total: Math.max(0, total),
+    },
+  });
 
   const customer = await getCustomerSession();
   if (customer && customer.phone === phone && (city || region || address || latitude || longitude)) {
