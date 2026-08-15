@@ -33,9 +33,10 @@ type ReturnRequest = {
 
 export function ReturnCard({ request }: { request: ReturnRequest }) {
   const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<{ success?: boolean; otoError?: string | null; returnOrderId?: string; returnFee?: number | null } | null>(null);
+  const [result, setResult] = useState<{ success?: boolean; error?: string; otoError?: string | null; returnOrderId?: string | null; returnFee?: number | null } | null>(null);
   const [status, setStatus] = useState(request.status);
   const [adminNote, setAdminNote] = useState(request.admin_note || "");
+  const [otoFailed, setOtoFailed] = useState(request.return_status === "error");
 
   const handleApprove = async () => {
     if (!confirm("هل أنت متأكد من الموافقة على هذا المرتجع؟ سيتم إنشاء شحنة مرتجع تلقائياً عبر OTO.")) return;
@@ -43,7 +44,10 @@ export function ReturnCard({ request }: { request: ReturnRequest }) {
     setResult(null);
     const res = await approveReturnRequestAction(request.id);
     setResult(res);
-    if (res.success) setStatus("approved");
+    if (res.success) {
+      setStatus("approved");
+      setOtoFailed(Boolean(res.otoError) || !res.returnOrderId);
+    }
     setLoading(false);
   };
 
@@ -138,6 +142,7 @@ export function ReturnCard({ request }: { request: ReturnRequest }) {
         </div>
       )}
 
+      {result?.error && <p className="mt-3 text-sm text-red-600 font-bold">{result.error}</p>}
       {result?.otoError && <p className="mt-3 text-sm text-red-600">{result.otoError}</p>}
       {result?.success && result.returnOrderId && (
         <p className="mt-3 text-sm text-emerald-600 font-bold">
@@ -168,7 +173,7 @@ export function ReturnCard({ request }: { request: ReturnRequest }) {
           </div>
         )}
 
-        {status === "approved" && request.return_status === "error" && !request.oto_return_order_id && (
+        {status === "approved" && otoFailed && !result?.returnOrderId && (
           <button
             onClick={handleApprove}
             disabled={loading}
