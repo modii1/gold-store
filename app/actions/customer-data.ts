@@ -82,17 +82,27 @@ export async function approveReturnRequestAction(returnRequestId: string) {
   if (!deliveryOptionId) return { error: "لا يوجد خيار شحن مرتبط بالطلب الأصلي — لا يمكن إنشاء شحنة مرتجع" };
 
   let otoResult: any = null;
+  let otoError: string | null = null;
   try {
     await getAccessToken();
     const { data: cfg } = await supabase.from("oto_config").select("is_connected").eq("id", 1).maybeSingle();
+    console.log("[approveReturn] is_connected:", (cfg as any)?.is_connected, "order_number:", rr.orders?.order_number, "deliveryOptionId:", deliveryOptionId);
     if ((cfg as any)?.is_connected) {
       otoResult = await otoCreateReturnShipment({
         orderId: String(rr.orders?.order_number || ""),
         deliveryOptionId: String(deliveryOptionId),
         pickingType: "PICKUP_BY_DC",
       });
+      console.log("[approveReturn] otoResult:", JSON.stringify(otoResult));
+      if (!otoResult?.success) {
+        otoError = otoResult?.otoErrorMessage || "فشل إنشاء شحنة المرتجع من OTO";
+      }
+    } else {
+      otoError = "OTO غير متصل — تأكد من ربط الحساب من الإعدادات";
     }
   } catch (e) {
+    otoError = (e as Error).message;
+    console.error("[approveReturn] OTO error:", otoError);
     await supabase.from("shipping_logs").insert({
       order_id: rr.order_id,
       event: "oto.return.error",
@@ -132,8 +142,8 @@ export async function approveReturnRequestAction(returnRequestId: string) {
     } catch {
       // ignore — return fee will remain null
     }
-  } else if (otoResult) {
-    updateData.return_error = otoResult.otoErrorMessage || "فشل إنشاء شحنة المرتجع";
+  } else if (otoError) {
+    updateData.return_error = otoError;
     updateData.return_status = "error";
   }
 
@@ -158,6 +168,6 @@ export async function approveReturnRequestAction(returnRequestId: string) {
     success: true,
     returnOrderId: otoResult?.returnOrderId || null,
     returnFee: updateData.return_fee || null,
-    error: updateData.return_error || null,
+    otoError: otoError || null,
   };
 }

@@ -33,7 +33,7 @@ type ReturnRequest = {
 
 export function ReturnCard({ request }: { request: ReturnRequest }) {
   const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<{ success?: boolean; error?: string; returnOrderId?: string; returnFee?: number | null } | null>(null);
+  const [result, setResult] = useState<{ success?: boolean; otoError?: string | null; returnOrderId?: string; returnFee?: number | null } | null>(null);
   const [status, setStatus] = useState(request.status);
   const [adminNote, setAdminNote] = useState(request.admin_note || "");
 
@@ -138,7 +138,7 @@ export function ReturnCard({ request }: { request: ReturnRequest }) {
         </div>
       )}
 
-      {result?.error && <p className="mt-3 text-sm text-red-600">{result.error}</p>}
+      {result?.otoError && <p className="mt-3 text-sm text-red-600">{result.otoError}</p>}
       {result?.success && result.returnOrderId && (
         <p className="mt-3 text-sm text-emerald-600 font-bold">
           تم إنشاء شحنة المرتجع — رقم الإرجاع: {result.returnOrderId}
