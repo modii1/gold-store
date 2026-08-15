@@ -11,13 +11,19 @@ export function formatCurrency(value: number | null | undefined) {
   return new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(value ?? 0);
 }
 
-const DATE_FMT = new Intl.DateTimeFormat("en-GB", { dateStyle: "medium" });
-const DATETIME_FMT = new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short" });
+function pad(n: number) {
+  return String(n).padStart(2, "0");
+}
+
+function datePart(d: Date) {
+  return `${d.getFullYear()}/${pad(d.getMonth() + 1)}/${pad(d.getDate())}`;
+}
 
 export function formatDate(value: string | Date | null | undefined) {
   if (!value) return "";
   try {
-    return DATETIME_FMT.format(new Date(value));
+    const d = new Date(value);
+    return `${datePart(d)} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
   } catch {
     return "";
   }
@@ -26,7 +32,7 @@ export function formatDate(value: string | Date | null | undefined) {
 export function formatDateOnly(value: string | Date | null | undefined) {
   if (!value) return "";
   try {
-    return DATE_FMT.format(new Date(value));
+    return datePart(new Date(value));
   } catch {
     return "";
   }

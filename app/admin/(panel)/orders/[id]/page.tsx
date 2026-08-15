@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { notFound } from "next/navigation";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { OrderDetail } from "../order-detail";
 
 export default async function OrderDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -14,9 +15,11 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
 
   if (!order) notFound();
 
+  const admin = createAdminClient();
+
   async function safeQuery(table: string, id: string, order: "created_at" | "updated_at", ascending: boolean) {
     try {
-      const r = await supabase.from(table).select("*").eq("order_id", id).order(order, { ascending });
+      const r = await admin.from(table).select("*").eq("order_id", id).order(order, { ascending });
       if (r.error) return [];
       return r.data || [];
     } catch {

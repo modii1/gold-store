@@ -59,7 +59,7 @@ export async function getOrdersByPhoneAction(phone: string): Promise<Order[]> {
 export async function validateCouponAction(code: string, subtotal: number): Promise<Coupon | { error: string }> {
   const trimmed = code.trim();
   if (!trimmed) return { error: "أدخلي كود الخصم" };
-  const supabase = await createClient();
+  const supabase = createAdminClient();
   const { data } = await supabase.from("coupons").select("*").eq("code", trimmed).maybeSingle();
   if (!data) return { error: "كود الخصم غير صحيح" };
   const c = data as Coupon;
@@ -196,9 +196,10 @@ export async function createOrderAction(formData: FormData) {
   }
 
   if (couponCode && finalDiscount > 0) {
-    const { data: c } = await supabase.from("coupons").select("used_count").eq("code", couponCode).maybeSingle();
+    const admin = createAdminClient();
+    const { data: c } = await admin.from("coupons").select("used_count").eq("code", couponCode).maybeSingle();
     if (c) {
-      await supabase.from("coupons").update({ used_count: (c.used_count ?? 0) + 1 }).eq("code", couponCode);
+      await admin.from("coupons").update({ used_count: (c.used_count ?? 0) + 1 }).eq("code", couponCode);
     }
   }
 

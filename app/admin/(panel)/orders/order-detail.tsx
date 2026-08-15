@@ -60,7 +60,18 @@ export function OrderDetail({ order, statusLog, notes: initialNotes, shipments }
     fd.set("status", newStatus);
     const res = await updateOrderStatusAction(fd);
     setBusy(false);
-    if (!res.error) router.refresh();
+    if (!res.error) {
+      setStatusLogState((prev) => [...prev, {
+        id: `local-${Date.now()}`,
+        order_id: order.id,
+        old_status: order.status,
+        new_status: newStatus,
+        changed_by: "admin",
+        note: null,
+        created_at: new Date().toISOString(),
+      } as OrderStatusLog]);
+      router.refresh();
+    }
   };
 
   const handleShip = async () => {
@@ -82,6 +93,14 @@ export function OrderDetail({ order, statusLog, notes: initialNotes, shipments }
     const res = await addOrderNoteAction(fd);
     setBusy(false);
     if (res.error) { alert(res.error); return; }
+    setNotes((prev) => [...prev, {
+      id: `local-${Date.now()}`,
+      order_id: order.id,
+      content: noteText.trim(),
+      author: "admin",
+      is_internal: true,
+      created_at: new Date().toISOString(),
+    } as OrderNote]);
     setNoteText("");
     router.refresh();
   };
@@ -131,9 +150,9 @@ export function OrderDetail({ order, statusLog, notes: initialNotes, shipments }
                 {st.label}
               </span>
             </div>
-            <p className="mt-0.5 text-sm text-stone-500">
+            <p className="mt-0.5 text-sm text-stone-500 text-right">
               <Calendar className="inline w-3.5 h-3.5 ml-1" />
-              {formatDate(order.created_at)}
+              <span dir="ltr">{formatDate(order.created_at)}</span>
             </p>
           </div>
         </div>
@@ -221,8 +240,8 @@ export function OrderDetail({ order, statusLog, notes: initialNotes, shipments }
                               </span>
                             )}
                           </div>
-                          <p className="mt-0.5 text-xs text-stone-400">
-                            {formatDate(log.created_at)}
+                          <p className="mt-0.5 text-xs text-stone-400 text-right">
+                            <span dir="ltr">{formatDate(log.created_at)}</span>
                             {log.changed_by && ` — ${log.changed_by}`}
                           </p>
                           {log.note && <p className="mt-1 text-sm text-stone-600">{log.note}</p>}
@@ -247,8 +266,8 @@ export function OrderDetail({ order, statusLog, notes: initialNotes, shipments }
                     <StickyNote className="w-4 h-4 mt-0.5 text-stone-400 shrink-0" />
                     <div className="flex-1 min-w-0">
                       <p className="text-sm text-stone-700">{n.content}</p>
-                      <p className="mt-1 text-xs text-stone-400">
-                        {n.author} — {formatDate(n.created_at)}
+                      <p className="mt-1 text-xs text-stone-400 text-right">
+                        {n.author} — <span dir="ltr">{formatDate(n.created_at)}</span>
                       </p>
                     </div>
                     <button onClick={() => handleDeleteNote(n.id)} className="text-stone-400 hover:text-red-500 transition">

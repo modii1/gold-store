@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import Link from "next/link";
-import { Trash2, ExternalLink, Loader2, CheckCircle2, Truck, PackageCheck, Banknote, Clock, Eye } from "lucide-react";
+import { Trash2, ExternalLink, Loader2, CheckCircle2, Truck, PackageCheck, Banknote, Clock, Eye, Tag } from "lucide-react";
 import { updateOrderStatusAction, deleteOrderAction, createShipmentAction, searchOrdersAction } from "@/app/actions/orders-admin";
 import { Currency } from "@/components/storefront/currency";
 import { formatDate } from "@/lib/format";
@@ -119,7 +119,12 @@ export function OrdersTable({ orders: initialOrders, carriers }: { orders: Order
                     </div>
                     <p className="mt-1 text-sm text-stone-600">{o.customer_name} — <span dir="ltr">{o.customer_phone}</span></p>
                     {o.customer_city && <p className="text-xs text-stone-400">{o.customer_city}</p>}
-                    <p className="mt-1 text-xs text-stone-400" dir="ltr">{formatDate(o.created_at)}</p>
+                    <p className="mt-1 text-xs text-stone-400 text-right" dir="ltr">{formatDate(o.created_at)}</p>
+                    {o.coupon_code && (
+                      <p className="mt-1 inline-flex items-center gap-1 rounded-full bg-gold/10 px-2 py-0.5 text-xs font-bold text-gold-dark">
+                        <Tag className="w-3 h-3" /> كود الخصم: {o.coupon_code} {o.discount > 0 && <span>(-{o.discount})</span>}
+                      </p>
+                    )}
                     {o.shipping_method && <p className="mt-0.5 text-xs text-stone-400">الشحن: {o.shipping_method}</p>}
                     {o.tracking_number && (
                       <p className="mt-1 text-xs font-semibold text-blue-600">

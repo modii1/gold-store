@@ -9,7 +9,7 @@ import { customerLogoutAction } from "@/app/actions/logout";
 import { getOrdersByPhoneAction } from "@/app/actions/orders";
 import { getSettings } from "@/lib/services/settings";
 import { getCategoriesList } from "@/lib/services/products";
-import { formatCurrency } from "@/lib/format";
+import { formatCurrency, formatDate } from "@/lib/format";
 import { Currency } from "@/components/storefront/currency";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createReturnRequestAction } from "@/app/actions/customer-data";
@@ -125,7 +125,7 @@ export default async function AccountPage() {
                     <div className="flex flex-wrap items-center justify-between gap-3">
                       <div>
                         <p className="font-bold text-ink">طلب #{o.order_number}</p>
-                        <p className="mt-0.5 text-xs text-stone-400" dir="ltr">{new Date(o.created_at).toLocaleDateString("en-GB")}</p>
+                        <p className="mt-0.5 text-xs text-stone-400 text-right" dir="ltr">{formatDate(o.created_at)}</p>
                       </div>
                       <div className="flex items-center gap-2"><span className={`rounded-full px-3 py-1 text-xs font-bold ${st.cls}`}>{st.label}</span>{o.tracking_url && <a href={o.tracking_url} target="_blank" rel="noreferrer" className="text-xs font-bold text-gold">تتبع</a>}</div>
                     </div>

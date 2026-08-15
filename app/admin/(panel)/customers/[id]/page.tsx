@@ -45,7 +45,7 @@ export default async function AdminCustomerDetailsPage({ params }: { params: Pro
         <div className="mt-6 grid gap-3 border-t border-amber-100 pt-5 text-sm text-stone-600 sm:grid-cols-3">
           <p className="flex items-center gap-2" dir="ltr"><Phone className="h-4 w-4 text-gold" />{customer.phone}</p>
           <p className="flex items-center gap-2"><Mail className="h-4 w-4 text-gold" />{customer.email || "لا يوجد بريد إلكتروني"}</p>
-          <p className="flex items-center gap-2"><CalendarDays className="h-4 w-4 text-gold" />سجلت في <span dir="ltr">{formatDateOnly(customer.created_at)}</span></p>
+          <p className="flex items-center gap-2"><CalendarDays className="h-4 w-4 text-gold" />سجلت في <span className="text-right" dir="ltr">{formatDateOnly(customer.created_at)}</span></p>
         </div>
       </section>
 
@@ -60,7 +60,7 @@ export default async function AdminCustomerDetailsPage({ params }: { params: Pro
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div>
                 <p className="font-bold text-stone-900">طلب #{order.order_number}</p>
-                <p className="mt-1 text-xs text-stone-400" dir="ltr">{formatDate(order.created_at)}</p>
+                <p className="mt-1 text-xs text-stone-400 text-right" dir="ltr">{formatDate(order.created_at)}</p>
               </div>
               <div className="text-start"><Currency value={order.total} className="text-lg font-bold text-gold" /><Status status={order.status} /></div>
             </div>
