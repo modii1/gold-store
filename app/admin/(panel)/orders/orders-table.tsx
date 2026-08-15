@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Trash2, ExternalLink, Loader2, CheckCircle2, Truck, PackageCheck, Banknote, Clock, Eye } from "lucide-react";
 import { updateOrderStatusAction, deleteOrderAction, createShipmentAction, searchOrdersAction } from "@/app/actions/orders-admin";
 import { Currency } from "@/components/storefront/currency";
+import { formatDate } from "@/lib/format";
 import { OrderFilters } from "./order-filters";
 import type { Order, Carrier } from "@/types";
 
@@ -118,7 +119,7 @@ export function OrdersTable({ orders: initialOrders, carriers }: { orders: Order
                     </div>
                     <p className="mt-1 text-sm text-stone-600">{o.customer_name} — <span dir="ltr">{o.customer_phone}</span></p>
                     {o.customer_city && <p className="text-xs text-stone-400">{o.customer_city}</p>}
-                    <p className="mt-1 text-xs text-stone-400">{new Date(o.created_at).toLocaleString("ar-SA")}</p>
+                    <p className="mt-1 text-xs text-stone-400" dir="ltr">{formatDate(o.created_at)}</p>
                     {o.shipping_method && <p className="mt-0.5 text-xs text-stone-400">الشحن: {o.shipping_method}</p>}
                     {o.tracking_number && (
                       <p className="mt-1 text-xs font-semibold text-blue-600">

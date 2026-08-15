@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { ArrowLeft, Mail, Phone, Users } from "lucide-react";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { formatCurrency } from "@/lib/format";
+import { formatCurrency, formatDateOnly } from "@/lib/format";
 import { Currency } from "@/components/storefront/currency";
 
 type Customer = {
@@ -80,7 +80,7 @@ export default async function AdminCustomersPage() {
                   <p className="flex items-center gap-1.5" dir="ltr"><Phone className="h-3.5 w-3.5 text-gold" />{customer.phone}</p>
                   {customer.email && <p className="flex items-center gap-1.5 truncate"><Mail className="h-3.5 w-3.5 shrink-0 text-gold" />{customer.email}</p>}
                 </div>
-                <p className="text-sm text-stone-500">{new Date(customer.created_at).toLocaleDateString("ar-SA")}</p>
+                <p className="text-sm text-stone-500" dir="ltr">{formatDateOnly(customer.created_at)}</p>
                 <p className="text-sm font-bold text-stone-800">{customer.orderCount}</p>
                 <Currency value={customer.totalSpent} className="text-sm font-bold text-emerald-700" />
                 <Link href={`/admin/customers/${customer.id}`} className="inline-flex items-center justify-center gap-1 rounded-xl bg-stone-900 px-3 py-2 text-xs font-bold text-white transition hover:bg-gold">

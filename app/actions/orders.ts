@@ -66,7 +66,7 @@ export async function validateCouponAction(code: string, subtotal: number): Prom
   if (!c.is_active) return { error: "كود الخصم غير فعال" };
   if (c.ends_at && new Date(c.ends_at) < new Date()) return { error: "انتهت صلاحية الكود" };
   if (c.usage_limit !== null && c.used_count >= c.usage_limit) return { error: "استُهلك الكود" };
-  if (c.min_order > 0 && subtotal < c.min_order) return { error: `الحد الأدنى للطلب ${c.min_order.toLocaleString("ar-SA")}` };
+  if (c.min_order > 0 && subtotal < c.min_order) return { error: `الحد الأدنى للطلب ${c.min_order.toLocaleString("en-US")}` };
   return c;
 }
 

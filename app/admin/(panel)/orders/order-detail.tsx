@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { updateOrderStatusAction, createShipmentAction, addOrderNoteAction, deleteOrderNoteAction } from "@/app/actions/orders-admin";
 import { Currency } from "@/components/storefront/currency";
+import { formatDate } from "@/lib/format";
 import type { Order, OrderStatusLog, OrderNote } from "@/types";
 
 const statusConfig: Record<string, { label: string; cls: string; icon: typeof CheckCircle2 }> = {
@@ -132,7 +133,7 @@ export function OrderDetail({ order, statusLog, notes: initialNotes, shipments }
             </div>
             <p className="mt-0.5 text-sm text-stone-500">
               <Calendar className="inline w-3.5 h-3.5 ml-1" />
-              {new Date(order.created_at).toLocaleString("ar-SA")}
+              {formatDate(order.created_at)}
             </p>
           </div>
         </div>
@@ -221,7 +222,7 @@ export function OrderDetail({ order, statusLog, notes: initialNotes, shipments }
                             )}
                           </div>
                           <p className="mt-0.5 text-xs text-stone-400">
-                            {new Date(log.created_at).toLocaleString("ar-SA")}
+                            {formatDate(log.created_at)}
                             {log.changed_by && ` — ${log.changed_by}`}
                           </p>
                           {log.note && <p className="mt-1 text-sm text-stone-600">{log.note}</p>}
@@ -247,7 +248,7 @@ export function OrderDetail({ order, statusLog, notes: initialNotes, shipments }
                     <div className="flex-1 min-w-0">
                       <p className="text-sm text-stone-700">{n.content}</p>
                       <p className="mt-1 text-xs text-stone-400">
-                        {n.author} — {new Date(n.created_at).toLocaleString("ar-SA")}
+                        {n.author} — {formatDate(n.created_at)}
                       </p>
                     </div>
                     <button onClick={() => handleDeleteNote(n.id)} className="text-stone-400 hover:text-red-500 transition">

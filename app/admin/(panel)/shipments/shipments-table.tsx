@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { PackageSearch, ExternalLink, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { formatDateOnly } from "@/lib/format";
 
 type Shipment = {
   id: string;
@@ -115,7 +116,7 @@ export function ShipmentsTable({ shipments }: { shipments: Shipment[] }) {
                     <td className="px-4 py-3 hidden md:table-cell">{s.price != null ? `${s.price} ${s.price ? "ر.س" : ""}` : "—"}</td>
                     <td className="px-4 py-3 hidden md:table-cell">{s.cod_amount ? `${s.cod_amount} ر.س` : "—"}</td>
                     <td className="px-4 py-3 hidden lg:table-cell">{s.driver_name ? `${s.driver_name} ${s.driver_phone || ""}` : "—"}</td>
-                    <td className="px-4 py-3 text-xs text-stone-500 hidden md:table-cell">{new Date(s.created_at).toLocaleDateString("ar-SA")}</td>
+                    <td className="px-4 py-3 text-xs text-stone-500 hidden md:table-cell" dir="ltr">{formatDateOnly(s.created_at)}</td>
                     <td className="px-4 py-3">
                       {(s.branded_tracking_url || s.tracking_url) && (
                         <a href={s.branded_tracking_url || s.tracking_url || "#"} target="_blank" rel="noreferrer"
