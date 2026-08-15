@@ -78,8 +78,8 @@ export function ShipmentsTable({ shipments }: { shipments: Shipment[] }) {
       </div>
 
       <div className="relative">
-        <Search className="absolute right-3 top-2.5 w-4 h-4 text-stone-400" />
-        <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="ابحث برقم التتبع أو الشركة..." className={inputCls + " w-full pr-9"} />
+        <Search className="absolute start-3 top-2.5 w-4 h-4 text-stone-400" />
+        <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="ابحث برقم التتبع أو الشركة..." className={inputCls + " w-full ps-9"} />
       </div>
 
       {filtered.length === 0 ? (

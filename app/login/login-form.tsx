@@ -16,14 +16,14 @@ export function LoginForm() {
       <div>
         <label className="mb-1.5 block text-sm font-bold text-ink">رقم الجوال</label>
         <div className="relative">
-          <Phone className="absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-gold" />
+          <Phone className="absolute end-4 top-1/2 h-4 w-4 -translate-y-1/2 text-gold" />
           <input
             name="phone"
             type="tel"
             required
             placeholder="05xxxxxxxx"
             dir="ltr"
-            className="input-lux pr-11 pl-4 py-3"
+            className="input-lux pe-11 ps-4 py-3"
           />
         </div>
       </div>
@@ -31,19 +31,19 @@ export function LoginForm() {
       <div>
         <label className="mb-1.5 block text-sm font-bold text-ink">كلمة المرور</label>
         <div className="relative">
-          <Lock className="absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-gold" />
+          <Lock className="absolute end-4 top-1/2 h-4 w-4 -translate-y-1/2 text-gold" />
           <input
             name="password"
             type={show ? "text" : "password"}
             required
             placeholder="••••••••"
             dir="ltr"
-            className="input-lux pr-11 pl-11 py-3"
+            className="input-lux pe-11 ps-11 py-3"
           />
           <button
             type="button"
             onClick={() => setShow((s) => !s)}
-            className="absolute left-3 top-1/2 -translate-y-1/2 p-1 text-stone-400 hover:text-ink transition"
+            className="absolute start-3 top-1/2 -translate-y-1/2 p-1 text-stone-400 hover:text-ink transition"
             aria-label={show ? "إخفاء كلمة المرور" : "إظهار كلمة المرور"}
           >
             {show ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}

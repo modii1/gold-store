@@ -129,7 +129,7 @@ export function OrdersTable({ orders, carriers }: { orders: Order[]; carriers: C
                     </p>
                   )}
                 </div>
-                <div className="flex flex-col items-end gap-2">
+                <div className="flex flex-col items-start gap-2">
                   <Currency value={o.total} className="text-xl font-bold text-gold" />
                   <form action={updateOrderStatus}>
                     <input type="hidden" name="id" value={o.id} />
