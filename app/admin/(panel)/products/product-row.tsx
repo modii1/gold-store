@@ -18,14 +18,14 @@ export function ProductRow({ product }: { product: Product }) {
   return (
     <tr className="hover:bg-stone-50/50 transition">
       <td className="p-4">
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 min-w-0">
           {cover ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={cover} alt="" className="h-12 w-12 rounded-lg object-cover" />
+            <img src={cover} alt="" className="h-12 w-12 rounded-lg object-cover shrink-0" />
           ) : (
-            <div className="h-12 w-12 rounded-lg bg-stone-100 flex items-center justify-center text-stone-300 text-xs">لا صورة</div>
+            <div className="h-12 w-12 rounded-lg bg-stone-100 flex items-center justify-center text-stone-300 text-xs shrink-0">لا صورة</div>
           )}
-          <span className="font-semibold text-stone-800">{product.name}</span>
+          <span className="font-semibold text-stone-800 truncate">{product.name}</span>
         </div>
       </td>
       <td className="p-4"><Currency value={product.price} className="font-bold text-gold" /></td>
