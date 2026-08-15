@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getAdminSession } from "@/lib/auth";
-import { validateTemplateVariables, SUPPORTED_VARIABLES } from "@/lib/notifications/templates";
+import { validateTemplateVariables } from "@/lib/notifications/templates";
 import type { ChannelCode, Rule } from "@/lib/notifications/types";
 
 function ok() {
@@ -212,5 +212,3 @@ export async function resetTemplateAction(eventType: string) {
   revalidatePath("/admin/settings/notifications");
   return ok();
 }
-
-export const NOTIFICATION_SUPPORTED_VARIABLES = SUPPORTED_VARIABLES;

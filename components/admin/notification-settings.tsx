@@ -2,7 +2,8 @@
 
 import { useActionState, useState } from "react";
 import { Loader2, Save, Power, RefreshCcw, CheckCircle2, XCircle } from "lucide-react";
-import { updateTemplateAction, updateRuleAction, toggleTemplateAction, toggleRuleAction, updateChannelAction, NOTIFICATION_SUPPORTED_VARIABLES } from "@/app/actions/notifications-admin";
+import { updateTemplateAction, updateRuleAction, toggleTemplateAction, toggleRuleAction, updateChannelAction } from "@/app/actions/notifications-admin";
+import { SUPPORTED_VARIABLES } from "@/lib/notifications/templates";
 import { CHANNEL_CONFIG_FIELDS } from "@/lib/notifications/channel-config";
 
 type Template = {
@@ -141,7 +142,7 @@ function TemplateEditor({ template }: { template: Template }) {
         <div>
           <label className="block text-[11px] font-bold text-stone-500">المتغيرات المتاحة</label>
           <p className="mt-1 flex flex-wrap gap-1">
-            {NOTIFICATION_SUPPORTED_VARIABLES.map((v) => (
+            {SUPPORTED_VARIABLES.map((v) => (
               <span key={v} className="rounded bg-amber-50 px-1.5 py-0.5 font-mono text-[10px] text-amber-700" dir="ltr">{"{{" + v + "}}"}</span>
             ))}
           </p>
