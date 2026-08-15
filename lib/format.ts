@@ -44,3 +44,22 @@ export function formatDateOnly(value: string | Date | null | undefined) {
     return "";
   }
 }
+
+const OTO_ERROR_TRANSLATIONS: { match: RegExp; arabic: string }[] = [
+  { match: /status of the order is not suitable/i, arabic: "حالة الطلب لا تسمح بإنشاء شحنة مرتجع — يجب أن يكون الطلب مُسلَّمًا في OTO أولاً" },
+  { match: /already\s*exist/i, arabic: "شحنة مرتجع لهذا الطلب موجودة مسبقاً في OTO" },
+  { match: /order\s*not\s*found|invalid\s*order/i, arabic: "الطلب غير موجود في OTO" },
+  { match: /delivery\s*option\s*not\s*found|invalid\s*delivery\s*option/i, arabic: "خيار الشحن المرتبط بالطلب غير موجود في OTO" },
+  { match: /insufficient\s*balance|no\s*balance|not\s*enough/i, arabic: "رصيد OTO غير كافٍ لإنشاء الشحنة — اشحن رصيدك أولاً" },
+  { match: /invalid\s*credentials|unauthorized|token\s*expired/i, arabic: "انتهت صلاحية الاتصال بـ OTO — أعد ربط الحساب من الإعدادات" },
+  { match: /customer\s*not\s*found|invalid\s*phone/i, arabic: "بيانات العميل غير موجودة في OTO" },
+  { match: /network|timeout|fetch failed/i, arabic: "تعذر الاتصال بخدمة OTO — حاول مرة أخرى" },
+];
+
+export function translateOtoError(message: string | null | undefined): string {
+  if (!message) return "";
+  for (const { match, arabic } of OTO_ERROR_TRANSLATIONS) {
+    if (match.test(message)) return arabic;
+  }
+  return message;
+}

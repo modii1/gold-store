@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { CheckCircle, XCircle, Loader2, Truck, ExternalLink, DollarSign } from "lucide-react";
 import { approveReturnRequestAction, updateReturnRequestAction } from "@/app/actions/customer-data";
+import { translateOtoError } from "@/lib/format";
 
 type ReturnRequest = {
   id: string;
@@ -138,13 +139,13 @@ export function ReturnCard({ request }: { request: ReturnRequest }) {
             </a>
           )}
           {request.return_error && (
-            <p className="text-sm text-red-600">خطأ: {request.return_error}</p>
+            <p className="text-sm text-red-600">خطأ: {translateOtoError(request.return_error)}</p>
           )}
         </div>
       )}
 
       {result?.error && <p className="mt-3 text-sm text-red-600 font-bold">{result.error}</p>}
-      {result?.otoError && <p className="mt-3 text-sm text-red-600">{result.otoError}</p>}
+      {result?.otoError && <p className="mt-3 text-sm text-red-600">{translateOtoError(result.otoError)}</p>}
       {result?.success && result.returnOrderId && (
         <p className="mt-3 text-sm text-emerald-600 font-bold">
           تم إنشاء شحنة المرتجع — رقم الإرجاع: {result.returnOrderId}

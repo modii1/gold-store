@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getCustomerSession } from "@/lib/auth";
 import { otoCreateReturnShipment, getAccessToken } from "@/lib/oto/client";
+import { translateOtoError } from "@/lib/format";
 
 export async function saveCustomerAddressAction(formData: FormData) {
   const session = await getCustomerSession();
@@ -118,13 +119,13 @@ export async function approveReturnRequestAction(returnRequestId: string) {
       });
       console.log("[approveReturn] otoResult:", JSON.stringify(otoResult));
       if (!otoResult?.success) {
-        otoError = otoResult?.otoErrorMessage || "فشل إنشاء شحنة المرتجع من OTO";
+        otoError = translateOtoError(otoResult?.otoErrorMessage) || "فشل إنشاء شحنة المرتجع من OTO";
       }
     } else {
       otoError = "OTO غير متصل — تأكد من ربط الحساب من الإعدادات";
     }
   } catch (e) {
-    otoError = (e as Error).message;
+    otoError = translateOtoError((e as Error).message);
     console.error("[approveReturn] OTO error:", otoError);
     await supabase.from("shipping_logs").insert({
       order_id: rr.order_id,
