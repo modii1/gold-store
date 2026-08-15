@@ -8,33 +8,45 @@ export async function logOrderStatusChange(
   note?: string
 ) {
   const supabase = createAdminClient();
-  await supabase.from("order_status_log").insert({
-    order_id: orderId,
-    old_status: oldStatus,
-    new_status: newStatus,
-    changed_by: changedBy,
-    note: note || null,
-  });
+  try {
+    await supabase.from("order_status_log").insert({
+      order_id: orderId,
+      old_status: oldStatus,
+      new_status: newStatus,
+      changed_by: changedBy,
+      note: note || null,
+    });
+  } catch {
+    // table not migrated yet — skip logging
+  }
 }
 
 export async function getOrderStatusLog(orderId: string) {
-  const supabase = createAdminClient();
-  const { data } = await supabase
-    .from("order_status_log")
-    .select("*")
-    .eq("order_id", orderId)
-    .order("created_at", { ascending: true });
-  return data || [];
+  try {
+    const supabase = createAdminClient();
+    const { data } = await supabase
+      .from("order_status_log")
+      .select("*")
+      .eq("order_id", orderId)
+      .order("created_at", { ascending: true });
+    return data || [];
+  } catch {
+    return [];
+  }
 }
 
 export async function getOrderNotes(orderId: string) {
-  const supabase = createAdminClient();
-  const { data } = await supabase
-    .from("order_notes")
-    .select("*")
-    .eq("order_id", orderId)
-    .order("created_at", { ascending: true });
-  return data || [];
+  try {
+    const supabase = createAdminClient();
+    const { data } = await supabase
+      .from("order_notes")
+      .select("*")
+      .eq("order_id", orderId)
+      .order("created_at", { ascending: true });
+    return data || [];
+  } catch {
+    return [];
+  }
 }
 
 export async function addOrderNote(orderId: string, content: string, author: string = "admin", isInternal: boolean = true) {

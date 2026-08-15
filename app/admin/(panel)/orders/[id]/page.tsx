@@ -14,10 +14,20 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
 
   if (!order) notFound();
 
+  async function safeQuery(table: string, id: string, order: "created_at" | "updated_at", ascending: boolean) {
+    try {
+      const r = await supabase.from(table).select("*").eq("order_id", id).order(order, { ascending });
+      if (r.error) return [];
+      return r.data || [];
+    } catch {
+      return [];
+    }
+  }
+
   const [statusLog, notes, shipments] = await Promise.all([
-    supabase.from("order_status_log").select("*").eq("order_id", id).order("created_at", { ascending: true }).then((r) => r.data || []),
-    supabase.from("order_notes").select("*").eq("order_id", id).order("created_at", { ascending: true }).then((r) => r.data || []),
-    supabase.from("shipments").select("*").eq("order_id", id).order("created_at", { ascending: false }).then((r) => r.data || []),
+    safeQuery("order_status_log", id, "created_at", true),
+    safeQuery("order_notes", id, "created_at", true),
+    safeQuery("shipments", id, "created_at", false),
   ]);
 
   return (

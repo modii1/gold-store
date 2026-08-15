@@ -18,7 +18,7 @@ export async function updateOrderStatusAction(formData: FormData) {
   const { data: current } = await supabase.from("orders").select("status").eq("id", id).maybeSingle();
   const oldStatus = current?.status || null;
 
-  const { error } = await supabase.from("orders").update({ status, updated_at: new Date().toISOString() }).eq("id", id);
+  const { error } = await supabase.from("orders").update({ status }).eq("id", id);
   if (error) return { error: error.message };
 
   await logOrderStatusChange(id, oldStatus, status, "admin");
@@ -280,13 +280,17 @@ export async function addOrderNoteAction(formData: FormData) {
   if (!orderId || !content?.trim()) return { error: "بيانات ناقصة" };
 
   const supabase = createAdminClient();
-  const { error } = await supabase.from("order_notes").insert({
-    order_id: orderId,
-    content: content.trim(),
-    author: "admin",
-    is_internal: true,
-  });
-  if (error) return { error: error.message };
+  try {
+    const { error } = await supabase.from("order_notes").insert({
+      order_id: orderId,
+      content: content.trim(),
+      author: "admin",
+      is_internal: true,
+    });
+    if (error) return { error: error.message };
+  } catch {
+    return { error: "جدول الملاحظات غير مفعّل — شغّل migration-012 في Supabase" };
+  }
   revalidatePath(`/admin/orders/${orderId}`);
   return { success: true };
 }
@@ -294,8 +298,12 @@ export async function addOrderNoteAction(formData: FormData) {
 export async function deleteOrderNoteAction(noteId: string, orderId: string) {
   if (!noteId) return { error: "معرف الملاحظة مطلوب" };
   const supabase = createAdminClient();
-  const { error } = await supabase.from("order_notes").delete().eq("id", noteId);
-  if (error) return { error: error.message };
+  try {
+    const { error } = await supabase.from("order_notes").delete().eq("id", noteId);
+    if (error) return { error: error.message };
+  } catch {
+    return { error: "جدول الملاحظات غير مفعّل" };
+  }
   revalidatePath(`/admin/orders/${orderId}`);
   return { success: true };
 }
