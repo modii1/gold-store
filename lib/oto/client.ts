@@ -155,6 +155,31 @@ export async function otoCreateShipment(body: {
   return otoFetch("/rest/v2/createShipment", { method: "POST", body });
 }
 
+export async function otoCreateReturnShipment(body: {
+  orderId: string;
+  deliveryOptionId: string;
+  pickupLocationCode?: string;
+  pickingType?: "PICKUP_BY_DC" | "BRANCH_DROP_OFF";
+  items?: { quantity: string; sku: string }[];
+}): Promise<{
+  success: boolean;
+  returnOrderId?: string;
+  message?: string;
+  otoErrorMessage?: string;
+}> {
+  return otoFetch("/rest/v2/createReturnShipment", { method: "POST", body });
+}
+
+export async function otoGetReturnDetails(orderId: string): Promise<{
+  success: boolean;
+  returnedItems?: any[];
+  returnOrderId?: string;
+  returnStatus?: string;
+  otoErrorMessage?: string;
+}> {
+  return otoFetch("/rest/v2/getReturnDetails", { method: "POST", body: { orderId } });
+}
+
 export async function otoRegisterWebhook(params: {
   method?: string;
   url: string;

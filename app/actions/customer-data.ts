@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getCustomerSession } from "@/lib/auth";
+import { otoCreateReturnShipment, getAccessToken } from "@/lib/oto/client";
 
 export async function saveCustomerAddressAction(formData: FormData) {
   const session = await getCustomerSession();
@@ -57,4 +58,106 @@ export async function updateReturnRequestAction(formData: FormData) {
   if (error) return { error: error.message };
   revalidatePath("/admin/returns");
   return { success: true };
+}
+
+export async function approveReturnRequestAction(returnRequestId: string) {
+  if (!returnRequestId) return { error: "معرف الطلب مطلوب" };
+  const supabase = createAdminClient();
+
+  const { data: rr, error: rrErr } = await supabase
+    .from("return_requests")
+    .select("*, orders(id, order_number, customer_name, customer_phone, customer_city, region, address, items, delivery_option_id, total)")
+    .eq("id", returnRequestId)
+    .maybeSingle();
+  if (rrErr || !rr) return { error: rrErr?.message || "طلب المرتجع غير موجود" };
+  if (rr.status !== "pending") return { error: "هذا الطلب تمت معالجته مسبقاً" };
+
+  const { data: shipment } = await supabase
+    .from("shipments")
+    .select("delivery_option_id, delivery_company, delivery_option_name")
+    .eq("order_id", rr.order_id)
+    .maybeSingle();
+
+  const deliveryOptionId = shipment?.delivery_option_id || rr.orders?.delivery_option_id;
+  if (!deliveryOptionId) return { error: "لا يوجد خيار شحن مرتبط بالطلب الأصلي — لا يمكن إنشاء شحنة مرتجع" };
+
+  let otoResult: any = null;
+  try {
+    await getAccessToken();
+    const { data: cfg } = await supabase.from("oto_config").select("is_connected").eq("id", 1).maybeSingle();
+    if ((cfg as any)?.is_connected) {
+      otoResult = await otoCreateReturnShipment({
+        orderId: String(rr.orders?.order_number || ""),
+        deliveryOptionId: String(deliveryOptionId),
+        pickingType: "PICKUP_BY_DC",
+      });
+    }
+  } catch (e) {
+    await supabase.from("shipping_logs").insert({
+      order_id: rr.order_id,
+      event: "oto.return.error",
+      level: "error",
+      message: (e as Error).message,
+      payload: { returnRequestId, deliveryOptionId },
+    });
+  }
+
+  const updateData: Record<string, any> = {
+    status: "approved",
+    updated_at: new Date().toISOString(),
+  };
+
+  if (otoResult?.success) {
+    updateData.oto_return_order_id = otoResult.returnOrderId || null;
+    updateData.return_delivery_company = shipment?.delivery_company || null;
+    updateData.return_delivery_option_name = shipment?.delivery_option_name || null;
+    updateData.return_shipped_at = new Date().toISOString();
+    updateData.return_status = "created";
+
+    try {
+      const { data: otoCfg } = await supabase.from("oto_config").select("origin_city, origin_country").eq("id", 1).maybeSingle();
+      const { otoCheckDeliveryFee } = await import("@/lib/oto/client");
+      const ratesRes = await otoCheckDeliveryFee({
+        originCity: (otoCfg as any)?.origin_city || "Riyadh",
+        destinationCity: (otoCfg as any)?.origin_city || "Riyadh",
+        originCountry: (otoCfg as any)?.origin_country || "SA",
+        destinationCountry: (otoCfg as any)?.origin_country || "SA",
+        weight: 0.5,
+        totalDue: 0,
+      });
+      if (ratesRes.deliveryCompany) {
+        const matched = ratesRes.deliveryCompany.find((d) => d.deliveryOptionId === deliveryOptionId);
+        if (matched) updateData.return_fee = matched.returnFee;
+      }
+    } catch {
+      // ignore — return fee will remain null
+    }
+  } else if (otoResult) {
+    updateData.return_error = otoResult.otoErrorMessage || "فشل إنشاء شحنة المرتجع";
+    updateData.return_status = "error";
+  }
+
+  const { error: upErr } = await supabase
+    .from("return_requests")
+    .update(updateData)
+    .eq("id", returnRequestId);
+  if (upErr) return { error: upErr.message };
+
+  if (otoResult?.success) {
+    await supabase.from("shipping_logs").insert({
+      order_id: rr.order_id,
+      event: "oto.return.created",
+      level: "info",
+      message: `تم إنشاء شحنة المرتجع عبر OTO — رقم الإرجاع: ${otoResult.returnOrderId}`,
+      payload: { returnRequestId, returnOrderId: otoResult.returnOrderId, deliveryOptionId },
+    });
+  }
+
+  revalidatePath("/admin/returns");
+  return {
+    success: true,
+    returnOrderId: otoResult?.returnOrderId || null,
+    returnFee: updateData.return_fee || null,
+    error: updateData.return_error || null,
+  };
 }
