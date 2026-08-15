@@ -37,6 +37,7 @@ export function ReturnCard({ request }: { request: ReturnRequest }) {
   const [status, setStatus] = useState(request.status);
   const [adminNote, setAdminNote] = useState(request.admin_note || "");
   const [otoFailed, setOtoFailed] = useState(request.return_status === "error");
+  const shipmentCreated = Boolean(result?.returnOrderId) || Boolean(request.oto_return_order_id);
 
   const handleApprove = async () => {
     if (!confirm("هل أنت متأكد من الموافقة على هذا المرتجع؟ سيتم إنشاء شحنة مرتجع تلقائياً عبر OTO.")) return;
@@ -151,67 +152,70 @@ export function ReturnCard({ request }: { request: ReturnRequest }) {
       )}
 
       {/* Action buttons */}
-      <div className="mt-4 flex flex-col gap-3">
+      <div className="mt-4 flex flex-wrap items-center gap-2">
         {status === "pending" && (
-          <div className="flex flex-wrap gap-2">
+          <>
             <button
               onClick={handleApprove}
               disabled={loading}
-              className="flex items-center gap-2 rounded-xl bg-emerald-600 px-5 py-2.5 text-sm font-bold text-white hover:bg-emerald-700 transition disabled:opacity-50"
+              className="flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 transition disabled:opacity-50"
             >
-              {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
+              {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle className="w-3.5 h-3.5" />}
               موافقة وإنشاء شحنة مرتجع
             </button>
             <button
               onClick={handleReject}
               disabled={loading}
-              className="flex items-center gap-2 rounded-xl bg-red-600 px-5 py-2.5 text-sm font-bold text-white hover:bg-red-700 transition disabled:opacity-50"
+              className="flex items-center gap-1.5 rounded-lg border border-red-200 bg-white px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50 transition disabled:opacity-50"
             >
-              {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <XCircle className="w-4 h-4" />}
+              {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <XCircle className="w-3.5 h-3.5" />}
               رفض
             </button>
+          </>
+        )}
+
+        {status === "approved" && otoFailed && !shipmentCreated && (
+          <div className="flex flex-col gap-1.5">
+            <button
+              onClick={handleApprove}
+              disabled={loading}
+              className="flex w-fit items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-700 hover:bg-amber-100 transition disabled:opacity-50"
+            >
+              {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Truck className="w-3.5 h-3.5" />}
+              إعادة محاولة إنشاء شحنة المرتجع
+            </button>
+            <p className="text-[11px] text-stone-500">يجب أن يكون الطلب الأصلي «مُسلَّم» في OTO حتى يتمكن من إنشاء شحنة مرتجع.</p>
           </div>
         )}
 
-        {status === "approved" && otoFailed && !result?.returnOrderId && (
-          <button
-            onClick={handleApprove}
-            disabled={loading}
-            className="flex items-center gap-2 rounded-xl bg-amber-600 px-5 py-2.5 text-sm font-bold text-white hover:bg-amber-700 transition disabled:opacity-50 w-fit"
-          >
-            {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Truck className="w-4 h-4" />}
-            إعادة محاولة إنشاء شحنة المرتجع
-          </button>
-        )}
-
-        {status === "approved" && (
-          <div className="flex flex-wrap gap-2">
+        {status === "approved" && !otoFailed && shipmentCreated && (
+          <>
             <button
               onClick={() => handleUpdateStatus("received")}
               disabled={loading}
-              className="flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-bold text-white hover:bg-blue-700 transition disabled:opacity-50"
+              className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 transition disabled:opacity-50"
             >
-              {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+              {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
               تم الاستلام
             </button>
             <button
               onClick={() => handleUpdateStatus("refunded")}
               disabled={loading}
-              className="flex items-center gap-2 rounded-xl bg-stone-600 px-4 py-2 text-sm font-bold text-white hover:bg-stone-700 transition disabled:opacity-50"
+              className="flex items-center gap-1.5 rounded-lg bg-stone-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-stone-800 transition disabled:opacity-50"
             >
-              {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+              {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
               تم رد المبلغ
             </button>
-          </div>
+          </>
         )}
 
         {status === "received" && (
           <button
             onClick={() => handleUpdateStatus("refunded")}
             disabled={loading}
-            className="flex items-center gap-2 rounded-xl bg-stone-600 px-4 py-2 text-sm font-bold text-white hover:bg-stone-700 transition disabled:opacity-50 w-fit"
+            className="flex items-center gap-1.5 rounded-lg bg-stone-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-stone-800 transition disabled:opacity-50"
           >
-            {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+            {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
             تم رد المبلغ
           </button>
         )}
@@ -222,7 +226,7 @@ export function ReturnCard({ request }: { request: ReturnRequest }) {
             value={adminNote}
             onChange={(e) => setAdminNote(e.target.value)}
             placeholder="ملاحظة الإدارة (اختياري)"
-            className="input-lux w-full sm:max-w-sm"
+            className="input-lux w-full sm:w-64"
           />
         )}
       </div>
