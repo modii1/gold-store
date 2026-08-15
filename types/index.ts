@@ -118,6 +118,7 @@ export type OrderItem = {
   price: number;
   qty: number;
   image?: string | null;
+  sku?: string | null;
 };
 
 export type OrderStatus =
@@ -140,11 +141,16 @@ export type Order = {
   region: string | null;
   address: string | null;
   national_address: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  maps_url: string | null;
   items: OrderItem[];
   total: number;
   shipping_cost: number;
   discount: number;
+  coupon_code: string | null;
   status: OrderStatus;
+  delivery_status: string | null;
   shipping_method: string | null;
   carrier_code: string | null;
   delivery_option_id: number | null;
@@ -152,7 +158,28 @@ export type Order = {
   tracking_url: string | null;
   payment_method: string | null;
   transfer_receipt_url: string | null;
+  customer_identifier: string | null;
   notes: string | null;
+  created_at: string;
+  updated_at: string | null;
+};
+
+export type OrderStatusLog = {
+  id: string;
+  order_id: string;
+  old_status: string | null;
+  new_status: string;
+  changed_by: string | null;
+  note: string | null;
+  created_at: string;
+};
+
+export type OrderNote = {
+  id: string;
+  order_id: string;
+  author: string;
+  content: string;
+  is_internal: boolean;
   created_at: string;
 };
 

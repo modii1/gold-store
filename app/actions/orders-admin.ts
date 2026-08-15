@@ -5,6 +5,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getCarrierByCode, getCarriers } from "@/lib/services/carriers";
 import { createCarrierShipment } from "@/lib/shipping";
 import { otoCreateOrder, getAccessToken } from "@/lib/oto/client";
+import { logOrderStatusChange } from "@/lib/orders/status-log";
 import type { Order, Carrier } from "@/types";
 
 export async function updateOrderStatusAction(formData: FormData) {
@@ -13,9 +14,17 @@ export async function updateOrderStatusAction(formData: FormData) {
   if (!id || !status) return { error: "بيانات ناقصة" };
 
   const supabase = createAdminClient();
-  const { error } = await supabase.from("orders").update({ status }).eq("id", id);
+
+  const { data: current } = await supabase.from("orders").select("status").eq("id", id).maybeSingle();
+  const oldStatus = current?.status || null;
+
+  const { error } = await supabase.from("orders").update({ status, updated_at: new Date().toISOString() }).eq("id", id);
   if (error) return { error: error.message };
+
+  await logOrderStatusChange(id, oldStatus, status, "admin");
+
   revalidatePath("/admin/orders");
+  revalidatePath(`/admin/orders/${id}`);
   revalidatePath("/admin/dashboard");
   return { success: true };
 }
@@ -263,4 +272,46 @@ export async function createShipmentAction(formData: FormData) {
   } catch (e) {
     return { error: (e as Error).message };
   }
+}
+
+export async function addOrderNoteAction(formData: FormData) {
+  const orderId = formData.get("order_id") as string;
+  const content = formData.get("content") as string;
+  if (!orderId || !content?.trim()) return { error: "بيانات ناقصة" };
+
+  const supabase = createAdminClient();
+  const { error } = await supabase.from("order_notes").insert({
+    order_id: orderId,
+    content: content.trim(),
+    author: "admin",
+    is_internal: true,
+  });
+  if (error) return { error: error.message };
+  revalidatePath(`/admin/orders/${orderId}`);
+  return { success: true };
+}
+
+export async function deleteOrderNoteAction(noteId: string, orderId: string) {
+  if (!noteId) return { error: "معرف الملاحظة مطلوب" };
+  const supabase = createAdminClient();
+  const { error } = await supabase.from("order_notes").delete().eq("id", noteId);
+  if (error) return { error: error.message };
+  revalidatePath(`/admin/orders/${orderId}`);
+  return { success: true };
+}
+
+export async function searchOrdersAction(query: string, status?: string) {
+  const supabase = createAdminClient();
+  let qb = supabase.from("orders").select("*");
+
+  if (query) {
+    const q = `%${query}%`;
+    qb = qb.or(`customer_name.ilike.${q},customer_phone.ilike.${q},order_number.eq.${query || 0},email.ilike.${q}`);
+  }
+  if (status && status !== "all") {
+    qb = qb.eq("status", status);
+  }
+
+  const { data } = await qb.order("created_at", { ascending: false }).limit(100);
+  return data || [];
 }
