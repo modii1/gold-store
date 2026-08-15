@@ -1,8 +1,10 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useEffect, useState } from "react";
 import { User, Lock, Eye, EyeOff, Loader2, LogIn } from "lucide-react";
 import { adminLoginAction } from "@/app/actions/auth";
+
+const STORAGE_KEY = "gs_admin_login";
 
 export function AdminLoginForm() {
   const [state, formAction, pending] = useActionState(
@@ -10,6 +12,28 @@ export function AdminLoginForm() {
     null
   ) as [null | Awaited<ReturnType<typeof adminLoginAction>>, (fd: FormData) => void, boolean];
   const [show, setShow] = useState(false);
+  const [username, setUsername] = useState("admin");
+  const [password, setPassword] = useState("");
+
+  useEffect(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
+      if (typeof saved.username === "string") setUsername(saved.username);
+      if (typeof saved.password === "string") setPassword(saved.password);
+    } catch {
+      // ignore corrupted storage
+    }
+  }, []);
+
+  const persist = (u: string, p: string) => {
+    setUsername(u);
+    setPassword(p);
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ username: u, password: p }));
+    } catch {
+      // storage unavailable
+    }
+  };
 
   return (
     <form action={formAction} className="space-y-4">
@@ -19,7 +43,8 @@ export function AdminLoginForm() {
           <User className="absolute end-4 top-1/2 h-4 w-4 -translate-y-1/2 text-gold" />
           <input
             name="username"
-            defaultValue="admin"
+            value={username}
+            onChange={(e) => persist(e.target.value, password)}
             autoComplete="username"
             dir="ltr"
             className="input-lux pe-11 py-3"
@@ -33,6 +58,8 @@ export function AdminLoginForm() {
           <Lock className="absolute end-4 top-1/2 h-4 w-4 -translate-y-1/2 text-gold" />
           <input
             name="password"
+            value={password}
+            onChange={(e) => persist(username, e.target.value)}
             type={show ? "text" : "password"}
             required
             autoComplete="current-password"

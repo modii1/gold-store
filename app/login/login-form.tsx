@@ -1,8 +1,10 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useEffect, useState } from "react";
 import { Phone, Lock, Eye, EyeOff, Loader2, LogIn } from "lucide-react";
 import { customerLoginAction } from "@/app/actions/auth";
+
+const STORAGE_KEY = "gs_customer_login";
 
 export function LoginForm() {
   const [state, formAction, pending] = useActionState(
@@ -10,6 +12,28 @@ export function LoginForm() {
     null
   ) as [null | Awaited<ReturnType<typeof customerLoginAction>>, (fd: FormData) => void, boolean];
   const [show, setShow] = useState(false);
+  const [phone, setPhone] = useState("");
+  const [password, setPassword] = useState("");
+
+  useEffect(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
+      if (typeof saved.phone === "string") setPhone(saved.phone);
+      if (typeof saved.password === "string") setPassword(saved.password);
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  const persist = (p: string, pw: string) => {
+    setPhone(p);
+    setPassword(pw);
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ phone: p, password: pw }));
+    } catch {
+      // ignore
+    }
+  };
 
   return (
     <form action={formAction} className="space-y-5">
@@ -21,6 +45,8 @@ export function LoginForm() {
             name="phone"
             type="tel"
             required
+            value={phone}
+            onChange={(e) => persist(e.target.value, password)}
             placeholder="05xxxxxxxx"
             dir="ltr"
             className="input-lux pe-11 ps-4 py-3"
@@ -36,6 +62,8 @@ export function LoginForm() {
             name="password"
             type={show ? "text" : "password"}
             required
+            value={password}
+            onChange={(e) => persist(phone, e.target.value)}
             placeholder="••••••••"
             dir="ltr"
             className="input-lux pe-11 ps-11 py-3"

@@ -1,8 +1,10 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useEffect, useState } from "react";
 import { Phone, Mail, User, Lock, Eye, EyeOff, Loader2, UserPlus } from "lucide-react";
 import { registerCustomerAction } from "@/app/actions/auth";
+
+const STORAGE_KEY = "gs_register";
 
 export function RegisterForm() {
   const [state, formAction, pending] = useActionState(
@@ -11,6 +13,38 @@ export function RegisterForm() {
   ) as [null | Awaited<ReturnType<typeof registerCustomerAction>>, (fd: FormData) => void, boolean];
   const [show, setShow] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
+  const [name, setName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirm, setConfirm] = useState("");
+
+  useEffect(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
+      if (typeof saved.name === "string") setName(saved.name);
+      if (typeof saved.phone === "string") setPhone(saved.phone);
+      if (typeof saved.email === "string") setEmail(saved.email);
+      if (typeof saved.password === "string") setPassword(saved.password);
+      if (typeof saved.confirm === "string") setConfirm(saved.confirm);
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  const persist = (patch: Partial<{ name: string; phone: string; email: string; password: string; confirm: string }>) => {
+    const next = { name, phone, email, password, confirm, ...patch };
+    setName(next.name);
+    setPhone(next.phone);
+    setEmail(next.email);
+    setPassword(next.password);
+    setConfirm(next.confirm);
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+    } catch {
+      // ignore
+    }
+  };
 
   return (
     <form action={formAction} className="space-y-4">
@@ -18,7 +52,7 @@ export function RegisterForm() {
         <label className="mb-1.5 block text-sm font-bold text-ink">الاسم الكامل *</label>
         <div className="relative">
           <User className="absolute end-4 top-1/2 h-4 w-4 -translate-y-1/2 text-gold" />
-          <input name="name" required placeholder="مثال: نورة أحمد" className="input-lux pe-11 py-3" />
+          <input name="name" required value={name} onChange={(e) => persist({ name: e.target.value })} placeholder="مثال: نورة أحمد" className="input-lux pe-11 py-3" />
         </div>
       </div>
 
@@ -26,7 +60,7 @@ export function RegisterForm() {
         <label className="mb-1.5 block text-sm font-bold text-ink">رقم الجوال *</label>
         <div className="relative">
           <Phone className="absolute end-4 top-1/2 h-4 w-4 -translate-y-1/2 text-gold" />
-          <input name="phone" type="tel" required placeholder="05xxxxxxxx" dir="ltr" className="input-lux pe-11 py-3" />
+          <input name="phone" type="tel" required value={phone} onChange={(e) => persist({ phone: e.target.value })} placeholder="05xxxxxxxx" dir="ltr" className="input-lux pe-11 py-3" />
         </div>
       </div>
 
@@ -34,7 +68,7 @@ export function RegisterForm() {
         <label className="mb-1.5 block text-sm font-bold text-ink">البريد الإلكتروني (اختياري)</label>
         <div className="relative">
           <Mail className="absolute end-4 top-1/2 h-4 w-4 -translate-y-1/2 text-gold" />
-          <input name="email" type="email" placeholder="you@example.com" dir="ltr" className="input-lux pe-11 py-3" />
+          <input name="email" type="email" value={email} onChange={(e) => persist({ email: e.target.value })} placeholder="you@example.com" dir="ltr" className="input-lux pe-11 py-3" />
         </div>
       </div>
 
@@ -43,7 +77,7 @@ export function RegisterForm() {
           <label className="mb-1.5 block text-sm font-bold text-ink">كلمة المرور *</label>
           <div className="relative">
             <Lock className="absolute end-4 top-1/2 h-4 w-4 -translate-y-1/2 text-gold" />
-            <input name="password" type={show ? "text" : "password"} required placeholder="6+ أحرف" dir="ltr"
+            <input name="password" value={password} onChange={(e) => persist({ password: e.target.value })} type={show ? "text" : "password"} required placeholder="6+ أحرف" dir="ltr"
               className="input-lux pe-11 ps-9 py-3" />
             <button type="button" onClick={() => setShow((s) => !s)}
               className="absolute start-2.5 top-1/2 -translate-y-1/2 p-1 text-stone-400 hover:text-ink transition" aria-label="إظهار/إخفاء">
@@ -55,7 +89,7 @@ export function RegisterForm() {
           <label className="mb-1.5 block text-sm font-bold text-ink">تأكيد المرور *</label>
           <div className="relative">
             <Lock className="absolute end-4 top-1/2 h-4 w-4 -translate-y-1/2 text-gold" />
-            <input name="confirm" type={showConfirm ? "text" : "password"} required placeholder="تأكيد" dir="ltr"
+            <input name="confirm" value={confirm} onChange={(e) => persist({ confirm: e.target.value })} type={showConfirm ? "text" : "password"} required placeholder="تأكيد" dir="ltr"
               className="input-lux pe-11 ps-9 py-3" />
             <button type="button" onClick={() => setShowConfirm((s) => !s)}
               className="absolute start-2.5 top-1/2 -translate-y-1/2 p-1 text-stone-400 hover:text-ink transition" aria-label="إظهار/إخفاء">

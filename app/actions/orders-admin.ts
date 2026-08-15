@@ -287,9 +287,14 @@ export async function addOrderNoteAction(formData: FormData) {
       author: "admin",
       is_internal: true,
     });
-    if (error) return { error: error.message };
+    if (error) {
+      if (error.message?.includes("Could not find the table") || (error as any).code === "42P01" || (error as any).code === "PGRST205") {
+        return { error: "جدول الملاحظات غير مفعّل — شغّل sql/migration-012.sql في Supabase SQL Editor أولاً" };
+      }
+      return { error: error.message };
+    }
   } catch {
-    return { error: "جدول الملاحظات غير مفعّل — شغّل migration-012 في Supabase" };
+    return { error: "جدول الملاحظات غير مفعّل — شغّل sql/migration-012.sql في Supabase SQL Editor أولاً" };
   }
   revalidatePath(`/admin/orders/${orderId}`);
   return { success: true };
@@ -300,9 +305,14 @@ export async function deleteOrderNoteAction(noteId: string, orderId: string) {
   const supabase = createAdminClient();
   try {
     const { error } = await supabase.from("order_notes").delete().eq("id", noteId);
-    if (error) return { error: error.message };
+    if (error) {
+      if (error.message?.includes("Could not find the table") || (error as any).code === "42P01" || (error as any).code === "PGRST205") {
+        return { error: "جدول الملاحظات غير مفعّل — شغّل sql/migration-012.sql في Supabase SQL Editor أولاً" };
+      }
+      return { error: error.message };
+    }
   } catch {
-    return { error: "جدول الملاحظات غير مفعّل" };
+    return { error: "جدول الملاحظات غير مفعّل — شغّل sql/migration-012.sql في Supabase SQL Editor أولاً" };
   }
   revalidatePath(`/admin/orders/${orderId}`);
   return { success: true };
