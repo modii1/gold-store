@@ -13,6 +13,7 @@ import { formatDate, pluralizeArabic } from "@/lib/format";
 import { Currency } from "@/components/storefront/currency";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createReturnRequestAction } from "@/app/actions/customer-data";
+import { otoStatusLabel } from "@/lib/oto/sync";
 
 export const metadata: Metadata = { title: "لوحة حسابي | لمعة" };
 
@@ -40,6 +41,17 @@ const RETURN_STATUS: Record<string, { label: string; cls: string }> = {
   refunded: { label: "تم رد المبلغ", cls: "bg-stone-100 text-stone-700" },
 };
 
+const SHIPMENT_STATUS: Record<string, { label: string; cls: string }> = {
+  pending: { label: "قيد الانتظار", cls: "bg-stone-100 text-stone-600" },
+  processing: { label: "قيد المعالجة", cls: "bg-amber-50 text-amber-700" },
+  in_transit: { label: "في الطريق", cls: "bg-blue-50 text-blue-700" },
+  on_hold: { label: "معلقة بالمستودع", cls: "bg-violet-50 text-violet-700" },
+  delivered: { label: "تم التسليم", cls: "bg-teal-50 text-teal-700" },
+  returned: { label: "مرتجع", cls: "bg-rose-50 text-rose-600" },
+  cancelled: { label: "ملغي", cls: "bg-stone-100 text-stone-500" },
+  failed: { label: "فشل الشحن", cls: "bg-rose-50 text-rose-700" },
+};
+
 export default async function AccountPage() {
   const session = await getCustomerSession();
   if (!session) redirect("/login");
@@ -51,6 +63,7 @@ export default async function AccountPage() {
   ]);
   let addresses: any[] = [];
   let returns: any[] = [];
+  let shipmentByOrder = new Map<string, any>();
   try {
     const admin = createAdminClient();
     const result = await Promise.all([
@@ -59,6 +72,19 @@ export default async function AccountPage() {
     ]);
     addresses = result[0].data || [];
     returns = result[1].data || [];
+
+    // Attach live shipment data (status, tracking, carrier) from OTO sync.
+    const orderIds = orders.map((o) => o.id);
+    if (orderIds.length) {
+      const { data: shipmentRows } = await admin
+        .from("shipments")
+        .select("id,order_id,oto_order_id,status,dc_status,tracking_number,dc_tracking_number,tracking_url,branded_tracking_url,print_awb_url,delivery_company,delivery_option_name,driver_name")
+        .in("order_id", orderIds)
+        .order("created_at", { ascending: false });
+      (shipmentRows || []).forEach((s: any) => {
+        if (!shipmentByOrder.has(s.order_id)) shipmentByOrder.set(s.order_id, s);
+      });
+    }
   } catch {
     // The account page remains usable if optional customer tables are unavailable.
   }
@@ -173,6 +199,11 @@ export default async function AccountPage() {
                   <div className="mt-4 space-y-4 lg:hidden">
                     {orders.map((o) => {
                       const st = STATUS[o.status] || STATUS.pending;
+                      const shipment = shipmentByOrder.get(o.id);
+                      const sst = shipment
+                        ? SHIPMENT_STATUS[shipment.status] || { label: shipment.status as string, cls: "bg-stone-100 text-stone-600" }
+                        : null;
+                      const trackUrl = shipment?.tracking_url || shipment?.branded_tracking_url || o.tracking_url;
                       return (
                         <article key={o.id} className="rounded-3xl border border-sand bg-white p-5">
                           <div className="flex flex-wrap items-center justify-between gap-3">
@@ -180,8 +211,18 @@ export default async function AccountPage() {
                               <p className="font-bold text-ink">طلب #{o.order_number}</p>
                               <p className="mt-0.5 text-xs text-stone-400 text-right" dir="ltr">{formatDate(o.created_at)}</p>
                             </div>
-                            <div className="flex items-center gap-2"><span className={`rounded-full px-3 py-1 text-xs font-bold ${st.cls}`}>{st.label}</span>{o.tracking_url && <a href={o.tracking_url} target="_blank" rel="noreferrer" className="text-xs font-bold text-gold">تتبع</a>}</div>
+                            <div className="flex items-center gap-2">
+                              {shipment ? (
+                                <span className={`rounded-full px-3 py-1 text-xs font-bold ${sst!.cls}`}>{sst!.label}</span>
+                              ) : (
+                                <span className={`rounded-full px-3 py-1 text-xs font-bold ${st.cls}`}>{st.label}</span>
+                              )}
+                              {trackUrl && <a href={trackUrl} target="_blank" rel="noreferrer" className="text-xs font-bold text-gold">تتبع</a>}
+                            </div>
                           </div>
+                          {shipment && shipment.delivery_company && (
+                            <p className="mt-2 text-xs text-stone-400">الشحن: {shipment.delivery_option_name || shipment.delivery_company}</p>
+                          )}
                           <div className="mt-4 space-y-2 border-t border-sand pt-4">
                             {(o.items || []).map((item, i) => (
                               <div key={i} className="flex items-center justify-between text-sm">
@@ -219,6 +260,9 @@ export default async function AccountPage() {
                         <tbody className="divide-y divide-sand/60">
                           {orders.map((o) => {
                             const st = STATUS[o.status] || STATUS.pending;
+                            const shipment = shipmentByOrder.get(o.id);
+                            const sst = shipment ? SHIPMENT_STATUS[shipment.status] || { label: shipment.status, cls: "bg-stone-100 text-stone-600" } : null;
+                            const trackUrl = shipment?.tracking_url || shipment?.branded_tracking_url || o.tracking_url;
                             return (
                               <tr key={o.id} className="hover:bg-cream/60 transition">
                                 <td className="px-5 py-4 align-top">
@@ -245,13 +289,20 @@ export default async function AccountPage() {
                                 </td>
                                 <td className="px-5 py-4 align-top">
                                   <div className="flex flex-wrap items-center gap-2">
-                                    <span className={`whitespace-nowrap rounded-full px-2.5 py-0.5 text-xs font-bold ${st.cls}`}>{st.label}</span>
-                                    {o.tracking_url && (
-                                      <a href={o.tracking_url} target="_blank" rel="noreferrer" className="text-xs font-bold text-gold hover:underline">
+                                    {shipment ? (
+                                      <span className={`whitespace-nowrap rounded-full px-2.5 py-0.5 text-xs font-bold ${sst!.cls}`}>{sst!.label}</span>
+                                    ) : (
+                                      <span className={`whitespace-nowrap rounded-full px-2.5 py-0.5 text-xs font-bold ${st.cls}`}>{st.label}</span>
+                                    )}
+                                    {trackUrl && (
+                                      <a href={trackUrl} target="_blank" rel="noreferrer" className="text-xs font-bold text-gold hover:underline">
                                         تتبع
                                       </a>
                                     )}
                                   </div>
+                                  {shipment?.delivery_company && (
+                                    <p className="mt-1 text-[11px] text-stone-400">{shipment.delivery_option_name || shipment.delivery_company}</p>
+                                  )}
                                 </td>
                               </tr>
                             );
