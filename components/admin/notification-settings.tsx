@@ -1,8 +1,9 @@
 "use client";
 
-import { useActionState, useEffect, useState } from "react";
+import { useActionState, useState } from "react";
 import { Loader2, Save, Power, RefreshCcw, CheckCircle2, XCircle } from "lucide-react";
-import { updateTemplateAction, updateRuleAction, toggleTemplateAction, toggleRuleAction, NOTIFICATION_SUPPORTED_VARIABLES } from "@/app/actions/notifications-admin";
+import { updateTemplateAction, updateRuleAction, toggleTemplateAction, toggleRuleAction, updateChannelAction, NOTIFICATION_SUPPORTED_VARIABLES } from "@/app/actions/notifications-admin";
+import { CHANNEL_CONFIG_FIELDS } from "@/lib/notifications/channel-config";
 
 type Template = {
   event_type: string;
@@ -29,6 +30,7 @@ type Channel = {
   name: string;
   description: string | null;
   enabled: boolean;
+  config?: Record<string, string> | null;
 };
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -220,6 +222,73 @@ function RuleEditor({ rule }: { rule: Rule }) {
   );
 }
 
+function ChannelEditor({ channel }: { channel: Channel }) {
+  const [state, formAction, pending] = useActionState(
+    async (_prev: unknown, formData: FormData) => updateChannelAction(formData),
+    null
+  );
+  const fields = CHANNEL_CONFIG_FIELDS[channel.code] || [];
+  const [enabled, setEnabled] = useState(channel.enabled);
+  const isInApp = channel.code === "in_app";
+
+  return (
+    <form action={formAction} className="rounded-2xl border border-sand bg-cream/40 p-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-2.5">
+          <span className={`h-2.5 w-2.5 rounded-full ${channel.enabled ? "bg-emerald-500" : "bg-stone-300"}`} />
+          <div>
+            <p className="text-sm font-bold text-ink">{channel.name}</p>
+            {channel.description && <p className="mt-0.5 text-[11px] text-stone-400">{channel.description}</p>}
+          </div>
+        </div>
+        {!isInApp && (
+          <label className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-bold transition ${enabled ? "bg-emerald-50 text-emerald-700" : "bg-stone-100 text-stone-500"}`}>
+            <input
+              type="checkbox"
+              name="enabled"
+              checked={enabled}
+              onChange={(e) => setEnabled(e.target.checked)}
+              className="h-3.5 w-3.5 accent-gold"
+            />
+            {enabled ? "مفعّلة" : "معطّلة"}
+          </label>
+        )}
+      </div>
+
+      <input type="hidden" name="code" value={channel.code} />
+      {isInApp && <input type="hidden" name="enabled" value="on" />}
+
+      {!isInApp && (
+        <div className="mt-3 grid gap-3 md:grid-cols-2">
+          {fields.map((f) => (
+            <div key={f.key}>
+              <label className="block text-[11px] font-bold text-stone-500">{f.label}</label>
+              <input
+                name={f.key}
+                type={f.type === "password" ? "password" : "text"}
+                defaultValue={channel.config?.[f.key] || ""}
+                placeholder={f.placeholder}
+                autoComplete="off"
+                className="mt-1 w-full rounded-xl border border-sand bg-white px-3 py-2 text-sm outline-none focus:border-gold"
+              />
+              {f.hint && <p className="mt-0.5 text-[10px] text-stone-400">{f.hint}</p>}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {!isInApp && (
+        <div className="mt-3 flex items-center gap-2">
+          <button type="submit" disabled={pending} className="flex items-center gap-1.5 rounded-full bg-gold px-4 py-2 text-xs font-bold text-white transition hover:bg-gold-dark disabled:opacity-50">
+            {pending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />} حفظ الإعدادات
+          </button>
+          <ActionState state={state} />
+        </div>
+      )}
+    </form>
+  );
+}
+
 export function NotificationSettings({ templates, rules, channels }: { templates: Template[]; rules: Rule[]; channels: Channel[] }) {
   const [tab, setTab] = useState<"templates" | "rules" | "channels">("templates");
 
@@ -277,24 +346,19 @@ export function NotificationSettings({ templates, rules, channels }: { templates
       )}
 
       {tab === "channels" && (
-        <div className="rounded-3xl border border-sand bg-white p-4 md:p-6">
-          <p className="text-xs text-stone-500">القنوات الخارجية تتطلب مفاتيح API من مزوّد الخدمة. القناة غير المفعّلة تخطى تسليمها تلقائيًا.</p>
-          <div className="mt-4 space-y-3">
-            {channels.map((ch) => (
-              <div key={ch.code} className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-cream/60 p-4">
-                <div>
-                  <p className="text-sm font-bold text-ink">{ch.name}</p>
-                  <p className="mt-0.5 text-xs text-stone-500">{ch.description || "—"}</p>
-                </div>
-                <span className={`rounded-full px-3 py-1 text-[11px] font-bold ${ch.enabled ? "bg-emerald-50 text-emerald-700" : "bg-stone-100 text-stone-400"}`}>
-                  {ch.enabled ? "مفعّلة" : "معطّلة"}
-                </span>
-              </div>
-            ))}
-            {channels.length === 0 && <p className="py-8 text-center text-sm text-stone-400">جدول القنوات غير متاح — شغّل SQL للترحيل أولاً</p>}
+        <div className="space-y-4">
+          <div className="rounded-3xl border border-amber-100 bg-amber-50/50 px-4 py-3 text-xs text-amber-800">
+            القنوات الخارجية (SMS، واتساب، بريد، Push) تتطلب مفاتيح API من مزوّد الخدمة.
+            املأ الحقول ثم اضغط "حفظ الإعدادات". القناة غير المفعّلة تخطى تسليمها تلقائيًا.
           </div>
-          <p className="mt-4 flex items-center gap-1.5 text-[11px] text-stone-400">
-            <RefreshCcw className="h-3 w-3" /> تحديث القنوات يتم يدويًا في قاعدة البيانات أو عبر SQL.
+          <div className="grid gap-4 xl:grid-cols-2">
+            {channels.map((ch) => (
+              <ChannelEditor key={ch.code} channel={ch} />
+            ))}
+            {channels.length === 0 && <p className="rounded-2xl border border-sand bg-white p-8 text-center text-sm text-stone-400">جدول القنوات غير متاح — شغّل SQL للترحيل أولاً</p>}
+          </div>
+          <p className="flex items-center gap-1.5 text-[11px] text-stone-400">
+            <RefreshCcw className="h-3 w-3" /> تُحفظ الإعدادات في قاعدة البيانات وتطبَّق فورًا على محرك الإشعارات.
           </p>
         </div>
       )}

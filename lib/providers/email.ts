@@ -1,22 +1,29 @@
 import type { ChannelAdapter } from "@/lib/notifications/types";
+import { loadChannelConfig } from "@/lib/notifications/channel-config";
 
 /**
- * Email adapter — provider-independent. Currently no SMTP/email provider is
- * configured, so it is reported as not configured and deliveries are skipped.
- * To activate: set EMAIL_API_KEY / EMAIL_FROM (or SMTP_*) and implement the
- * send() call to the chosen provider (Resend, SendGrid, SES, ...) here.
+ * Email adapter — provider-independent (Resend, SendGrid, SES, SMTP).
+ * Credentials are configured from the admin panel and stored in
+ * notification_channels.config; env vars are kept as a fallback.
  */
 export const emailAdapter: ChannelAdapter = {
   code: "email",
   name: "البريد الإلكتروني",
-  isConfigured() {
-    return Boolean(process.env.EMAIL_API_KEY || process.env.SMTP_HOST);
+  async isConfigured() {
+    const { config } = await loadChannelConfig("email");
+    return Boolean(
+      config.api_key || config.provider || process.env.EMAIL_API_KEY || process.env.SMTP_HOST
+    );
   },
-  async send({ recipient, title, message }) {
-    if (!this.isConfigured()) {
+  async send({ recipient, title }) {
+    const { config, enabled } = await loadChannelConfig("email");
+    const configured =
+      config.api_key || config.provider || process.env.EMAIL_API_KEY || process.env.SMTP_HOST;
+    if (!enabled || !configured) {
       return { ok: false, errorMessage: "مزود البريد الإلكتروني غير مهيأ" };
     }
-    // Placeholder for the actual provider call. Never log secrets here.
+    // Placeholder for the provider call — implement send() against the
+    // chosen provider here. Never log secrets.
     return { ok: false, errorMessage: `مزود البريد الإلكتروني غير مهيأ (للمستلم ${recipient} — ${title})` };
   },
 };

@@ -143,6 +143,53 @@ export async function toggleRuleAction(eventType: string, isActive: boolean) {
   return ok();
 }
 
+/** Save a channel's enabled flag + provider config from the admin panel. */
+export async function updateChannelAction(formData: FormData) {
+  try {
+    await requireAdminOrThrow();
+  } catch {
+    return fail("غير مصرح");
+  }
+
+  const code = String(formData.get("code") || "");
+  const enabled = formData.get("enabled") === "on";
+  if (!["in_app", "email", "sms", "push", "whatsapp"].includes(code)) {
+    return fail("قناة غير معروفة");
+  }
+
+  const config: Record<string, string> = {};
+  for (const field of ["provider", "api_key", "sender", "from_number", "phone_number_id", "from", "vapid_public_key", "vapid_private_key", "vapid_subject"]) {
+    const value = String(formData.get(field) || "").trim();
+    if (value) config[field] = value;
+  }
+
+  const supabase = createAdminClient();
+  const { data: existing } = await supabase.from("notification_channels").select("code").eq("code", code);
+
+  if (existing && existing.length > 0) {
+    const { error } = await supabase
+      .from("notification_channels")
+      .update({ enabled, config, updated_at: new Date().toISOString() })
+      .eq("code", code);
+    if (error) return fail(error.message);
+  } else {
+    const names: Record<string, string> = {
+      in_app: "داخل التطبيق",
+      email: "البريد الإلكتروني",
+      sms: "رسائل SMS",
+      push: "إشعارات المتصفح",
+      whatsapp: "واتساب",
+    };
+    const { error } = await supabase
+      .from("notification_channels")
+      .insert({ code, name: names[code] || code, enabled, config });
+    if (error) return fail(error.message);
+  }
+
+  revalidatePath("/admin/settings/notifications");
+  return ok();
+}
+
 export async function resetTemplateAction(eventType: string) {
   try {
     await requireAdminOrThrow();
