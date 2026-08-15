@@ -26,8 +26,32 @@ function mapStatus(status?: string): string {
   if (s.includes("return") || s.includes("rto")) return "returned";
   if (s.includes("cancel")) return "cancelled";
   if (s.includes("fail") || s.includes("error")) return "failed";
-  if (s.includes("ship") || s.includes("transit") || s.includes("pick") || s.includes("outfordelivery") || s.includes("out for delivery")) return "in_transit";
+  // "shipmentOnHoldWarehouse" (suspended by warehouse) must be checked BEFORE
+  // anything containing "ship" — otherwise it wrongly maps to in_transit.
+  if (s.includes("onhold") || s.includes("on_hold") || s.includes("suspend")) return "on_hold";
+  if (s === "new") return "pending";
+  if (s.includes("outfordelivery") || s.includes("out for delivery")) return "in_transit";
+  if (s.includes("transit") || s.includes("pickedup") || s.includes("picked_up") || s.includes("shipped")) return "in_transit";
+  if (s.includes("ship") || s.includes("processing") || s.includes("pick")) return "processing";
   return "processing";
+}
+export { mapStatus };
+
+/** Raw OTO status → Arabic label, so admins see OTO's exact state. */
+export function otoStatusLabel(status?: string | null): string {
+  const s = (status || "").toLowerCase();
+  if (s.includes("delivered")) return "تم التوصيل";
+  if (s.includes("return")) return "مرتجع";
+  if (s.includes("cancel")) return "ملغي";
+  if (s.includes("fail")) return "فشل الشحن";
+  if (s.includes("onhold") || s.includes("on_hold") || s.includes("suspend")) return "معلقة بالمستودع";
+  if (s === "new") return "جديدة لدى OTO";
+  if (s.includes("outfordelivery") || s.includes("out for delivery")) return "خارج للتوصيل";
+  if (s.includes("pickedup") || s.includes("picked_up") || s.includes("shipped")) return "تم الشحن";
+  if (s.includes("transit")) return "في الطريق";
+  if (s.includes("processing") || s.includes("approve")) return "قيد المعالجة";
+  if (s.includes("ship")) return "قيد التجهيز";
+  return status ? String(status) : "";
 }
 
 function mapOrderStatus(status?: string): string {
@@ -44,8 +68,9 @@ function eventTypeFromStatus(status?: string): string | null {
   if (s.includes("delivered")) return "shipment.delivered";
   if (s.includes("return") || s.includes("rto")) return "return.received";
   if (s.includes("cancel")) return "shipment.cancelled";
+  if (s.includes("onhold") || s.includes("on_hold") || s.includes("suspend")) return "shipment.on_hold";
   if (s.includes("outfordelivery") || s.includes("out for delivery")) return "shipment.out_for_delivery";
-  if (s.includes("transit") || s.includes("ship") || s.includes("pick")) return "shipment.in_transit";
+  if (s.includes("transit") || s.includes("pickedup") || s.includes("picked_up") || s.includes("shipped")) return "shipment.in_transit";
   if (s.includes("fail")) return "shipment.failed";
   return null;
 }

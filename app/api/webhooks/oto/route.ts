@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { emitNotification, processEvent } from "@/lib/notifications/engine";
 import { buildEventId, ingestEvent, logNotificationEvent } from "@/lib/notifications/events";
+import { mapStatus as mapOtoStatus } from "@/lib/oto/sync";
 
 type OtoOrderStatusPayload = {
   orderId?: string;
@@ -176,7 +177,7 @@ async function handleOrderStatus(supabase: ReturnType<typeof createAdminClient>,
       tracking_url: body.trackingUrl || undefined,
       branded_tracking_url: body.brandedTrackingURL || undefined,
       print_awb_url: body.printAWBURL || undefined,
-      status: mapStatus(body.status || body.dcStatus),
+      status: mapOtoStatus(body.status || body.dcStatus),
       dc_status: body.dcStatus || undefined,
       driver_name: body.driverName || undefined,
       driver_phone: body.driverPhone || undefined,
@@ -191,7 +192,7 @@ async function handleOrderStatus(supabase: ReturnType<typeof createAdminClient>,
       tracking_url: body.trackingUrl || null,
       branded_tracking_url: body.brandedTrackingURL || null,
       print_awb_url: body.printAWBURL || null,
-      status: mapStatus(body.status || body.dcStatus),
+      status: mapOtoStatus(body.status || body.dcStatus),
       dc_status: body.dcStatus || null,
       driver_name: body.driverName || null,
       driver_phone: body.driverPhone || null,
@@ -284,20 +285,12 @@ function eventTypeFromStatus(status?: string): string | null {
   if (s.includes("delivered")) return "shipment.delivered";
   if (s.includes("return") || s.includes("rto")) return "return.received";
   if (s.includes("cancel")) return "shipment.cancelled";
+  if (s.includes("onhold") || s.includes("on_hold") || s.includes("suspend")) return "shipment.on_hold";
   if (s.includes("pick")) return "shipment.picked_up";
   if (s.includes("out for delivery") || s.includes("outfordelivery") || s.includes("delivery out")) return "shipment.out_for_delivery";
-  if (s.includes("transit") || s.includes("ship")) return "shipment.in_transit";
+  if (s.includes("transit") || s.includes("pickedup") || s.includes("picked_up") || s.includes("shipped")) return "shipment.in_transit";
   if (s.includes("fail")) return "shipment.failed";
   return null; // processing / unknown => no notification
-}
-
-function mapStatus(status?: string): string {
-  const s = (status || "").toLowerCase();
-  if (s.includes("delivered")) return "delivered";
-  if (s.includes("return") || s.includes("rto")) return "returned";
-  if (s.includes("cancel")) return "cancelled";
-  if (s.includes("ship") || s.includes("transit") || s.includes("pick")) return "in_transit";
-  return "processing";
 }
 
 function mapOrderStatus(status?: string): string {
@@ -305,6 +298,6 @@ function mapOrderStatus(status?: string): string {
   if (s.includes("delivered")) return "delivered";
   if (s.includes("return")) return "returned";
   if (s.includes("cancel")) return "cancelled";
-  if (s.includes("ship")) return "shipped";
+  if (s.includes("fail")) return "shipping_error";
   return "shipped";
 }

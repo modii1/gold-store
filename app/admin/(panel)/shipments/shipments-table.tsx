@@ -5,6 +5,7 @@ import { PackageSearch, ExternalLink, Search, RefreshCcw, CheckCircle2, AlertTri
 import { cn } from "@/lib/utils";
 import { formatDateOnly, pluralizeArabic } from "@/lib/format";
 import { refreshOtoShipmentsAction } from "@/app/actions/shipments";
+import { otoStatusLabel } from "@/lib/oto/sync";
 
 type SyncResult = { total: number; updated: number; failed: number; skipped: number };
 
@@ -36,9 +37,11 @@ const statusMeta: Record<string, { label: string; cls: string }> = {
   pending: { label: "قيد الانتظار", cls: "bg-stone-100 text-stone-600" },
   processing: { label: "قيد المعالجة", cls: "bg-amber-50 text-amber-700" },
   in_transit: { label: "في الطريق", cls: "bg-blue-50 text-blue-700" },
+  on_hold: { label: "معلقة بالمستودع", cls: "bg-violet-50 text-violet-700" },
   delivered: { label: "تم التوصيل", cls: "bg-emerald-50 text-emerald-700" },
   returned: { label: "مرتجع", cls: "bg-rose-50 text-rose-700" },
   cancelled: { label: "ملغي", cls: "bg-stone-100 text-stone-500" },
+  failed: { label: "فشل الشحن", cls: "bg-rose-50 text-rose-700" },
 };
 
 export function ShipmentsTable({ shipments, syncResult }: { shipments: Shipment[]; syncResult?: SyncResult | null }) {
@@ -164,7 +167,12 @@ export function ShipmentsTable({ shipments, syncResult }: { shipments: Shipment[
                     <td className="px-4 py-3 font-bold text-stone-800" dir="ltr">{s.tracking_number || s.dc_tracking_number || "—"}</td>
                     <td className="px-4 py-3">{s.delivery_option_name || s.delivery_company || "—"}</td>
                     <td className="px-4 py-3">
-                      <span className={cn("rounded-full px-2.5 py-1 text-xs font-bold", meta.cls)}>{meta.label}</span>
+                      <div className="flex flex-col items-start gap-1">
+                        <span className={cn("rounded-full px-2.5 py-1 text-xs font-bold", meta.cls)}>{meta.label}</span>
+                        {s.dc_status && s.dc_status !== s.status && (
+                          <span className="text-[10px] font-medium text-stone-400" dir="ltr">{otoStatusLabel(s.dc_status)}</span>
+                        )}
+                      </div>
                     </td>
                     <td className="px-4 py-3 hidden md:table-cell">{s.price != null ? `${s.price} ${s.price ? "ر.س" : ""}` : "—"}</td>
                     <td className="px-4 py-3 hidden md:table-cell">{s.cod_amount ? `${s.cod_amount} ر.س` : "—"}</td>
