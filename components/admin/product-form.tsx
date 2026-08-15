@@ -77,7 +77,7 @@ export function ProductForm({ product }: { product?: Product }) {
             className="w-full rounded-xl border border-stone-200 px-4 py-2.5 text-sm focus:border-gold focus:outline-none focus:ring-2 focus:ring-gold/20" />
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
             <label className="block text-sm font-semibold text-stone-700 mb-1">السعر (﷼) *</label>
             <input name="price" type="number" step="0.01" min="0" required defaultValue={product?.price || ""}
@@ -207,7 +207,7 @@ export function ProductForm({ product }: { product?: Product }) {
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src={img.url} alt="" className="h-full w-full object-cover" />
                   <button type="button" onClick={() => setImages(images.filter((_, idx) => idx !== i))}
-                    className="absolute top-1 left-1 flex h-6 w-6 items-center justify-center rounded-full bg-black/60 text-white opacity-0 group-hover:opacity-100 transition">
+                    className="absolute top-1 left-1 flex h-6 w-6 items-center justify-center rounded-full bg-black/60 text-white md:opacity-0 md:group-hover:opacity-100 transition">
                     <X className="w-3.5 h-3.5" />
                   </button>
                 </div>

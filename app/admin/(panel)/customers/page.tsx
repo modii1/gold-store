@@ -65,7 +65,7 @@ export default async function AdminCustomersPage() {
           لا يوجد عملاء مسجلون حتى الآن
         </div>
       ) : (
-        <div className="overflow-hidden rounded-2xl border border-amber-100 bg-white shadow-sm">
+        <div className="overflow-x-auto rounded-2xl border border-amber-100 bg-white shadow-sm">
           <div className="hidden grid-cols-[1.4fr_1fr_1.3fr_.7fr_1fr_auto] gap-4 border-b border-stone-100 bg-stone-50 px-5 py-3 text-xs font-bold text-stone-500 md:grid">
             <span>العميل</span><span>التواصل</span><span>تاريخ التسجيل</span><span>الطلبات</span><span>إجمالي المدفوع</span><span />
           </div>

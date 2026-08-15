@@ -127,35 +127,37 @@ export function ShippingManager({ carriers }: { carriers: Carrier[] }) {
       <div className="space-y-4">
         {rows.map((row, i) => (
           <div key={i} className="rounded-2xl border border-amber-100 bg-white p-5">
-            <div className="flex flex-wrap items-center gap-3">
-              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-amber-50 text-gold">
+            <div className="flex flex-col sm:flex-row sm:flex-wrap items-stretch sm:items-center gap-3">
+              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-amber-50 text-gold shrink-0">
                 <Truck className="w-5 h-5" />
               </div>
-              <div className="flex-1 min-w-52">
+              <div className="flex-1 sm:min-w-52">
                 <input value={row.name} onChange={(e) => updateRow(i, { name: e.target.value })} placeholder="اسم الشركة (مثال: أرامكس)"
                   className={inputCls} />
               </div>
-              <div className="w-40">
+              <div className="w-full sm:w-40">
                 <input value={row.code} onChange={(e) => updateRow(i, { code: e.target.value })} placeholder="الرمز: aramex" dir="ltr"
                   className={inputCls} />
               </div>
-              <label className="flex items-center gap-2 rounded-lg border border-stone-200 px-3 py-2 text-sm">
-                <input type="checkbox" checked={row.mode === "api"} onChange={(e) => updateRow(i, { mode: e.target.checked ? "api" : "flat" })} className="accent-gold" />
-                حساب عبر API
-              </label>
-              <label className="flex items-center gap-2 text-sm">
-                <input type="checkbox" checked={row.is_active} onChange={(e) => updateRow(i, { is_active: e.target.checked })} className="accent-gold" />
-                نشط
-              </label>
-              <div className="flex items-center gap-2">
-                <button onClick={() => saveRow(row)} disabled={loading}
-                  className="inline-flex items-center gap-1 rounded-lg bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-700 hover:bg-emerald-100 transition disabled:opacity-50">
-                  {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />} حفظ
-                </button>
-                <button onClick={() => delRow(row)}
-                  className="inline-flex items-center gap-1 rounded-lg px-3 py-2 text-xs font-bold text-stone-500 hover:bg-rose-50 hover:text-rose-600 transition">
-                  <Trash2 className="w-3.5 h-3.5" /> حذف
-                </button>
+              <div className="flex flex-wrap items-center gap-3">
+                <label className="flex items-center gap-2 rounded-lg border border-stone-200 px-3 py-2 text-sm">
+                  <input type="checkbox" checked={row.mode === "api"} onChange={(e) => updateRow(i, { mode: e.target.checked ? "api" : "flat" })} className="accent-gold" />
+                  حساب عبر API
+                </label>
+                <label className="flex items-center gap-2 text-sm">
+                  <input type="checkbox" checked={row.is_active} onChange={(e) => updateRow(i, { is_active: e.target.checked })} className="accent-gold" />
+                  نشط
+                </label>
+                <div className="flex items-center gap-2">
+                  <button onClick={() => saveRow(row)} disabled={loading}
+                    className="inline-flex items-center gap-1 rounded-lg bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-700 hover:bg-emerald-100 transition disabled:opacity-50">
+                    {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />} حفظ
+                  </button>
+                  <button onClick={() => delRow(row)}
+                    className="inline-flex items-center gap-1 rounded-lg px-3 py-2 text-xs font-bold text-stone-500 hover:bg-rose-50 hover:text-rose-600 transition">
+                    <Trash2 className="w-3.5 h-3.5" /> حذف
+                  </button>
+                </div>
               </div>
             </div>
 

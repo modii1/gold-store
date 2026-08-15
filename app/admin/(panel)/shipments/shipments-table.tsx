@@ -95,10 +95,10 @@ export function ShipmentsTable({ shipments }: { shipments: Shipment[] }) {
                 <th className="px-4 py-3 font-semibold">رقم التتبع</th>
                 <th className="px-4 py-3 font-semibold">الشركة</th>
                 <th className="px-4 py-3 font-semibold">الحالة</th>
-                <th className="px-4 py-3 font-semibold">السعر</th>
-                <th className="px-4 py-3 font-semibold">COD</th>
-                <th className="px-4 py-3 font-semibold">السائق</th>
-                <th className="px-4 py-3 font-semibold">التاريخ</th>
+                <th className="px-4 py-3 font-semibold hidden md:table-cell">السعر</th>
+                <th className="px-4 py-3 font-semibold hidden md:table-cell">COD</th>
+                <th className="px-4 py-3 font-semibold hidden lg:table-cell">السائق</th>
+                <th className="px-4 py-3 font-semibold hidden md:table-cell">التاريخ</th>
                 <th className="px-4 py-3 font-semibold">التتبع</th>
               </tr>
             </thead>
@@ -112,10 +112,10 @@ export function ShipmentsTable({ shipments }: { shipments: Shipment[] }) {
                     <td className="px-4 py-3">
                       <span className={cn("rounded-full px-2.5 py-1 text-xs font-bold", meta.cls)}>{meta.label}</span>
                     </td>
-                    <td className="px-4 py-3">{s.price != null ? `${s.price} ${s.price ? "ر.س" : ""}` : "—"}</td>
-                    <td className="px-4 py-3">{s.cod_amount ? `${s.cod_amount} ر.س` : "—"}</td>
-                    <td className="px-4 py-3">{s.driver_name ? `${s.driver_name} ${s.driver_phone || ""}` : "—"}</td>
-                    <td className="px-4 py-3 text-xs text-stone-500">{new Date(s.created_at).toLocaleDateString("ar-SA")}</td>
+                    <td className="px-4 py-3 hidden md:table-cell">{s.price != null ? `${s.price} ${s.price ? "ر.س" : ""}` : "—"}</td>
+                    <td className="px-4 py-3 hidden md:table-cell">{s.cod_amount ? `${s.cod_amount} ر.س` : "—"}</td>
+                    <td className="px-4 py-3 hidden lg:table-cell">{s.driver_name ? `${s.driver_name} ${s.driver_phone || ""}` : "—"}</td>
+                    <td className="px-4 py-3 text-xs text-stone-500 hidden md:table-cell">{new Date(s.created_at).toLocaleDateString("ar-SA")}</td>
                     <td className="px-4 py-3">
                       {(s.branded_tracking_url || s.tracking_url) && (
                         <a href={s.branded_tracking_url || s.tracking_url || "#"} target="_blank" rel="noreferrer"

@@ -35,7 +35,7 @@ export default async function AdminDashboardPage() {
         <p className="mt-1 text-sm text-stone-500">نظرة عامة على المتجر</p>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
         {stats.map((s) => (
           <article key={s.label} className="rounded-2xl border border-amber-100 bg-white p-5 shadow-sm">
             <p className="text-sm font-semibold text-stone-500">{s.label}</p>

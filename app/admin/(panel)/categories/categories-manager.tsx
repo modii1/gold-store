@@ -65,8 +65,8 @@ export function CategoriesManager({ categories }: { categories: Category[] }) {
           <thead>
             <tr className="border-b border-stone-100 text-right text-stone-500">
               <th className="p-3 font-semibold">الاسم</th>
-              <th className="p-3 font-semibold">Slug</th>
-              <th className="p-3 font-semibold">الترتيب</th>
+              <th className="p-3 font-semibold hidden md:table-cell">Slug</th>
+              <th className="p-3 font-semibold hidden md:table-cell">الترتيب</th>
               <th className="p-3 font-semibold">نشط</th>
               <th className="p-3 font-semibold">إجراءات</th>
             </tr>
@@ -78,11 +78,11 @@ export function CategoriesManager({ categories }: { categories: Category[] }) {
                   <input value={row.name} onChange={(e) => updateRow(i, { name: e.target.value })} placeholder="اسم التصنيف"
                     className="w-full rounded-lg border border-stone-200 px-3 py-2 text-sm" />
                 </td>
-                <td className="p-3">
+                <td className="p-3 hidden md:table-cell">
                   <input value={row.slug} onChange={(e) => updateRow(i, { slug: e.target.value })} placeholder="slug" dir="ltr"
                     className="w-full rounded-lg border border-stone-200 px-3 py-2 text-sm" />
                 </td>
-                <td className="p-3 w-20">
+                <td className="p-3 w-20 hidden md:table-cell">
                   <input value={row.sort_order} onChange={(e) => updateRow(i, { sort_order: e.target.value })} type="number"
                     className="w-full rounded-lg border border-stone-200 px-3 py-2 text-sm" />
                 </td>

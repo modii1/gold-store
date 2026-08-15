@@ -38,8 +38,8 @@ export default async function AdminProductsPage() {
               <tr className="border-b border-stone-100 text-right text-stone-500">
                 <th className="p-4 font-semibold">المنتج</th>
                 <th className="p-4 font-semibold">السعر</th>
-                <th className="p-4 font-semibold">الفئة</th>
-                <th className="p-4 font-semibold">وسائط</th>
+                <th className="p-4 font-semibold hidden md:table-cell">الفئة</th>
+                <th className="p-4 font-semibold hidden md:table-cell">وسائط</th>
                 <th className="p-4 font-semibold">الحالة</th>
                 <th className="p-4 font-semibold">إجراءات</th>
               </tr>
