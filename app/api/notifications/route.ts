@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getViewer, viewerFilter } from "@/lib/notifications/viewer";
+import { repairStaleNotifications } from "@/lib/notifications/engine";
 
 export const dynamic = "force-dynamic";
 
@@ -11,6 +12,8 @@ export const dynamic = "force-dynamic";
 export async function GET(req: NextRequest) {
   const viewer = await getViewer();
   if (!viewer) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+
+  await repairStaleNotifications(100);
 
   const searchParams = req.nextUrl.searchParams;
   const limit = Math.min(Number(searchParams.get("limit") || "50"), 200);

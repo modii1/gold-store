@@ -163,12 +163,14 @@ async function handleOrderStatus(supabase: ReturnType<typeof createAdminClient>,
   }
 
   const { data: shipments } = await supabase.from("shipments")
-    .select("id")
+    .select("id, tracking_url, tracking_number")
     .or(matchFilter)
     .limit(1);
 
   const shipmentId = shipments && shipments.length ? shipments[0].id : null;
+  const prevTrackingUrl = shipments && shipments.length ? shipments[0].tracking_url : null;
   const tracking = body.trackingNumber || body.dcTrackingNumber || null;
+  const trackingUrl = body.trackingUrl || body.brandedTrackingURL || null;
 
   if (shipments && shipments.length) {
     await supabase.from("shipments").update({
@@ -252,6 +254,45 @@ async function handleOrderStatus(supabase: ReturnType<typeof createAdminClient>,
           carrier_name: body.deliveryCompany,
           tracking_number: tracking,
           tracking_url: body.trackingUrl || body.brandedTrackingURL,
+          shipping_status: body.status || body.dcStatus,
+        } as Record<string, unknown>,
+      });
+    }
+  }
+
+  // Tracking link arrived while the status still maps to no event (e.g.
+  // "processing") — notify the customer so they can follow the shipment.
+  if (!eventType && trackingUrl && trackingUrl !== prevTrackingUrl) {
+    const externalEventId = buildEventId("oto", ["tracking", orderId, trackingUrl]);
+    const { inserted, id } = await ingestEvent({
+      source: "oto",
+      externalEventId,
+      eventType: "shipment.tracking_available",
+      orderId: internalOrderId,
+      orderNumber: internalOrderNumber,
+      shipmentId,
+      customerIdentifier,
+      payload: {
+        ...body,
+        carrier_name: body.deliveryCompany,
+        tracking_number: tracking,
+        tracking_url: trackingUrl,
+        shipping_status: body.status || body.dcStatus,
+      } as Record<string, unknown>,
+    });
+    if (inserted && id) {
+      await processEvent({
+        eventId: id,
+        eventType: "shipment.tracking_available",
+        orderId: internalOrderId,
+        orderNumber: internalOrderNumber,
+        shipmentId,
+        customerIdentifier,
+        payload: {
+          ...body,
+          carrier_name: body.deliveryCompany,
+          tracking_number: tracking,
+          tracking_url: trackingUrl,
           shipping_status: body.status || body.dcStatus,
         } as Record<string, unknown>,
       });

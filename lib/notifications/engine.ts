@@ -1,7 +1,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { EventInput, TemplateVariables, ChannelCode, Category, Severity } from "./types";
 import { ingestEvent, logNotificationEvent } from "./events";
-import { BUILT_IN_TEMPLATES, renderTemplate, renderTemplateTitle, validateTemplateVariables } from "./templates";
+import { BUILT_IN_TEMPLATES, CUSTOMER_TEMPLATE_OVERRIDES, renderTemplate, renderTemplateTitle, validateTemplateVariables } from "./templates";
 import { builtInRuleFor, matchRule, resolveChannels } from "./rules";
 import { getCustomerPreferences, filterChannelsForCustomer } from "./preferences";
 import { createDeliveries, attemptDelivery } from "./dispatcher";
@@ -47,10 +47,33 @@ async function loadEnabledChannels(): Promise<ChannelCode[]> {
 
 async function loadTemplate(eventType: string): Promise<TemplateRow> {
   const supabase = createAdminClient();
+  const builtIn = BUILT_IN_TEMPLATES.find((t) => t.event_type === eventType);
+  if (builtIn) {
+    // The code is the source of truth: keep the DB row in sync with the
+    // built-in so stale seeded templates (old titles/placeholders) never
+    // override current ones. Mirrors what the settings page seed does.
+    const { data } = await supabase
+      .from("notification_templates")
+      .select("name, title, body, severity, category")
+      .eq("event_type", eventType)
+      .maybeSingle();
+    const stale =
+      !data ||
+      data.name !== builtIn.name ||
+      data.title !== builtIn.title ||
+      data.body !== builtIn.body ||
+      data.severity !== builtIn.severity ||
+      data.category !== builtIn.category;
+    if (stale) {
+      await supabase.from("notification_templates").upsert(
+        { ...builtIn, is_active: true, updated_at: new Date().toISOString() },
+        { onConflict: "event_type" }
+      );
+    }
+    return builtIn as unknown as TemplateRow;
+  }
   const { data } = await supabase.from("notification_templates").select("*").eq("event_type", eventType).maybeSingle();
   if (data) return data as unknown as TemplateRow;
-  const builtIn = BUILT_IN_TEMPLATES.find((t) => t.event_type === eventType);
-  if (builtIn) return builtIn as unknown as TemplateRow;
   return {
     event_type: eventType,
     name: eventType,
@@ -240,6 +263,10 @@ export async function processEvent(args: {
   const category = template.category as Category;
   const channels = resolveChannels(eventType, rules as never[], template.channels, variables, enabledChannels);
 
+  const customerOverride = CUSTOMER_TEMPLATE_OVERRIDES[eventType];
+  const customerTitle = customerOverride ? renderTemplateTitle(customerOverride.title, variables) : title;
+  const customerMessage = customerOverride ? renderTemplate(customerOverride.body, variables) : message;
+
   // --- Validate template variables (warn in logs if unknown) ---
   for (const t of [template.title, template.body]) {
     const unknown = validateTemplateVariables(t);
@@ -293,10 +320,10 @@ export async function processEvent(args: {
         eventType,
         category,
         severity,
-        title,
-        message,
+        title: customerTitle,
+        message: customerMessage,
         metadata: { ...payload },
-        actionUrl,
+        actionUrl: orderId ? "/account#orders" : null,
       });
       if (customerNotificationId) {
         await createDeliveries(customerNotificationId, customerChannels);
@@ -307,4 +334,81 @@ export async function processEvent(args: {
   const supabase = createAdminClient();
   await supabase.from("notification_events").update({ status: "processed", processed_at: new Date().toISOString() }).eq("id", args.eventId);
   void attemptDelivery; // dispatcher runs synchronously inside createDeliveries for in_app
+}
+
+type StoredNotificationRow = {
+  id: string;
+  user_type: "admin" | "customer";
+  type: string;
+  title: string;
+  message: string;
+  metadata: Record<string, unknown> | null;
+  order_id: string | null;
+  order_number: number | null;
+  shipment_id: string | null;
+};
+
+let lastRepairRunAt = 0;
+
+/**
+ * Re-renders already-stored notification rows from the current templates so
+ * stale seeded text (duplicate order numbers, store-greeting sent to customers,
+ * literal {{...}} leftovers) is corrected in place. Idempotent: each row is
+ * flagged via metadata.repaired and processed only once. Rate-limited to once
+ * per 30s per process so list fetches stay cheap.
+ */
+export async function repairStaleNotifications(limit = 100): Promise<number> {
+  const now = Date.now();
+  if (now - lastRepairRunAt < 30_000) return 0;
+  lastRepairRunAt = now;
+
+  const supabase = createAdminClient();
+  const { data } = await supabase
+    .from("notifications")
+    .select("id, user_type, type, title, message, metadata, order_id, order_number, shipment_id")
+    .order("created_at", { ascending: false })
+    .limit(limit);
+
+  let repaired = 0;
+  for (const row of (data as StoredNotificationRow[] | null) || []) {
+    const meta = (row.metadata || {}) as Record<string, unknown>;
+    if (meta.repaired === true) continue;
+    try {
+      const builtIn = BUILT_IN_TEMPLATES.find((t) => t.event_type === row.type);
+      if (!builtIn) continue; // custom/unknown event — leave untouched
+
+      const variables = await enrichVariables(
+        {
+          ...(meta as TemplateVariables),
+          store_name: typeof meta.store_name === "string" ? meta.store_name : null,
+          support_phone: typeof meta.support_phone === "string" ? meta.support_phone : null,
+        },
+        row.order_id,
+        row.shipment_id
+      );
+
+      const template = await loadTemplate(row.type);
+      const isCustomer = row.user_type === "customer";
+      const override = isCustomer ? CUSTOMER_TEMPLATE_OVERRIDES[row.type] : undefined;
+      const newTitle = renderTemplateTitle(override?.title ?? template.title, variables);
+      const rendered = renderTemplate(override?.body ?? template.body, variables);
+      const hasLeftover = /\{\{/.test(rendered);
+
+      const patch: Record<string, unknown> = {
+        metadata: { ...meta, repaired: true },
+        updated_at: new Date().toISOString(),
+      };
+      if (newTitle !== row.title) patch.title = newTitle;
+      if (!hasLeftover && rendered !== row.message) patch.message = rendered;
+      else if (hasLeftover && /\{\{/.test(row.message)) {
+        patch.message = row.message.replace(/\{\{[\w.]+\}\}/g, "").replace(/\s{2,}/g, " ").trim();
+      }
+
+      await supabase.from("notifications").update(patch).eq("id", row.id);
+      repaired += 1;
+    } catch (e) {
+      console.error("[notifications] repair failed for", row.id, e);
+    }
+  }
+  return repaired;
 }

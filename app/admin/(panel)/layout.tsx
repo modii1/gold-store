@@ -20,8 +20,8 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         <main className="min-w-0 flex-1">
           <div className="mb-4 flex items-center justify-between rounded-2xl border border-amber-100 bg-white px-4 py-3 shadow-sm md:px-6">
             <div className="flex items-center gap-3">
-              <span className="text-sm font-bold text-stone-900">لوحة التحكم</span>
-              <span className="hidden text-xs text-stone-400 sm:inline">متجر الذهب — مركز الإشعارات</span>
+              <span className="text-sm font-bold text-stone-900">اشعارات النظام</span>
+              <span className="hidden text-xs text-stone-400 sm:inline">متجر الذهب — لوحة التحكم</span>
             </div>
             <NotificationBell scope="admin" />
           </div>

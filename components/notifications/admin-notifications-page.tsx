@@ -263,34 +263,58 @@ export function AdminNotificationsPage() {
               const sev = severityMeta(item.severity);
               const isShipmentFail = item.type === "shipment.failed";
               return (
-                <li key={item.id} className={`flex flex-wrap items-center gap-3 py-3 ${item.is_read ? "opacity-70" : ""}`}>
-                  <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${sev.dot}`} />
+                <li key={item.id} className={`flex flex-col gap-3 py-3 sm:flex-row sm:items-start sm:gap-3 ${item.is_read ? "opacity-70" : ""}`}>
+                  <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${sev.dot} sm:mt-1`} />
                   <div className="min-w-0 flex-1">
-                    <p className="flex flex-wrap items-center gap-2 text-sm font-semibold text-stone-800">
+                    <p className="flex flex-wrap items-center gap-2 break-words text-sm font-semibold text-stone-800">
                       {item.title}
                       <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${sev.badge}`}>{sev.label}</span>
                       {item.category && <span className="rounded-full bg-stone-100 px-2 py-0.5 text-[10px] font-semibold text-stone-500">{CATEGORY_LABELS[item.category] || item.category}</span>}
                     </p>
-                    {item.message && <p className="mt-0.5 line-clamp-2 text-xs text-stone-500">{item.message}</p>}
-                    <p className="mt-1 flex items-center gap-3 text-[11px] text-stone-400">
+                    {item.message && <p className="mt-1 text-xs leading-relaxed text-stone-500 [overflow-wrap:anywhere]">{item.message}</p>}
+                    <p className="mt-1.5 flex flex-wrap items-center gap-3 text-[11px] text-stone-400">
                       <span dir="ltr">{timeAgo(item.created_at)}</span>
-                      {item.order_number && <span>طلب #{item.order_number}</span>}
                       {isShipmentFail && <span className="rounded-full bg-red-50 px-2 py-0.5 text-[10px] font-bold text-red-600">يتطلب تدخلاً</span>}
                     </p>
+                    <div className="mt-2 flex flex-wrap items-center gap-1.5 sm:hidden">
+                      {item.order_id && (
+                        <Link href={`/admin/orders/${item.order_id}`} className="flex items-center gap-1 whitespace-nowrap rounded-lg border border-stone-200 px-2.5 py-1.5 text-[11px] font-semibold text-stone-600 transition hover:bg-stone-50">
+                          فتح الطلب <ExternalLink className="h-3 w-3" />
+                        </Link>
+                      )}
+                      {item.shipment_id && (
+                        <Link href="/admin/shipments" className="flex items-center gap-1 whitespace-nowrap rounded-lg border border-stone-200 px-2.5 py-1.5 text-[11px] font-semibold text-stone-600 transition hover:bg-stone-50">
+                          <PackageSearch className="h-3 w-3" /> الشحنة
+                        </Link>
+                      )}
+                      {isShipmentFail && item.order_id && (
+                        <Link href={`/admin/orders/${item.order_id}`} className="flex items-center gap-1 whitespace-nowrap rounded-lg bg-amber-600 px-2.5 py-1.5 text-[11px] font-bold text-white transition hover:bg-amber-700">
+                          <RotateCcw className="h-3 w-3" /> إعادة المحاولة
+                        </Link>
+                      )}
+                      {!item.is_read && (
+                        <button onClick={() => void markRead(item.id)} title="تعليم كمقروء" className="rounded-lg border border-stone-200 p-1.5 text-stone-400 transition hover:bg-stone-50 hover:text-stone-600">
+                          <CheckCheck className="h-3.5 w-3.5" />
+                        </button>
+                      )}
+                      <button onClick={() => void remove(item.id)} title="حذف" className="rounded-lg border border-stone-200 p-1.5 text-stone-400 transition hover:bg-red-50 hover:text-red-600">
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-1.5">
+                  <div className="hidden shrink-0 flex-wrap items-center gap-1.5 sm:flex">
                     {item.order_id && (
-                      <Link href={`/admin/orders/${item.order_id}`} className="flex items-center gap-1 rounded-lg border border-stone-200 px-2.5 py-1.5 text-[11px] font-semibold text-stone-600 transition hover:bg-stone-50">
+                      <Link href={`/admin/orders/${item.order_id}`} className="flex items-center gap-1 whitespace-nowrap rounded-lg border border-stone-200 px-2.5 py-1.5 text-[11px] font-semibold text-stone-600 transition hover:bg-stone-50">
                         فتح الطلب <ExternalLink className="h-3 w-3" />
                       </Link>
                     )}
                     {item.shipment_id && (
-                      <Link href="/admin/shipments" className="flex items-center gap-1 rounded-lg border border-stone-200 px-2.5 py-1.5 text-[11px] font-semibold text-stone-600 transition hover:bg-stone-50">
+                      <Link href="/admin/shipments" className="flex items-center gap-1 whitespace-nowrap rounded-lg border border-stone-200 px-2.5 py-1.5 text-[11px] font-semibold text-stone-600 transition hover:bg-stone-50">
                         <PackageSearch className="h-3 w-3" /> الشحنة
                       </Link>
                     )}
                     {isShipmentFail && item.order_id && (
-                      <Link href={`/admin/orders/${item.order_id}`} className="flex items-center gap-1 rounded-lg bg-amber-600 px-2.5 py-1.5 text-[11px] font-bold text-white transition hover:bg-amber-700">
+                      <Link href={`/admin/orders/${item.order_id}`} className="flex items-center gap-1 whitespace-nowrap rounded-lg bg-amber-600 px-2.5 py-1.5 text-[11px] font-bold text-white transition hover:bg-amber-700">
                         <RotateCcw className="h-3 w-3" /> إعادة المحاولة
                       </Link>
                     )}

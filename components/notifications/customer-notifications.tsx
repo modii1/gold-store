@@ -153,20 +153,34 @@ export function CustomerNotifications() {
           {items.map((item) => {
             const sev = severityMeta(item.severity);
             return (
-              <li key={item.id} className={`group flex items-start gap-3 py-4 ${item.is_read ? "opacity-60" : ""}`}>
-                <span className={`mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full ${sev.dot}`} />
+              <li key={item.id} className={`group flex flex-col gap-3 py-4 sm:flex-row sm:items-start sm:gap-3 ${item.is_read ? "opacity-60" : ""}`}>
+                <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${sev.dot} sm:mt-1.5`} />
                 <div className="min-w-0 flex-1">
-                  <p className="text-sm font-bold text-ink">{item.title}</p>
-                  {item.message && <p className="mt-0.5 line-clamp-2 text-xs text-stone-500">{item.message}</p>}
-                  <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-stone-400">
+                  <p className="break-words text-sm font-bold text-ink">{item.title}</p>
+                  {item.message && <p className="mt-1 text-xs leading-relaxed text-stone-500 [overflow-wrap:anywhere]">{item.message}</p>}
+                  <p className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-stone-400">
                     <span dir="ltr">{timeAgo(item.created_at)}</span>
-                    {item.order_number && <span>طلب #{item.order_number}</span>}
                     <span className="rounded-full bg-cream px-2 py-0.5 font-semibold text-stone-500">{CATEGORY_LABELS[item.category] || item.category}</span>
                   </p>
+                  <div className="mt-2 flex flex-wrap items-center gap-1.5 sm:hidden">
+                    {item.order_id && (
+                      <Link href="/account#orders" className="flex items-center gap-1 whitespace-nowrap rounded-lg border border-sand px-2 py-1.5 text-[11px] font-semibold text-stone-600 transition hover:bg-cream">
+                        فتح <ExternalLink className="h-3 w-3" />
+                      </Link>
+                    )}
+                    {!item.is_read && (
+                      <button onClick={() => void markRead(item.id)} title="تعليم كمقروء" className="rounded-lg border border-sand p-1.5 text-stone-400 transition hover:bg-cream hover:text-stone-600">
+                        <CheckCheck className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                    <button onClick={() => void remove(item.id)} title="حذف" className="rounded-lg border border-sand p-1.5 text-stone-400 transition hover:bg-rose-50 hover:text-rose-600">
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
                 </div>
-                <div className="flex shrink-0 items-center gap-1">
+                <div className="hidden shrink-0 flex-wrap items-center justify-end gap-1 sm:flex">
                   {item.order_id && (
-                    <Link href="/account#orders" className="flex items-center gap-1 rounded-lg border border-sand px-2 py-1.5 text-[11px] font-semibold text-stone-600 transition hover:bg-cream">
+                    <Link href="/account#orders" className="flex items-center gap-1 whitespace-nowrap rounded-lg border border-sand px-2 py-1.5 text-[11px] font-semibold text-stone-600 transition hover:bg-cream">
                       فتح <ExternalLink className="h-3 w-3" />
                     </Link>
                   )}
