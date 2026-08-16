@@ -11,7 +11,7 @@ import { formatDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { Order, OrderDetails, OrderNote } from "@/types";
 import {
-  ORDER_STATUS_META, PAYMENT_STATUS_META, SHIPPING_STATUS_META, WORKFLOW_STEPS,
+  ORDER_STATUS_META, PAYMENT_STATUS_META, SHIPPING_STATUS_META,
   derivePaymentStatus, deriveShippingStatus, isTransfer, shipmentCompanyName, workflowAction,
 } from "@/lib/orders/order-meta";
 
@@ -94,59 +94,13 @@ export function OrderDrawer({ drawer, busyId, onClose, onStatus, onShip, onAppro
 
   function renderDetail() {
     if (!order) return null;
-    const st = ORDER_STATUS_META[order.status] || ORDER_STATUS_META.pending;
     const pst = PAYMENT_STATUS_META[derivePaymentStatus(order)];
     const sst = SHIPPING_STATUS_META[deriveShippingStatus(order)];
-    const w = workflowAction(order);
-    const stepIndex = WORKFLOW_STEPS.findIndex((s) => s.value === order.status);
-    const terminal = order.status === "cancelled" || order.status === "returned";
 
     const subtotal = order.total - order.shipping_cost + order.discount;
 
     return (
       <div className="space-y-4">
-        {/* Stepper */}
-        <Section title="سير العمل" icon={CheckCircle2}>
-          {terminal ? (
-            <div className="flex items-center gap-2 rounded-xl bg-red-50 p-3 text-sm font-bold text-red-600">
-              <XCircle className="h-5 w-5" />
-              الطلب {order.status === "cancelled" ? "ملغي" : "مرتجع"}
-              {order.notes && <span className="text-xs font-normal text-red-500">— {order.notes}</span>}
-            </div>
-          ) : (
-            <ol className="flex items-center justify-between gap-1 overflow-x-auto py-2">
-              {WORKFLOW_STEPS.map((step, i) => {
-                const done = stepIndex >= i;
-                const current = stepIndex === i;
-                return (
-                  <li key={step.value} className="flex min-w-[70px] flex-1 flex-col items-center gap-1.5">
-                    <span
-                      className={cn(
-                        "flex h-7 w-7 items-center justify-center rounded-full border-2 text-xs font-bold",
-                        current
-                          ? "border-gold bg-gold text-white"
-                          : done
-                          ? "border-emerald-500 bg-emerald-500 text-white"
-                          : "border-stone-200 bg-white text-stone-400"
-                      )}
-                    >
-                      {done && !current ? <CheckCircle2 className="h-4 w-4" /> : i + 1}
-                    </span>
-                    <span className={cn("whitespace-nowrap text-[10px] font-bold", current ? "text-gold-dark" : done ? "text-emerald-700" : "text-stone-400")}>
-                      {step.label}
-                    </span>
-                  </li>
-                );
-              })}
-            </ol>
-          )}
-          <div className="mt-2 flex flex-wrap gap-2 border-t border-stone-100 pt-3">
-            <Badge {...st} />
-            <Badge {...pst} />
-            <Badge {...sst} />
-          </div>
-        </Section>
-
         {/* Customer */}
         <Section title="بيانات العميل" icon={Box}>
           <div className="space-y-2 text-sm">
