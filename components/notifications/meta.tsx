@@ -27,7 +27,7 @@ export const CATEGORY_LABELS: Record<string, string> = {
   marketing: "تسويق",
 };
 
-const URL_RE = /(https?:\/\/[^\s<>"'.,;،؛:()]+)/g;
+const URL_RE = /(https?:\/\/[^\s<>"']+)/g;
 
 /**
  * Renders a stored notification message, converting long URLs into a short
@@ -40,9 +40,10 @@ export function renderMessageWithLinks(message: string, linkClassName: string, c
   const parts = cleaned.split(URL_RE);
   return parts.map((part, i) => {
     if (/^https?:\/\//.test(part)) {
+      const href = part.replace(/[.,;،؛:()]+$/, "");
       if (!clickable) return <span key={i} className={linkClassName}>اضغط هنا</span>;
       return (
-        <a key={i} href={part} target="_blank" rel="noopener noreferrer" className={linkClassName}>
+        <a key={i} href={href} target="_blank" rel="noopener noreferrer" className={linkClassName}>
           اضغط هنا
         </a>
       );
