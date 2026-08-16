@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { Loader2, Trash2, CheckCheck, ExternalLink, Save } from "lucide-react";
 import { timeAgo } from "./notification-bell";
-import { severityMeta, CATEGORY_LABELS } from "./meta";
+import { severityMeta, CATEGORY_LABELS, renderMessageWithLinks } from "./meta";
 
 type Item = {
   id: string;
@@ -162,7 +162,7 @@ export function CustomerNotifications() {
                       {sev.label}
                     </span>
                   </p>
-                  {item.message && <p className="mt-1 text-xs leading-relaxed text-stone-500 [overflow-wrap:anywhere]">{item.message}</p>}
+                  {item.message && <p className="mt-1 text-xs leading-relaxed text-stone-500 [overflow-wrap:anywhere]">{renderMessageWithLinks(item.message, "font-bold text-amber-700 underline decoration-amber-300 underline-offset-2 hover:text-amber-800")}</p>}
                   <p className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-stone-400">
                     <span dir="ltr">{timeAgo(item.created_at)}</span>
                     <span className="rounded-full bg-cream px-2 py-0.5 font-semibold text-stone-500">{CATEGORY_LABELS[item.category] || item.category}</span>

@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import Link from "next/link";
 import { Bell, CheckCheck, ExternalLink, Loader2 } from "lucide-react";
-import { severityMeta } from "./meta";
+import { severityMeta, renderMessageWithLinks } from "./meta";
 
 type BellItem = {
   id: string;
@@ -124,7 +124,7 @@ export function NotificationBell({ scope = "admin" }: { scope?: "admin" | "custo
                   <span className={`mt-0.5 h-2.5 w-2.5 shrink-0 rounded-full ${sev.dot}`} />
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-[13px] font-semibold text-stone-800">{item.title}</span>
-                    <span className="mt-0.5 block line-clamp-2 text-[11px] leading-relaxed text-stone-500 [overflow-wrap:anywhere]">{item.message}</span>
+                    <span className="mt-0.5 block line-clamp-2 text-[11px] leading-relaxed text-stone-500 [overflow-wrap:anywhere]">{renderMessageWithLinks(item.message, "font-semibold text-amber-700 underline decoration-amber-300 underline-offset-2", false)}</span>
                     <span className="mt-1 block text-[10px] text-stone-400" dir="ltr">
                       {timeAgo(item.created_at)}
                     </span>

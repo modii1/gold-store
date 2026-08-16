@@ -16,7 +16,7 @@ import {
   Settings2,
 } from "lucide-react";
 import { timeAgo } from "./notification-bell";
-import { severityMeta, CATEGORY_LABELS } from "./meta";
+import { severityMeta, CATEGORY_LABELS, renderMessageWithLinks } from "./meta";
 
 type Item = {
   id: string;
@@ -273,7 +273,7 @@ export function AdminNotificationsPage() {
                       </span>
                       {item.category && <span className="rounded-full bg-stone-100 px-2 py-0.5 text-[10px] font-semibold text-stone-500">{CATEGORY_LABELS[item.category] || item.category}</span>}
                     </p>
-                    {item.message && <p className="mt-1 text-xs leading-relaxed text-stone-500 [overflow-wrap:anywhere]">{item.message}</p>}
+                    {item.message && <p className="mt-1 text-xs leading-relaxed text-stone-500 [overflow-wrap:anywhere]">{renderMessageWithLinks(item.message, "font-bold text-amber-700 underline decoration-amber-300 underline-offset-2 hover:text-amber-800")}</p>}
                     <p className="mt-1.5 flex flex-wrap items-center gap-3 text-[11px] text-stone-400">
                       <span dir="ltr">{timeAgo(item.created_at)}</span>
                       {isShipmentFail && <span className="rounded-full bg-red-50 px-2 py-0.5 text-[10px] font-bold text-red-600">يتطلب تدخلاً</span>}
