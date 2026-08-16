@@ -12,7 +12,7 @@ import { cn } from "@/lib/utils";
 import type { Order, OrderDetails, OrderNote } from "@/types";
 import {
   ORDER_STATUS_META, PAYMENT_STATUS_META, SHIPPING_STATUS_META, WORKFLOW_STEPS,
-  derivePaymentStatus, deriveShippingStatus, isTransfer, shipmentCompanyName, workflowAction, ALL_ORDER_STATUSES,
+  derivePaymentStatus, deriveShippingStatus, isTransfer, shipmentCompanyName, workflowAction,
 } from "@/lib/orders/order-meta";
 
 type DrawerState = {
@@ -408,19 +408,6 @@ export function OrderDrawer({ drawer, busyId, onClose, onStatus, onShip, onAppro
 
         {order && (
           <div className="flex flex-wrap items-center gap-2 border-t border-stone-200 bg-white px-5 py-3">
-            <select
-              value={order.status}
-              onChange={(e) =>
-                onStatus(order, e.target.value, ORDER_STATUS_META[e.target.value as keyof typeof ORDER_STATUS_META]?.label || e.target.value)
-              }
-              disabled={busyId === order.id}
-              aria-label="تغيير حالة الطلب"
-              className="rounded-lg border border-stone-200 bg-white px-2.5 py-2 text-xs font-bold text-stone-700 focus:border-gold focus:outline-none disabled:opacity-50"
-            >
-              {ALL_ORDER_STATUSES.map((s) => (
-                <option key={s.value} value={s.value}>{s.label}</option>
-              ))}
-            </select>
             {(() => {
               const w = workflowAction(order);
               if (!w) return null;

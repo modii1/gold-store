@@ -144,6 +144,7 @@ export function OrdersTable(props: Props) {
   }
 
   const StatusSelect = ({ o }: { o: Order }) => {
+    const st = ORDER_STATUS_META[o.status] || ORDER_STATUS_META.pending;
     return (
       <select
         value={o.status}
@@ -152,7 +153,10 @@ export function OrdersTable(props: Props) {
         }
         disabled={busyId === o.id}
         aria-label="تغيير حالة الطلب"
-        className="rounded-lg border border-stone-200 bg-white px-2 py-1.5 text-xs font-bold text-stone-700 focus:border-gold focus:outline-none disabled:opacity-50"
+        className={cn(
+          "cursor-pointer whitespace-nowrap rounded-full border px-2.5 py-0.5 text-xs font-bold focus:outline-none disabled:opacity-50",
+          st.cls
+        )}
       >
         {ALL_ORDER_STATUSES.map((s) => (
           <option key={s.value} value={s.value}>{s.label}</option>
@@ -177,7 +181,7 @@ export function OrdersTable(props: Props) {
     <div className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-sm text-stone-500">
-          عرض <b>{total === 0 ? 0 : (page - 1) * limit + 1}</b>–<b>{Math.min(page * limit, total)}</b> من{" "}
+          عرض <b>{orders.length === 0 ? 0 : (page - 1) * limit + 1}</b>–<b>{Math.min((page - 1) * limit + orders.length, total)}</b> من{" "}
           <b>{total}</b> {pluralizeArabic(total, "طلب", "طلبين", "طلب")}
         </p>
         <select
@@ -195,7 +199,6 @@ export function OrdersTable(props: Props) {
       {/* ============ Mobile cards ============ */}
       <div className="space-y-3 md:hidden">
         {orders.map((o) => {
-          const st = ORDER_STATUS_META[o.status] || ORDER_STATUS_META.pending;
           const pst = PAYMENT_STATUS_META[derivePaymentStatus(o)];
           const sst = SHIPPING_STATUS_META[deriveShippingStatus(o)];
           return (
@@ -213,7 +216,7 @@ export function OrdersTable(props: Props) {
                     <button onClick={() => props.onOpen(o)} className="font-bold text-stone-900 hover:text-gold">
                       #{o.order_number}
                     </button>
-                    <span className={cn("rounded-full border px-2 py-0.5 text-[11px] font-bold", st.cls)}>{st.label}</span>
+                    <StatusSelect o={o} />
                   </div>
                   <p className="mt-0.5 text-xs text-stone-400" dir="ltr">{formatDate(o.created_at)}</p>
                 </div>
@@ -259,7 +262,6 @@ export function OrdersTable(props: Props) {
                 </button>
                 <TransferActions o={o} />
                 <QuickAction o={o} />
-                <StatusSelect o={o} />
                 <button onClick={() => props.onPrint(o)} aria-label="طباعة الفاتورة"
                   className="flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-bold text-stone-500 hover:bg-stone-100">
                   <Printer className="h-3.5 w-3.5" />
@@ -307,7 +309,6 @@ export function OrdersTable(props: Props) {
             </thead>
             <tbody className="divide-y divide-stone-100">
               {orders.map((o) => {
-                const st = ORDER_STATUS_META[o.status] || ORDER_STATUS_META.pending;
                 const pst = PAYMENT_STATUS_META[derivePaymentStatus(o)];
                 const sst = SHIPPING_STATUS_META[deriveShippingStatus(o)];
                 return (
@@ -362,9 +363,7 @@ export function OrdersTable(props: Props) {
                       )}
                     </td>
                     <td className="px-4 py-4">
-                      <span className={cn("inline-block whitespace-nowrap rounded-full border px-2.5 py-0.5 text-xs font-bold", st.cls)}>
-                        {st.label}
-                      </span>
+                      <StatusSelect o={o} />
                     </td>
                     <td className="px-4 py-4">
                       {o.shipping_method && <p className="text-xs text-stone-600">{o.shipping_method}</p>}
@@ -396,7 +395,6 @@ export function OrdersTable(props: Props) {
                         </button>
                         <TransferActions o={o} />
                         <QuickAction o={o} />
-                        <StatusSelect o={o} />
                         <button onClick={() => props.onPrint(o)} aria-label="طباعة الفاتورة"
                           className="rounded-lg border border-stone-200 p-1.5 text-stone-500 hover:bg-stone-100">
                           <Printer className="h-3.5 w-3.5" />
