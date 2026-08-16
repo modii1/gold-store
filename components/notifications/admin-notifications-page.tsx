@@ -264,11 +264,13 @@ export function AdminNotificationsPage() {
               const isShipmentFail = item.type === "shipment.failed";
               return (
                 <li key={item.id} className={`flex flex-col gap-3 py-3 sm:flex-row sm:items-start sm:gap-3 ${item.is_read ? "opacity-70" : ""}`}>
-                  <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${sev.dot} sm:mt-1`} />
                   <div className="min-w-0 flex-1">
                     <p className="flex flex-wrap items-center gap-2 break-words text-sm font-semibold text-stone-800">
                       {item.title}
-                      <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${sev.badge}`}>{sev.label}</span>
+                      <span className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[10px] font-bold ${sev.badge}`}>
+                        <span className={`h-1.5 w-1.5 rounded-full ${sev.dot}`} />
+                        {sev.label}
+                      </span>
                       {item.category && <span className="rounded-full bg-stone-100 px-2 py-0.5 text-[10px] font-semibold text-stone-500">{CATEGORY_LABELS[item.category] || item.category}</span>}
                     </p>
                     {item.message && <p className="mt-1 text-xs leading-relaxed text-stone-500 [overflow-wrap:anywhere]">{item.message}</p>}

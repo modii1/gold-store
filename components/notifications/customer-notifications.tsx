@@ -154,9 +154,14 @@ export function CustomerNotifications() {
             const sev = severityMeta(item.severity);
             return (
               <li key={item.id} className={`group flex flex-col gap-3 py-4 sm:flex-row sm:items-start sm:gap-3 ${item.is_read ? "opacity-60" : ""}`}>
-                <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${sev.dot} sm:mt-1.5`} />
                 <div className="min-w-0 flex-1">
-                  <p className="break-words text-sm font-bold text-ink">{item.title}</p>
+                  <p className="flex flex-wrap items-center gap-2 break-words text-sm font-bold text-ink">
+                    {item.title}
+                    <span className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[10px] font-bold ${sev.badge}`}>
+                      <span className={`h-1.5 w-1.5 rounded-full ${sev.dot}`} />
+                      {sev.label}
+                    </span>
+                  </p>
                   {item.message && <p className="mt-1 text-xs leading-relaxed text-stone-500 [overflow-wrap:anywhere]">{item.message}</p>}
                   <p className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-stone-400">
                     <span dir="ltr">{timeAgo(item.created_at)}</span>
