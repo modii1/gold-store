@@ -10,6 +10,17 @@ export function isTransfer(o: { payment_method?: string | null }) {
   return pm.includes("تحويل") || pm.includes("بنكي") || pm.includes("transfer");
 }
 
+/**
+ * Display name of the shipping company for a shipment row.
+ * Falls back from shipment fields → order fields → generic label.
+ */
+export function shipmentCompanyName(
+  s: { delivery_company?: string | null; delivery_option_name?: string | null },
+  o: { shipping_method?: string | null }
+): string {
+  return s.delivery_company || s.delivery_option_name || o.shipping_method || "شحنة";
+}
+
 export function isCod(o: { payment_method?: string | null }) {
   const pm = (o.payment_method || "").toLowerCase();
   return (

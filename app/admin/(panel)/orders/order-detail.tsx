@@ -10,6 +10,7 @@ import {
 import { updateOrderStatusAction, createShipmentAction, addOrderNoteAction, deleteOrderNoteAction } from "@/app/actions/orders-admin";
 import { Currency } from "@/components/storefront/currency";
 import { formatDate } from "@/lib/format";
+import { shipmentCompanyName } from "@/lib/orders/order-meta";
 import type { Order, OrderStatusLog, OrderNote } from "@/types";
 
 const statusConfig: Record<string, { label: string; cls: string; icon: typeof CheckCircle2 }> = {
@@ -393,7 +394,7 @@ export function OrderDetail({ order, statusLog, notes: initialNotes, shipments }
                 <div className="mt-2 space-y-2">
                   {shipments.map((s: any) => (
                     <div key={s.id} className="rounded-lg bg-stone-50 p-2 text-xs">
-                      <p className="font-bold">{s.delivery_company || s.delivery_option_name || order.shipping_method || "شحنة"}</p>
+                      <p className="font-bold">{shipmentCompanyName(s, order)}</p>
                       {s.tracking_number && <p>تتبع: {s.tracking_number}</p>}
                       {s.print_awb_url && (
                         <a href={s.print_awb_url} target="_blank" rel="noopener noreferrer" className="text-gold hover:underline">
