@@ -9,7 +9,7 @@ import {
   rejectTransferAction, bulkUpdateOrdersAction, getOrderDetailsAction, exportOrdersCsvAction,
 } from "@/app/actions/orders-admin";
 import { buildOrdersQueryString } from "@/lib/orders/query";
-import { pluralizeArabic } from "@/lib/format";
+import { formatDateOnly, pluralizeArabic } from "@/lib/format";
 import { OrdersStats } from "./orders-stats";
 import { OrderFilters } from "./order-filters";
 import { OrdersTable } from "./orders-table";
@@ -47,7 +47,7 @@ function ordersToCsvClient(rows: Order[]): string {
     return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
   };
   const lines = rows.map((o) =>
-    [o.order_number, o.customer_name, o.customer_phone, o.customer_city, o.status, o.total, o.payment_method, o.shipping_method, o.tracking_number, o.created_at]
+    [o.order_number, o.customer_name, o.customer_phone, o.customer_city, o.status, o.total, o.payment_method, o.shipping_method, o.tracking_number, formatDateOnly(o.created_at)]
       .map(escape)
       .join(",")
   );

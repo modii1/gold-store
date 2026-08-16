@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { X, Printer, Loader2 } from "lucide-react";
-import { formatArabicDateTime, formatCurrency } from "@/lib/format";
+import { formatDate, formatCurrency } from "@/lib/format";
 import type { Order, Settings } from "@/types";
 
 type Props = {
@@ -124,7 +124,7 @@ function Invoice({ order, settings }: { order: Order; settings: Settings }) {
         </div>
         <div>
           <p className="text-xs text-stone-400">التاريخ</p>
-          <p className="font-bold text-stone-900">{formatArabicDateTime(order.created_at)}</p>
+          <p className="font-bold text-stone-900" dir="ltr">{formatDate(order.created_at)}</p>
         </div>
         <div>
           <p className="text-xs text-stone-400">العميل</p>

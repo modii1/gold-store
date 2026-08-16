@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Search, Filter, X } from "lucide-react";
+import { Search, Filter, X, Calendar } from "lucide-react";
 import type { Carrier, OrdersQueryParams, OrderStatus } from "@/types";
 import { ALL_ORDER_STATUSES } from "@/lib/orders/order-meta";
+import { formatDateOnly } from "@/lib/format";
 
 const statusOptions = [{ value: "all", label: "جميع الحالات" }, ...ALL_ORDER_STATUSES];
 
@@ -39,6 +40,35 @@ type Props = {
 
 function isoDate(d: Date) {
   return d.toISOString().slice(0, 10);
+}
+
+function DateField({
+  value,
+  label,
+  onChange,
+}: {
+  value: string;
+  label: string;
+  onChange: (value: string | undefined) => void;
+}) {
+  return (
+    <div className="relative">
+      <div
+        dir="ltr"
+        className="pointer-events-none flex h-full w-full items-center gap-2 rounded-xl border border-stone-200 bg-white px-3 py-2.5 text-sm"
+      >
+        <Calendar className="h-4 w-4 shrink-0 text-stone-400" />
+        <span className={value ? "font-semibold text-stone-700" : "text-stone-400"}>{value ? formatDateOnly(value) : label}</span>
+      </div>
+      <input
+        type="date"
+        value={value}
+        onChange={(e) => onChange(e.target.value || undefined)}
+        aria-label={label}
+        className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+      />
+    </div>
+  );
 }
 
 export function OrderFilters({ params, carriers, onChange, onClear }: Props) {
@@ -151,19 +181,15 @@ export function OrderFilters({ params, carriers, onChange, onClear }: Props) {
           ))}
         </select>
 
-        <input
-          type="date"
+        <DateField
           value={params.from || ""}
-          onChange={(e) => onChange({ from: e.target.value || undefined })}
-          aria-label="من تاريخ"
-          className={selectCls}
+          label="من تاريخ"
+          onChange={(v) => onChange({ from: v })}
         />
-        <input
-          type="date"
+        <DateField
           value={params.to || ""}
-          onChange={(e) => onChange({ to: e.target.value || undefined })}
-          aria-label="إلى تاريخ"
-          className={selectCls}
+          label="إلى تاريخ"
+          onChange={(v) => onChange({ to: v })}
         />
 
         {hasFilters && (
