@@ -11,8 +11,8 @@ import { formatDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { Order, OrderDetails, OrderNote } from "@/types";
 import {
-  ORDER_STATUS_META, PAYMENT_STATUS_META, SHIPPING_STATUS_META,
-  derivePaymentStatus, deriveShippingStatus, isTransfer, shipmentCompanyName, workflowAction,
+  ORDER_STATUS_META, SHIPPING_STATUS_META,
+  isTransfer, shipmentCompanyName, workflowAction,
 } from "@/lib/orders/order-meta";
 
 type DrawerState = {
@@ -94,8 +94,6 @@ export function OrderDrawer({ drawer, busyId, onClose, onStatus, onShip, onAppro
 
   function renderDetail() {
     if (!order) return null;
-    const pst = PAYMENT_STATUS_META[derivePaymentStatus(order)];
-    const sst = SHIPPING_STATUS_META[deriveShippingStatus(order)];
 
     const subtotal = order.total - order.shipping_cost + order.discount;
 
@@ -171,11 +169,8 @@ export function OrderDrawer({ drawer, busyId, onClose, onStatus, onShip, onAppro
 
         {/* Payment */}
         <Section title="الدفع" icon={Banknote}>
-          <div className="space-y-2 text-sm">
-            <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="space-y-2 text-sm">
               <p className="flex items-center gap-1.5 text-stone-700"><CreditCard className="h-3.5 w-3.5 text-stone-400" /> {order.payment_method || "غير محدد"}</p>
-              <Badge {...pst} />
-            </div>
             {isTransfer(order) && order.transfer_receipt_url && (
               <a href={order.transfer_receipt_url} target="_blank" rel="noopener noreferrer"
                 className="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-700 hover:underline">
@@ -201,10 +196,7 @@ export function OrderDrawer({ drawer, busyId, onClose, onStatus, onShip, onAppro
         {/* Shipping */}
         <Section title="الشحن" icon={Truck}>
           <div className="space-y-2 text-sm">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <p className="text-stone-700">{order.shipping_method || "لم يتم تحديد شركة شحن"}</p>
-              <Badge {...sst} />
-            </div>
+            <p className="text-stone-700">{order.shipping_method || "لم يتم تحديد شركة شحن"}</p>
             {order.tracking_number && (
               <p className="text-xs">
                 <span className="text-stone-500">رقم التتبع:</span>{" "}
@@ -320,7 +312,10 @@ export function OrderDrawer({ drawer, busyId, onClose, onStatus, onShip, onAppro
       >
         <div className="flex items-center justify-between gap-3 border-b border-stone-200 bg-white px-5 py-4">
           <div>
-            <p className="text-lg font-extrabold text-stone-900">طلب #{order?.order_number || "…"}</p>
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="text-lg font-extrabold text-stone-900">طلب #{order?.order_number || "…"}</p>
+              {order && <Badge {...(ORDER_STATUS_META[order.status] || ORDER_STATUS_META.pending)} />}
+            </div>
             <p className="text-xs text-stone-400" dir="ltr">{order ? formatDate(order.created_at) : ""}</p>
           </div>
           <div className="flex items-center gap-2">

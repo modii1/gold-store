@@ -114,8 +114,9 @@ export function deriveShippingStatus(o: Order): ShippingStatus {
     return hasTracking ? "in_transit" : "created";
   }
 
-  const hasShipment = Boolean(o.tracking_number || o.shipping_method || o.delivery_option_id);
-  if (hasShipment) return "created";
+  // A shipment is only "created" once a tracking number exists — picking a
+  // shipping method at checkout is not a created shipment.
+  if (hasTracking) return "created";
   return "not_created";
 }
 

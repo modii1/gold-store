@@ -1,16 +1,15 @@
 "use client";
 
+import { useState } from "react";
 import {
-  Eye, Loader2, Truck, CheckCircle2, PackageCheck, Banknote, Clock, Trash2, Printer, Copy,
-  ExternalLink, ChevronLeft, ChevronRight, AlertCircle, Tag,
+  Eye, Loader2, ChevronLeft, ChevronRight, AlertCircle, Tag, RefreshCw, Check, ExternalLink,
 } from "lucide-react";
 import type { Order, OrdersQueryParams, OrderSortKey } from "@/types";
 import { Currency } from "@/components/storefront/currency";
 import { formatDate, pluralizeArabic } from "@/lib/format";
 import { LIMIT_OPTIONS } from "@/lib/orders/query";
 import {
-  ORDER_STATUS_META, PAYMENT_STATUS_META, SHIPPING_STATUS_META,
-  derivePaymentStatus, deriveShippingStatus, isTransfer, workflowAction,
+  ORDER_STATUS_META, ALL_ORDER_STATUSES,
 } from "@/lib/orders/order-meta";
 import { cn } from "@/lib/utils";
 
@@ -38,10 +37,6 @@ type Props = {
   onCopy: (o: Order) => void;
 };
 
-function badge(meta: { label: string; cls: string }) {
-  return <span className={`whitespace-nowrap rounded-full border px-2 py-0.5 text-[11px] font-bold ${meta.cls}`}>{meta.label}</span>;
-}
-
 function itemsSummary(o: Order) {
   const items = o.items || [];
   if (!items.length) return "بدون منتجات";
@@ -50,80 +45,47 @@ function itemsSummary(o: Order) {
   return head;
 }
 
+function StatusMenu({ o, busy, onStatus }: { o: Order; busy: boolean; onStatus: (o: Order, target: string, label: string) => void }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="relative">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        disabled={busy}
+        className="flex items-center gap-1 rounded-lg bg-gold/10 px-2.5 py-1.5 text-xs font-bold text-gold-dark hover:bg-gold/20 disabled:opacity-50"
+      >
+        {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+        تغيير حالة الطلب
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
+          <div className="absolute right-0 top-full z-50 mt-1 w-44 overflow-hidden rounded-xl border border-stone-200 bg-white py-1 shadow-lg">
+            {ALL_ORDER_STATUSES.map((s) => (
+              <button
+                key={s.value}
+                onClick={() => {
+                  setOpen(false);
+                  if (s.value !== o.status) onStatus(o, s.value, s.label);
+                }}
+                className="flex w-full items-center gap-2 px-3 py-2 text-xs font-bold text-stone-600 hover:bg-stone-50"
+              >
+                <span className={`h-2 w-2 rounded-full ${ORDER_STATUS_META[s.value].cls.split(" ").find((c) => c.startsWith("bg-")) || "bg-stone-300"}`} />
+                {s.label}
+                {s.value === o.status && <Check className="mr-auto h-3.5 w-3.5 text-emerald-600" />}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 export function OrdersTable(props: Props) {
   const { orders, total, pages, page, limit, selected, busyId } = props;
 
   const allSelected = orders.length > 0 && orders.every((o) => selected.includes(o.id));
-
-  const TransferActions = ({ o }: { o: Order }) => {
-    if (!isTransfer(o)) return null;
-    if (o.status !== "pending" && o.status !== "confirmed") return null;
-    if (!o.transfer_receipt_url) {
-      return (
-        <span className="flex items-center gap-1 rounded-lg bg-amber-50 px-2.5 py-1.5 text-[11px] font-bold text-amber-700">
-          <Clock className="h-3.5 w-3.5" /> بانتظار إثبات التحويل
-        </span>
-      );
-    }
-    return (
-      <div className="flex items-center gap-1.5">
-        <button
-          onClick={() => props.onApproveTransfer(o)}
-          disabled={busyId === o.id}
-          className="flex items-center gap-1 rounded-lg bg-emerald-600 px-2.5 py-1.5 text-xs font-bold text-white hover:bg-emerald-700 disabled:opacity-50"
-        >
-          <CheckCircle2 className="h-3.5 w-3.5" /> اعتماد التحويل
-        </button>
-        <button
-          onClick={() => props.onRejectTransfer(o)}
-          disabled={busyId === o.id}
-          className="flex items-center gap-1 rounded-lg bg-rose-50 px-2.5 py-1.5 text-xs font-bold text-rose-600 hover:bg-rose-100 disabled:opacity-50"
-        >
-          رفض
-        </button>
-      </div>
-    );
-  };
-
-  const QuickAction = ({ o }: { o: Order }) => {
-    const w = workflowAction(o);
-    if (!w) return null;
-    if (w.type === "blocked") {
-      return (
-        <span className="flex items-center gap-1 rounded-lg bg-amber-50 px-2.5 py-1.5 text-[11px] font-bold text-amber-700">
-          <Clock className="h-3.5 w-3.5" /> {w.label}
-        </span>
-      );
-    }
-    if (w.type === "ship") {
-      return (
-        <button
-          onClick={() => props.onShip(o)}
-          disabled={busyId === o.id}
-          className="flex items-center gap-1 rounded-lg bg-emerald-600 px-2.5 py-1.5 text-xs font-bold text-white hover:bg-emerald-700 disabled:opacity-50"
-        >
-          {busyId === o.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Truck className="h-3.5 w-3.5" />}
-          {w.label}
-        </button>
-      );
-    }
-    return (
-      <button
-        onClick={() => props.onStatus(o, w.target as string, w.label)}
-        disabled={busyId === o.id}
-        className="flex items-center gap-1 rounded-lg bg-emerald-600 px-2.5 py-1.5 text-xs font-bold text-white hover:bg-emerald-700 disabled:opacity-50"
-      >
-        {busyId === o.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : wIconFor(w.label)}
-        {w.label}
-      </button>
-    );
-  };
-
-  function wIconFor(label: string) {
-    if (label.includes("تسليم")) return <PackageCheck className="h-3.5 w-3.5" />;
-    if (label.includes("دفع")) return <Banknote className="h-3.5 w-3.5" />;
-    return <CheckCircle2 className="h-3.5 w-3.5" />;
-  }
 
   if (!orders.length) {
     return (
@@ -172,8 +134,6 @@ export function OrdersTable(props: Props) {
       <div className="space-y-3">
         {orders.map((o) => {
           const st = ORDER_STATUS_META[o.status] || ORDER_STATUS_META.pending;
-          const pst = PAYMENT_STATUS_META[derivePaymentStatus(o)];
-          const sst = SHIPPING_STATUS_META[deriveShippingStatus(o)];
           return (
             <article key={o.id} className="rounded-2xl border border-amber-100 bg-white p-4">
               <div className="flex items-start gap-3">
@@ -191,7 +151,7 @@ export function OrdersTable(props: Props) {
                     </button>
                     <span className={cn("rounded-full border px-2 py-0.5 text-[11px] font-bold", st.cls)}>{st.label}</span>
                   </div>
-                  <p className="mt-0.5 text-xs text-stone-400" dir="ltr">{formatDate(o.created_at)}</p>
+                  <p className="mt-0.5 text-right text-xs text-stone-400" dir="ltr">{formatDate(o.created_at)}</p>
                 </div>
                 <Currency value={o.total} className="text-lg font-extrabold text-gold" />
               </div>
@@ -203,8 +163,6 @@ export function OrdersTable(props: Props) {
               </div>
 
               <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                {badge(pst)}
-                {badge(sst)}
                 {o.coupon_code && (
                   <span className="inline-flex items-center gap-1 rounded-full bg-gold/10 px-2 py-0.5 text-[11px] font-bold text-gold-dark">
                     <Tag className="h-3 w-3" /> {o.coupon_code}
@@ -233,20 +191,7 @@ export function OrdersTable(props: Props) {
                 >
                   <Eye className="h-3.5 w-3.5" /> تفاصيل
                 </button>
-                <TransferActions o={o} />
-                <QuickAction o={o} />
-                <button onClick={() => props.onPrint(o)} aria-label="طباعة الفاتورة"
-                  className="flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-bold text-stone-500 hover:bg-stone-100">
-                  <Printer className="h-3.5 w-3.5" />
-                </button>
-                <button onClick={() => props.onCopy(o)} aria-label="نسخ رقم الطلب"
-                  className="rounded-lg px-2 py-1.5 text-stone-400 hover:bg-stone-100">
-                  <Copy className="h-3.5 w-3.5" />
-                </button>
-                <button onClick={() => props.onDelete(o)} aria-label="حذف الطلب"
-                  className="mr-auto rounded-lg px-2 py-1.5 text-stone-400 hover:bg-rose-50 hover:text-rose-600">
-                  <Trash2 className="h-3.5 w-3.5" />
-                </button>
+                <StatusMenu o={o} busy={busyId === o.id} onStatus={props.onStatus} />
               </div>
             </article>
           );
