@@ -45,6 +45,34 @@ export function formatDateOnly(value: string | Date | null | undefined) {
   }
 }
 
+export function formatArabicDateTime(value: string | Date | null | undefined) {
+  if (!value) return "";
+  try {
+    return new Date(value).toLocaleString("ar-SA-u-ca-gregory-nu-latn", {
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+    });
+  } catch {
+    return formatDate(value);
+  }
+}
+
+export function formatArabicDate(value: string | Date | null | undefined) {
+  if (!value) return "";
+  try {
+    return new Date(value).toLocaleDateString("ar-SA-u-ca-gregory-nu-latn", {
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+    });
+  } catch {
+    return formatDateOnly(value);
+  }
+}
+
 const OTO_ERROR_TRANSLATIONS: { match: RegExp; arabic: string }[] = [
   { match: /status of the order is not suitable/i, arabic: "حالة الطلب لا تسمح بإنشاء شحنة مرتجع — يجب أن يكون الطلب مُسلَّمًا في OTO أولاً" },
   { match: /already\s*exist/i, arabic: "شحنة مرتجع لهذا الطلب موجودة مسبقاً في OTO" },

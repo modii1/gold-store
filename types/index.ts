@@ -232,3 +232,65 @@ export type Page = {
   is_active: boolean;
   created_at: string;
 };
+
+// ============ Orders Management (admin) ============
+
+export type PaymentStatus =
+  | "unpaid"
+  | "awaiting_receipt"
+  | "awaiting_approval"
+  | "paid"
+  | "refunded"
+  | "cancelled";
+
+export type ShippingStatus =
+  | "not_created"
+  | "created"
+  | "picked_up"
+  | "in_transit"
+  | "out_for_delivery"
+  | "delivered"
+  | "failed"
+  | "returned"
+  | "cancelled";
+
+export type OrderStats = {
+  total: number;
+  today_orders: number;
+  today_sales: number;
+  total_sales: number;
+  needs_action: number;
+  returns_cancelled: number;
+};
+
+export type OrderSortKey = "created_at" | "order_number" | "total" | "status";
+
+export type OrdersQueryParams = {
+  q?: string;
+  status?: OrderStatus | "all";
+  payment?: string;
+  payment_method?: string;
+  carrier?: string;
+  from?: string;
+  to?: string;
+  sort?: OrderSortKey;
+  dir?: "asc" | "desc";
+  page?: number;
+  limit?: number;
+};
+
+export type OrdersQueryResult = {
+  orders: Order[];
+  total: number;
+  pages: number;
+  page: number;
+  limit: number;
+  stats: OrderStats;
+};
+
+export type OrderDetails = {
+  order: Order;
+  statusLog: OrderStatusLog[];
+  notes: OrderNote[];
+  shipments: Record<string, unknown>[];
+};

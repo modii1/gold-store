@@ -5,9 +5,11 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getCarrierByCode, getCarriers } from "@/lib/services/carriers";
 import { createCarrierShipment } from "@/lib/shipping";
 import { otoCreateOrder, getAccessToken } from "@/lib/oto/client";
-import { logOrderStatusChange } from "@/lib/orders/status-log";
+import { logOrderStatusChange, getOrderStatusLog, getOrderNotes } from "@/lib/orders/status-log";
+import { exportOrdersCsv } from "@/lib/orders/query";
+import { isTransfer } from "@/lib/orders/order-meta";
 import { emitNotification } from "@/lib/notifications/engine";
-import type { Order, Carrier } from "@/types";
+import type { Order, Carrier, OrdersQueryParams, OrderDetails, OrderStatus } from "@/types";
 
 export async function updateOrderStatusAction(formData: FormData) {
   const id = formData.get("id") as string;
@@ -35,11 +37,126 @@ export async function deleteOrderAction(formData: FormData) {
   if (!id) return { error: "معرف مطلوب" };
 
   const supabase = createAdminClient();
+  const { data: order } = await supabase.from("orders").select("id, status, order_number").eq("id", id).maybeSingle();
+  if (!order) return { error: "الطلب غير موجود" };
+
+  if (["paid", "delivered", "returned"].includes(order.status)) {
+    return { error: "لا يمكن حذف طلب بحالة مالية أو تسليم مؤكدة — استخدم الإلغاء أو المرتجع بدلاً من الحذف" };
+  }
+  const { data: shipments } = await supabase.from("shipments").select("id").eq("order_id", id).limit(1);
+  if (shipments && shipments.length) {
+    return { error: "لا يمكن حذف طلب يحتوي على شحنة مسجلة" };
+  }
+
   const { error } = await supabase.from("orders").delete().eq("id", id);
   if (error) return { error: error.message };
   revalidatePath("/admin/orders");
   revalidatePath("/admin/dashboard");
   return { success: true };
+}
+
+export async function approveTransferAction(formData: FormData) {
+  const id = formData.get("id") as string;
+  const note = (formData.get("note") as string)?.trim() || "تم اعتماد التحويل البنكي";
+  if (!id) return { error: "معرف الطلب مطلوب" };
+
+  const supabase = createAdminClient();
+  const { data: order } = await supabase.from("orders").select("*").eq("id", id).maybeSingle();
+  if (!order) return { error: "الطلب غير موجود" };
+  const o = order as Order;
+  if (!isTransfer(o)) return { error: "الطلب ليس تحويلاً بنكياً" };
+  if (o.status !== "pending" && o.status !== "confirmed") {
+    return { error: "لا يمكن اعتماد التحويل في هذه الحالة" };
+  }
+
+  await supabase.from("orders").update({ status: "processing" }).eq("id", id);
+  await logOrderStatusChange(id, o.status, "processing", "admin", note);
+  revalidatePath("/admin/orders");
+  revalidatePath(`/admin/orders/${id}`);
+  revalidatePath("/admin/dashboard");
+  return { success: true };
+}
+
+export async function rejectTransferAction(formData: FormData) {
+  const id = formData.get("id") as string;
+  const note = (formData.get("note") as string)?.trim() || "تم رفض إثبات التحويل";
+  if (!id) return { error: "معرف الطلب مطلوب" };
+
+  const supabase = createAdminClient();
+  const { data: order } = await supabase.from("orders").select("*").eq("id", id).maybeSingle();
+  if (!order) return { error: "الطلب غير موجود" };
+  const o = order as Order;
+  if (!isTransfer(o)) return { error: "الطلب ليس تحويلاً بنكياً" };
+  if (o.status !== "pending" && o.status !== "confirmed") {
+    return { error: "لا يمكن رفض التحويل في هذه الحالة" };
+  }
+
+  await supabase.from("orders").update({ status: "cancelled" }).eq("id", id);
+  await logOrderStatusChange(id, o.status, "cancelled", "admin", note);
+  revalidatePath("/admin/orders");
+  revalidatePath(`/admin/orders/${id}`);
+  revalidatePath("/admin/dashboard");
+  return { success: true };
+}
+
+export async function bulkUpdateOrdersAction(ids: string[], status: string) {
+  if (!ids?.length) return { error: "حدد الطلبات أولاً" };
+  if (!["pending", "confirmed", "processing", "shipped", "delivered", "paid", "cancelled", "returned"].includes(status)) {
+    return { error: "حالة غير صالحة" };
+  }
+
+  const supabase = createAdminClient();
+  const { data: rows } = await supabase.from("orders").select("id, order_number, status").in("id", ids);
+
+  const results: { orderNumber: number | null; ok: boolean; error?: string }[] = [];
+  let updated = 0;
+
+  for (const row of rows || []) {
+    if (status === "cancelled" && ["delivered", "paid", "returned"].includes(row.status)) {
+      results.push({ orderNumber: row.order_number, ok: false, error: "لا يمكن إلغاء طلب بحالته الحالية" });
+      continue;
+    }
+    const fd = new FormData();
+    fd.set("id", row.id);
+    fd.set("status", status);
+    const res = await updateOrderStatusAction(fd);
+    if (res.error) {
+      results.push({ orderNumber: row.order_number, ok: false, error: res.error });
+    } else {
+      updated++;
+      results.push({ orderNumber: row.order_number, ok: true });
+    }
+  }
+
+  revalidatePath("/admin/orders");
+  revalidatePath("/admin/dashboard");
+  return { updated, failed: results.length - updated, results };
+}
+
+export async function getOrderDetailsAction(orderId: string): Promise<{ error?: string } & Partial<OrderDetails>> {
+  if (!orderId) return { error: "معرف الطلب مطلوب" };
+  const supabase = createAdminClient();
+  const { data: order } = await supabase.from("orders").select("*").eq("id", orderId).maybeSingle();
+  if (!order) return { error: "الطلب غير موجود" };
+
+  const shipments = await supabase.from("shipments").select("*").eq("order_id", orderId).order("created_at", { ascending: false });
+  const [statusLog, notes] = await Promise.all([getOrderStatusLog(orderId), getOrderNotes(orderId)]);
+
+  return {
+    order: order as Order,
+    statusLog,
+    notes,
+    shipments: (shipments.data as Record<string, unknown>[]) || [],
+  };
+}
+
+export async function exportOrdersCsvAction(params: OrdersQueryParams) {
+  try {
+    const csv = await exportOrdersCsv(params);
+    return { csv };
+  } catch (e) {
+    return { error: (e as Error).message };
+  }
 }
 
 async function computeWeightGrams(supabase: ReturnType<typeof createAdminClient>, order: Order): Promise<number> {

@@ -1,21 +1,35 @@
-import { createClient } from "@/lib/supabase/server";
+import { getSettings } from "@/lib/services/settings";
 import { getCarriers } from "@/lib/services/carriers";
-import { OrdersTable } from "./orders-table";
+import { queryOrders, parseOrdersParams } from "@/lib/orders/query";
+import { OrdersManager } from "./orders-manager";
 
-export default async function AdminOrdersPage() {
-  const supabase = await createClient();
-  const [{ data: orders }, carriers] = await Promise.all([
-    supabase.from("orders").select("*").order("created_at", { ascending: false }),
+export const dynamic = "force-dynamic";
+
+export default async function AdminOrdersPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  const sp = await searchParams;
+  const params = parseOrdersParams(sp);
+
+  const [result, carriers, settings] = await Promise.all([
+    queryOrders(params),
     getCarriers(),
+    getSettings(),
   ]);
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-stone-900">الطلبات</h1>
-        <p className="mt-1 text-sm text-stone-500">إدارة طلبات العملاء</p>
-      </div>
-      <OrdersTable orders={orders ?? []} carriers={carriers} />
-    </div>
+    <OrdersManager
+      orders={result.orders}
+      total={result.total}
+      pages={result.pages}
+      page={result.page}
+      limit={result.limit}
+      stats={result.stats}
+      params={params}
+      carriers={carriers}
+      settings={settings}
+    />
   );
 }
