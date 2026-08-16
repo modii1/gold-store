@@ -265,12 +265,15 @@ export async function createShipmentAction(formData: FormData) {
 
         await supabase.from("orders").update({ status: "shipped" }).eq("id", orderId);
 
+        const oWithOption = o as Order & { delivery_option_name?: string | null };
+        const optionFallback = oWithOption.delivery_option_name || o.shipping_method;
+
         const shipRow = {
           order_id: orderId,
           oto_order_id: otoOrderId ? Number(otoOrderId) : null,
           delivery_option_id: optionId,
-          delivery_company: created.deliveryCompany || null,
-          delivery_option_name: created.deliveryOptionName || null,
+          delivery_company: created.deliveryCompany || optionFallback || null,
+          delivery_option_name: created.deliveryOptionName || optionFallback || null,
           tracking_number: null,
           dc_tracking_number: null,
           tracking_url: null,

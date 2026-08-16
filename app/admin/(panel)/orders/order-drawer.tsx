@@ -267,7 +267,7 @@ export function OrderDrawer({ drawer, busyId, onClose, onStatus, onShip, onAppro
             {(data?.shipments || []).map((s: any) => (
               <div key={s.id} className="rounded-xl bg-stone-50 p-2.5 text-xs">
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <p className="font-bold text-stone-700">{s.delivery_company || s.delivery_option_name || "شحنة"}</p>
+                    <p className="font-bold text-stone-700">{s.delivery_company || s.delivery_option_name || order.shipping_method || "شحنة"}</p>
                   {s.status && <Badge {...(SHIPPING_STATUS_META[s.status as keyof typeof SHIPPING_STATUS_META] || SHIPPING_STATUS_META.created)} />}
                 </div>
                 {(s.tracking_number || s.dc_tracking_number) && (

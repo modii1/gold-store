@@ -393,7 +393,7 @@ export function OrderDetail({ order, statusLog, notes: initialNotes, shipments }
                 <div className="mt-2 space-y-2">
                   {shipments.map((s: any) => (
                     <div key={s.id} className="rounded-lg bg-stone-50 p-2 text-xs">
-                      <p className="font-bold">{s.delivery_company || s.delivery_option_name || "شحنة"}</p>
+                      <p className="font-bold">{s.delivery_company || s.delivery_option_name || order.shipping_method || "شحنة"}</p>
                       {s.tracking_number && <p>تتبع: {s.tracking_number}</p>}
                       {s.print_awb_url && (
                         <a href={s.print_awb_url} target="_blank" rel="noopener noreferrer" className="text-gold hover:underline">
