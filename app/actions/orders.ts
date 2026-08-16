@@ -150,7 +150,29 @@ export async function createOrderAction(formData: FormData) {
   }
 
   const total = subtotal + finalShipping - finalDiscount;
-  const orderNumber = Date.now() % 1000000;
+  const orderNumber = (crypto.getRandomValues(new Uint32Array(1))[0] % 999999) + 1;
+
+  // Guard against double-submit: if this customer just placed an identical order
+  // within the last 20 seconds, return the existing order instead of creating a duplicate.
+  const { data: latestOrder } = await supabase
+    .from("orders")
+    .select("id, order_number, total, items, created_at")
+    .eq("customer_identifier", phone)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (latestOrder) {
+    const elapsedMs = Date.now() - new Date(latestOrder.created_at).getTime();
+    type LineItem = { product_id?: string | number; qty?: number; price?: number };
+    const normalizeItems = (list: LineItem[] | null) =>
+      JSON.stringify((list || []).map((i) => [i.product_id, i.qty, i.price]));
+    const sameItems = normalizeItems(latestOrder.items as LineItem[] | null) === normalizeItems(items as LineItem[]);
+    if (elapsedMs >= 0 && elapsedMs < 20_000 && sameItems && Math.abs((latestOrder.total || 0) - Math.max(0, total)) < 0.01) {
+      revalidatePath("/admin/orders");
+      revalidatePath("/admin/dashboard");
+      return { success: true, orderNumber: latestOrder.order_number };
+    }
+  }
 
   const { data: inserted, error } = await supabase
     .from("orders")

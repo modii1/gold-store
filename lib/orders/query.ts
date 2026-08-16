@@ -16,6 +16,7 @@ import {
   isCod,
   isTransfer,
 } from "./order-meta";
+import { formatDateOnly } from "@/lib/format";
 
 export const DEFAULT_LIMIT = 25;
 export const LIMIT_OPTIONS = [25, 50, 100];
@@ -158,35 +159,58 @@ function buildFiltered(supabase: ReturnType<typeof createAdminClient>, params: O
   return q;
 }
 
-function sum(values: (number | null)[] | undefined): number {
-  return (values || []).reduce<number>((acc, v) => acc + (Number(v) || 0), 0);
-}
-
 async function computeStats(supabase: ReturnType<typeof createAdminClient>): Promise<OrderStats> {
   const now = new Date();
   const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
   const tomorrowStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1).toISOString();
 
-  const [totalRes, todayRes, salesRes, actionRes, returnRes] = await Promise.all([
-    supabase.from("orders").select("id", { count: "exact", head: true }),
-    supabase
-      .from("orders")
-      .select("total,created_at")
-      .gte("created_at", todayStart)
-      .lt("created_at", tomorrowStart)
-      .in("status", ["paid", "delivered"]),
-    supabase.from("orders").select("total").in("status", ["paid", "delivered"]),
-    supabase.from("orders").select("id", { count: "exact", head: true }).in("status", ["pending", "confirmed"]),
-    supabase.from("orders").select("id", { count: "exact", head: true }).in("status", ["returned", "cancelled"]),
-  ]);
+  // Fetch the minimal columns and deduplicate by order_number so each order is
+  // counted exactly once — a duplicate row (double-submit) is the same logical order.
+  const { data } = await supabase
+    .from("orders")
+    .select("order_number,status,total,created_at");
+
+  const latestByNumber = new Map<number, { status: string; total: number; created_at: string }>();
+  for (const row of data || []) {
+    const key = row.order_number as number;
+    const prev = latestByNumber.get(key);
+    if (!prev || (row.created_at as string) >= prev.created_at) {
+      latestByNumber.set(key, {
+        status: row.status as string,
+        total: row.total as number,
+        created_at: row.created_at as string,
+      });
+    }
+  }
+
+  let total = 0;
+  let todayOrders = 0;
+  let todaySales = 0;
+  let totalSales = 0;
+  let needsAction = 0;
+  let returnsCancelled = 0;
+
+  for (const row of latestByNumber.values()) {
+    total += 1;
+    const paidLike = row.status === "paid" || row.status === "delivered";
+    if (paidLike) totalSales += Number(row.total) || 0;
+    if (row.created_at >= todayStart && row.created_at < tomorrowStart) {
+      if (paidLike) {
+        todayOrders += 1;
+        todaySales += Number(row.total) || 0;
+      }
+    }
+    if (row.status === "pending" || row.status === "confirmed") needsAction += 1;
+    if (row.status === "returned" || row.status === "cancelled") returnsCancelled += 1;
+  }
 
   return {
-    total: totalRes.count || 0,
-    today_orders: todayRes.data?.length || 0,
-    today_sales: sum((todayRes.data || []).map((r) => r.total as number)),
-    total_sales: sum((salesRes.data || []).map((r) => r.total as number)),
-    needs_action: actionRes.count || 0,
-    returns_cancelled: returnRes.count || 0,
+    total,
+    today_orders: todayOrders,
+    today_sales: todaySales,
+    total_sales: totalSales,
+    needs_action: needsAction,
+    returns_cancelled: returnsCancelled,
   };
 }
 
@@ -195,23 +219,34 @@ export async function queryOrders(params: OrdersQueryParams): Promise<OrdersQuer
   const limit = params.limit || DEFAULT_LIMIT;
   const page = params.page || 1;
 
-  const countBuilder = buildFiltered(
+  // Total counts each unique order once — duplicate rows sharing an order_number
+  // are the same logical order (double-submit) and must not inflate the count.
+  const { data: numRows } = await buildFiltered(
     supabase,
     params,
-    supabase.from("orders").select("id", { count: "exact", head: true })
+    supabase.from("orders").select("order_number")
   );
-  const { count } = await countBuilder;
-  const total = count || 0;
+  const total = new Set(((numRows || []) as { order_number: number }[]).map((r) => r.order_number)).size;
   const pages = Math.max(1, Math.ceil(total / limit));
 
   const q = buildFiltered(supabase, params).order(params.sort as string, { ascending: params.dir === "asc" });
   const offset = (page - 1) * limit;
   const { data } = await q.range(offset, offset + limit - 1);
 
+  // Keep only the first occurrence of each order_number on the page.
+  const seen = new Set<number>();
+  const orders: Order[] = [];
+  for (const o of (data as Order[]) || []) {
+    const key = o.order_number as number;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    orders.push(o);
+  }
+
   const [stats] = await Promise.all([computeStats(supabase)]);
 
   return {
-    orders: (data as Order[]) || [],
+    orders,
     total,
     pages,
     page,
@@ -228,7 +263,14 @@ export async function exportOrdersCsv(params: OrdersQueryParams): Promise<string
     .order("created_at", { ascending: false })
     .limit(CSV_MAX_ROWS);
 
-  const rows = (data as Order[]) || [];
+  const seen = new Set<number>();
+  const rows: Order[] = [];
+  for (const o of (data as Order[]) || []) {
+    const key = o.order_number as number;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    rows.push(o);
+  }
 
   const headers = [
     "رقم الطلب",
@@ -263,7 +305,7 @@ export async function exportOrdersCsv(params: OrdersQueryParams): Promise<string
       o.payment_method,
       o.shipping_method,
       o.tracking_number,
-      o.created_at,
+      formatDateOnly(o.created_at),
     ]
       .map(escape)
       .join(",")

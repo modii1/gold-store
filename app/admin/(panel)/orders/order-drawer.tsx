@@ -7,12 +7,12 @@ import {
 } from "lucide-react";
 import { addOrderNoteAction, deleteOrderNoteAction } from "@/app/actions/orders-admin";
 import { Currency } from "@/components/storefront/currency";
-import { formatArabicDateTime } from "@/lib/format";
+import { formatDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { Order, OrderDetails, OrderNote } from "@/types";
 import {
   ORDER_STATUS_META, PAYMENT_STATUS_META, SHIPPING_STATUS_META, WORKFLOW_STEPS,
-  derivePaymentStatus, deriveShippingStatus, isTransfer, shipmentCompanyName, workflowAction,
+  derivePaymentStatus, deriveShippingStatus, isTransfer, shipmentCompanyName, workflowAction, ALL_ORDER_STATUSES,
 } from "@/lib/orders/order-meta";
 
 type DrawerState = {
@@ -273,6 +273,9 @@ export function OrderDrawer({ drawer, busyId, onClose, onStatus, onShip, onAppro
                 {(s.tracking_number || s.dc_tracking_number) && (
                   <p className="mt-1 text-stone-500">تتبع: <span dir="ltr">{s.tracking_number || s.dc_tracking_number}</span></p>
                 )}
+                {s.created_at && (
+                  <p className="mt-1 text-stone-400">تاريخ الشحنة: <span dir="ltr">{formatDate(s.created_at)}</span></p>
+                )}
                 {s.print_awb_url && (
                   <a href={s.print_awb_url} target="_blank" rel="noopener noreferrer" className="mt-1 inline-flex items-center gap-1 font-bold text-gold-dark hover:underline">
                     طباعة Waybill <ExternalLink className="h-3 w-3" />
@@ -309,7 +312,7 @@ export function OrderDrawer({ drawer, busyId, onClose, onStatus, onShip, onAppro
                         من {ORDER_STATUS_META[log.old_status as keyof typeof ORDER_STATUS_META]?.label || log.old_status}
                       </span>
                     )}
-                    <p className="mt-1 text-xs text-stone-400" dir="ltr">{formatArabicDateTime(log.created_at)}</p>
+                    <p className="mt-1 text-xs text-stone-400" dir="ltr">{formatDate(log.created_at)}</p>
                     {log.note && <p className="mt-0.5 text-sm text-stone-600">{log.note}</p>}
                     {log.changed_by && <p className="text-[11px] text-stone-400">بواسطة: {log.changed_by}</p>}
                   </li>
@@ -364,7 +367,7 @@ export function OrderDrawer({ drawer, busyId, onClose, onStatus, onShip, onAppro
         <div className="flex items-center justify-between gap-3 border-b border-stone-200 bg-white px-5 py-4">
           <div>
             <p className="text-lg font-extrabold text-stone-900">طلب #{order?.order_number || "…"}</p>
-            <p className="text-xs text-stone-400" dir="ltr">{order ? formatArabicDateTime(order.created_at) : ""}</p>
+            <p className="text-xs text-stone-400" dir="ltr">{order ? formatDate(order.created_at) : ""}</p>
           </div>
           <div className="flex items-center gap-2">
             {order && (
@@ -405,6 +408,19 @@ export function OrderDrawer({ drawer, busyId, onClose, onStatus, onShip, onAppro
 
         {order && (
           <div className="flex flex-wrap items-center gap-2 border-t border-stone-200 bg-white px-5 py-3">
+            <select
+              value={order.status}
+              onChange={(e) =>
+                onStatus(order, e.target.value, ORDER_STATUS_META[e.target.value as keyof typeof ORDER_STATUS_META]?.label || e.target.value)
+              }
+              disabled={busyId === order.id}
+              aria-label="تغيير حالة الطلب"
+              className="rounded-lg border border-stone-200 bg-white px-2.5 py-2 text-xs font-bold text-stone-700 focus:border-gold focus:outline-none disabled:opacity-50"
+            >
+              {ALL_ORDER_STATUSES.map((s) => (
+                <option key={s.value} value={s.value}>{s.label}</option>
+              ))}
+            </select>
             {(() => {
               const w = workflowAction(order);
               if (!w) return null;

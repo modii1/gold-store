@@ -34,6 +34,7 @@ export function CheckoutForm({ settings, shipping, payment, customer, savedAddre
   const [coordinates, setCoordinates] = useState({ latitude: "", longitude: "" });
   const [selectedAddress, setSelectedAddress] = useState(savedAddresses[0]?.id || "");
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const submittingRef = useRef(false);
 
   useEffect(() => {
     const address = savedAddresses[0];
@@ -141,6 +142,8 @@ export function CheckoutForm({ settings, shipping, payment, customer, savedAddre
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    if (submittingRef.current) return;
+    submittingRef.current = true;
     setLoading(true);
     setError("");
     const formData = new FormData(e.currentTarget);
@@ -151,15 +154,19 @@ export function CheckoutForm({ settings, shipping, payment, customer, savedAddre
     formData.set("weight_kg", String(estWeightKg));
     if (applied) formData.set("coupon_code", applied.code);
 
-    const res = (await createOrderAction(formData)) as { error?: string; success?: boolean; orderNumber?: number };
-    setLoading(false);
-    if (res.error) {
-      setError(res.error);
-      return;
+    try {
+      const res = (await createOrderAction(formData)) as { error?: string; success?: boolean; orderNumber?: number };
+      if (res.error) {
+        setError(res.error);
+        return;
+      }
+      clearCart();
+      const phone = String(formData.get("phone") || "");
+      router.push(`/order-success?num=${res.orderNumber ?? ""}&phone=${encodeURIComponent(phone)}`);
+    } finally {
+      setLoading(false);
+      submittingRef.current = false;
     }
-    clearCart();
-    const phone = String(formData.get("phone") || "");
-    router.push(`/order-success?num=${res.orderNumber ?? ""}&phone=${encodeURIComponent(phone)}`);
   };
 
   return (
