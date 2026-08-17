@@ -24,7 +24,7 @@ const STATUS: Record<string, { label: string; cls: string }> = {
   confirmed: { label: "مؤكد", cls: "bg-sky-50 text-sky-700" },
   processing: { label: "قيد التجهيز", cls: "bg-indigo-50 text-indigo-700" },
   shipped: { label: "جاري الشحن", cls: "bg-blue-50 text-blue-700" },
-  picked_up: { label: "تم استلام الشحنة", cls: "bg-violet-50 text-violet-700" },
+  picked_up: { label: "استلام الشحنة", cls: "bg-violet-50 text-violet-700" },
   in_transit: { label: "في الطريق", cls: "bg-blue-50 text-blue-700" },
   out_for_delivery: { label: "خرج للتوصيل", cls: "bg-cyan-50 text-cyan-700" },
   delivered: { label: "تم التسليم", cls: "bg-teal-50 text-teal-700" },

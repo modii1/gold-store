@@ -133,7 +133,7 @@ export const BUILT_IN_TEMPLATES: Omit<NotificationTemplate, "is_active">[] = [
   },
   {
     event_type: "shipment.picked_up",
-    name: "تم استلام الشحنة من المتجر",
+    name: "استلام الشحنة من المتجر",
     title: "تم استلام طلبك من المتجر",
     body: "تم استلام طلبك {{order_number}} من المتجر وبدأت عملية الشحن عبر {{carrier_name}}.",
     severity: "info",

@@ -35,7 +35,7 @@ const BULK_STATUS_OPTIONS = [
   { value: "confirmed", label: "مؤكد" },
   { value: "processing", label: "قيد التجهيز" },
   { value: "shipped", label: "جاري الشحن" },
-  { value: "picked_up", label: "تم استلام الشحنة" },
+  { value: "picked_up", label: "استلام الشحنة" },
   { value: "in_transit", label: "في الطريق" },
   { value: "out_for_delivery", label: "خرج للتوصيل" },
   { value: "delivered", label: "تم التسليم" },

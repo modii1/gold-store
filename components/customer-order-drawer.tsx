@@ -19,7 +19,7 @@ type Shipment = Record<string, unknown>;
 const SHIPMENT_STATUS: Record<string, { label: string; cls: string }> = {
   not_created: { label: "لم تُنشأ الشحنة", cls: "bg-stone-100 text-stone-500" },
   created: { label: "تم إنشاء الشحنة", cls: "bg-sky-50 text-sky-700" },
-  picked_up: { label: "تم استلام الشحنة", cls: "bg-indigo-50 text-indigo-700" },
+  picked_up: { label: "استلام الشحنة", cls: "bg-indigo-50 text-indigo-700" },
   in_transit: { label: "في الطريق", cls: "bg-blue-50 text-blue-700" },
   awaiting_delivery: { label: "بانتظار التسليم", cls: "bg-cyan-50 text-cyan-700" },
   on_hold: { label: "معلقة بالمستودع", cls: "bg-violet-50 text-violet-700" },
