@@ -189,7 +189,7 @@ export function CustomerOrderDrawer({ orderId, onClose, onOrderCancelled }: Prop
                             <span className={cn(
                               "flex h-7 w-7 shrink-0 items-center justify-center rounded-full border-2 text-[10px] font-bold",
                               isCompleted && "border-gold bg-gold text-white",
-                              isCurrent && "border-gold bg-white text-gold",
+                              isCurrent && "border-gold bg-white text-gold shadow-[0_0_0_4px_rgba(176,141,87,0.15)] animate-pulse",
                               isFuture && "border-stone-200 bg-white text-stone-300",
                             )}>
                               {isCompleted ? <CircleCheck className="h-3.5 w-3.5" /> : i + 1}
