@@ -84,6 +84,6 @@ function Stat({ label, value, icon }: { label: string; value: string; icon: Reac
 }
 
 function Status({ status }: { status: string }) {
-  const labels: Record<string, string> = { pending: "قيد المراجعة", confirmed: "مؤكد", processing: "قيد التجهيز", shipped: "تم الشحن", delivered: "تم التسليم", paid: "مدفوع", cancelled: "ملغي" };
+  const labels: Record<string, string> = { pending: "قيد المراجعة", confirmed: "مؤكد", processing: "قيد التجهيز", shipped: "جاري الشحن", delivered: "تم التسليم", paid: "مدفوع", cancelled: "ملغي" };
   return <span className="mt-1 inline-block rounded-full bg-stone-100 px-2.5 py-1 text-xs font-semibold text-stone-600">{labels[status] || status}</span>;
 }

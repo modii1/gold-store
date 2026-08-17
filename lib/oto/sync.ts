@@ -83,7 +83,7 @@ export function otoStatusLabel(status?: string | null): string {
   if (s.includes("pendingcancel") || s.includes("pending_cancel")) return "قيد الانتظار للإلغاء";
   if (s === "new") return "جديدة لدى OTO";
   if (s.includes("outfordelivery") || s.includes("out for delivery") || s.includes("out_for_delivery")) return "خارج للتوصيل";
-  if (s.includes("pickedup") || s.includes("picked_up") || s.includes("shipped")) return "تم الشحن";
+  if (s.includes("pickedup") || s.includes("picked_up") || s.includes("shipped")) return "جاري الشحن";
   if (s.includes("transit") || s.includes("ontheway") || s.includes("on_the_way") || s.includes("waytocustomer")) return "في الطريق";
   if (s.includes("airport")) return "تم شحنها إلى المطار";
   if (s.includes("airline")) return "تم تسليمها لشركة الطيران";

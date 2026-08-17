@@ -35,7 +35,7 @@ export const ORDER_STATUS_META: Record<OrderStatus, { label: string; cls: string
   pending: { label: "قيد المراجعة", cls: "bg-amber-50 text-amber-700 border-amber-200" },
   confirmed: { label: "مؤكد", cls: "bg-sky-50 text-sky-700 border-sky-200" },
   processing: { label: "قيد التجهيز", cls: "bg-indigo-50 text-indigo-700 border-indigo-200" },
-  shipped: { label: "تم الشحن", cls: "bg-emerald-50 text-emerald-700 border-emerald-200" },
+  shipped: { label: "جاري الشحن", cls: "bg-emerald-50 text-emerald-700 border-emerald-200" },
   delivered: { label: "تم التسليم", cls: "bg-teal-50 text-teal-700 border-teal-200" },
   paid: { label: "مدفوع", cls: "bg-emerald-50 text-emerald-700 border-emerald-200" },
   cancelled: { label: "ملغي", cls: "bg-red-50 text-red-600 border-red-200" },
@@ -46,7 +46,7 @@ export const ALL_ORDER_STATUSES: { value: OrderStatus; label: string }[] = [
   { value: "pending", label: "قيد المراجعة" },
   { value: "confirmed", label: "مؤكد" },
   { value: "processing", label: "قيد التجهيز" },
-  { value: "shipped", label: "تم الشحن" },
+  { value: "shipped", label: "جاري الشحن" },
   { value: "delivered", label: "تم التسليم" },
   { value: "paid", label: "مدفوع" },
   { value: "cancelled", label: "ملغي" },
@@ -79,7 +79,7 @@ export const WORKFLOW_STEPS: { value: OrderStatus; label: string }[] = [
   { value: "pending", label: "قيد المراجعة" },
   { value: "confirmed", label: "مؤكد" },
   { value: "processing", label: "قيد التجهيز" },
-  { value: "shipped", label: "تم الشحن" },
+  { value: "shipped", label: "جاري الشحن" },
   { value: "delivered", label: "تم التسليم" },
 ];
 

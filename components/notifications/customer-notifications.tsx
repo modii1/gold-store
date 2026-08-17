@@ -29,7 +29,7 @@ const CHANNELS = [
 
 const PREF_CATEGORIES: { key: string; label: string; desc: string }[] = [
   { key: "orders", label: "إشعارات الطلبات", desc: "تأكيد الطلب، الإلغاء، تأكيد الدفع" },
-  { key: "shipping", label: "تحديثات الشحن", desc: "تم الشحن، في الطريق، التسليم" },
+  { key: "shipping", label: "تحديثات الشحن", desc: "جاري الشحن، في الطريق، التسليم" },
   { key: "payment", label: "إشعارات الدفع", desc: "نجاح أو فشل الدفع" },
   { key: "returns", label: "المرتجعات", desc: "حالة طلبات الاسترجاع" },
   { key: "marketing", label: "العروض التسويقية", desc: "العروض والخصومات — اختياري بالكامل" },

@@ -23,7 +23,7 @@ const STATUS: Record<string, { label: string; cls: string }> = {
   pending: { label: "قيد المراجعة", cls: "bg-amber-50 text-amber-700" },
   confirmed: { label: "مؤكد", cls: "bg-sky-50 text-sky-700" },
   processing: { label: "قيد التجهيز", cls: "bg-indigo-50 text-indigo-700" },
-  shipped: { label: "تم الشحن", cls: "bg-blue-50 text-blue-700" },
+  shipped: { label: "جاري الشحن", cls: "bg-blue-50 text-blue-700" },
   delivered: { label: "تم التسليم", cls: "bg-teal-50 text-teal-700" },
   paid: { label: "مدفوع", cls: "bg-emerald-50 text-emerald-700" },
   cancelled: { label: "ملغي", cls: "bg-red-50 text-red-600" },

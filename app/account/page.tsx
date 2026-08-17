@@ -78,7 +78,7 @@ export default async function AccountPage() {
   const stats: { label: string; value?: string; money?: number; icon: typeof Package; cls: string }[] = [
     { label: "إجمالي الطلبات", value: String(orders.length), icon: Package, cls: "bg-amber-50 text-amber-700" },
     { label: "قيد المتابعة", value: String(pendingOrders), icon: Clock, cls: "bg-indigo-50 text-indigo-700" },
-    { label: "تم الشحن", value: String(shippedOrders), icon: Truck, cls: "bg-blue-50 text-blue-700" },
+    { label: "جاري الشحن", value: String(shippedOrders), icon: Truck, cls: "bg-blue-50 text-blue-700" },
     { label: "تم التسليم", value: String(deliveredOrders), icon: CheckCircle2, cls: "bg-teal-50 text-teal-700" },
     { label: "ملغية", value: String(cancelledOrders), icon: XCircle, cls: "bg-red-50 text-red-500" },
     { label: "إجمالي المشتريات", money: totalSpent, icon: Banknote, cls: "bg-emerald-50 text-emerald-700" },

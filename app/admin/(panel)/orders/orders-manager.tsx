@@ -34,7 +34,7 @@ const BULK_STATUS_OPTIONS = [
   { value: "pending", label: "قيد المراجعة" },
   { value: "confirmed", label: "مؤكد" },
   { value: "processing", label: "قيد التجهيز" },
-  { value: "shipped", label: "تم الشحن" },
+  { value: "shipped", label: "جاري الشحن" },
   { value: "delivered", label: "تم التسليم" },
   { value: "paid", label: "مدفوع" },
   { value: "cancelled", label: "ملغي" },
