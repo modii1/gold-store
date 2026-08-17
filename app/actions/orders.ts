@@ -246,3 +246,69 @@ export async function createOrderAction(formData: FormData) {
   revalidatePath("/admin/dashboard");
   return { success: true, orderNumber };
 }
+
+export async function getCustomerOrderDetailsAction(orderId: string) {
+  const session = await getCustomerSession();
+  if (!session) return { error: "غير مصرح" };
+
+  const supabase = await createClient();
+  const { data: order } = await supabase
+    .from("orders")
+    .select("*")
+    .eq("id", orderId)
+    .eq("customer_identifier", session.phone)
+    .maybeSingle();
+
+  if (!order) return { error: "الطلب غير موجود" };
+
+  const shipments = await supabase
+    .from("shipments")
+    .select("*")
+    .eq("order_id", orderId)
+    .order("created_at", { ascending: false });
+
+  const statusLog = await supabase
+    .from("order_status_log")
+    .select("*")
+    .eq("order_id", orderId)
+    .order("created_at", { ascending: false });
+
+  return {
+    order: order as Order,
+    shipments: shipments.data || [],
+    statusLog: (statusLog.data || []) as { id: string; order_id: string; old_status: string | null; new_status: string; changed_by: string | null; note: string | null; created_at: string }[],
+  };
+}
+
+export async function cancelOrderAction(orderId: string) {
+  const session = await getCustomerSession();
+  if (!session) return { error: "غير مصرح" };
+
+  const supabase = await createClient();
+  const { data: order } = await supabase
+    .from("orders")
+    .select("id, status")
+    .eq("id", orderId)
+    .eq("customer_identifier", session.phone)
+    .maybeSingle();
+
+  if (!order) return { error: "الطلب غير موجود" };
+  if (!["pending"].includes(order.status)) {
+    return { error: "لا يمكن إلغاء الطلب في هذه المرحلة" };
+  }
+
+  const { error } = await supabase.from("orders").update({ status: "cancelled" }).eq("id", orderId);
+  if (error) return { error: error.message };
+
+  await supabase.from("order_status_log").insert({
+    order_id: orderId,
+    old_status: order.status,
+    new_status: "cancelled",
+    changed_by: session.phone,
+    note: "تم الإلغاء من قبل العميل",
+  });
+
+  revalidatePath("/account");
+  revalidatePath("/admin/orders");
+  return { success: true };
+}
