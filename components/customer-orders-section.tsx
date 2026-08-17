@@ -24,6 +24,9 @@ const STATUS: Record<string, { label: string; cls: string }> = {
   confirmed: { label: "مؤكد", cls: "bg-sky-50 text-sky-700" },
   processing: { label: "قيد التجهيز", cls: "bg-indigo-50 text-indigo-700" },
   shipped: { label: "جاري الشحن", cls: "bg-blue-50 text-blue-700" },
+  picked_up: { label: "تم استلام الشحنة", cls: "bg-violet-50 text-violet-700" },
+  in_transit: { label: "في الطريق", cls: "bg-blue-50 text-blue-700" },
+  out_for_delivery: { label: "خرج للتوصيل", cls: "bg-cyan-50 text-cyan-700" },
   delivered: { label: "تم التسليم", cls: "bg-teal-50 text-teal-700" },
   paid: { label: "مدفوع", cls: "bg-emerald-50 text-emerald-700" },
   cancelled: { label: "ملغي", cls: "bg-red-50 text-red-600" },
@@ -86,7 +89,7 @@ export function CustomerOrdersSection({ orders, shipmentMap }: Props) {
                   ) : (
                     <span className={`rounded-full px-3 py-1 text-xs font-bold ${st.cls}`}>{st.label}</span>
                   )}
-                  {trackUrl && <a href={trackUrl} target="_blank" rel="noreferrer" className="text-xs font-bold text-gold">تتبع</a>}
+                  {trackUrl && <a href={trackUrl} target="_blank" rel="noreferrer" className="rounded-full bg-ink px-3 py-1 text-[11px] font-bold text-ivory hover:bg-gold/80 transition">تتبع</a>}
                 </div>
               </div>
               {shipment && shipment.delivery_company && (
@@ -171,8 +174,8 @@ export function CustomerOrdersSection({ orders, shipmentMap }: Props) {
                           <span className={`whitespace-nowrap rounded-full px-2.5 py-0.5 text-xs font-bold ${st.cls}`}>{st.label}</span>
                         )}
                         {trackUrl && (
-                          <a href={trackUrl} target="_blank" rel="noreferrer" className="text-xs font-bold text-gold hover:underline">
-                            تتبع
+                          <a href={trackUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 rounded-full bg-ink px-3 py-1 text-[11px] font-bold text-ivory hover:bg-gold/80 transition whitespace-nowrap">
+                            تتبع <ExternalLink className="h-3 w-3" />
                           </a>
                         )}
                       </div>

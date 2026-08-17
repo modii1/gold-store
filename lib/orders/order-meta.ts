@@ -35,7 +35,10 @@ export const ORDER_STATUS_META: Record<OrderStatus, { label: string; cls: string
   pending: { label: "قيد المراجعة", cls: "bg-amber-50 text-amber-700 border-amber-200" },
   confirmed: { label: "مؤكد", cls: "bg-sky-50 text-sky-700 border-sky-200" },
   processing: { label: "قيد التجهيز", cls: "bg-indigo-50 text-indigo-700 border-indigo-200" },
-  shipped: { label: "جاري الشحن", cls: "bg-emerald-50 text-emerald-700 border-emerald-200" },
+  shipped: { label: "جاري الشحن", cls: "bg-blue-50 text-blue-700 border-blue-200" },
+  picked_up: { label: "تم استلام الشحنة", cls: "bg-violet-50 text-violet-700 border-violet-200" },
+  in_transit: { label: "في الطريق", cls: "bg-blue-50 text-blue-700 border-blue-200" },
+  out_for_delivery: { label: "خرج للتوصيل", cls: "bg-cyan-50 text-cyan-700 border-cyan-200" },
   delivered: { label: "تم التسليم", cls: "bg-teal-50 text-teal-700 border-teal-200" },
   paid: { label: "مدفوع", cls: "bg-emerald-50 text-emerald-700 border-emerald-200" },
   cancelled: { label: "ملغي", cls: "bg-red-50 text-red-600 border-red-200" },
@@ -47,6 +50,9 @@ export const ALL_ORDER_STATUSES: { value: OrderStatus; label: string }[] = [
   { value: "confirmed", label: "مؤكد" },
   { value: "processing", label: "قيد التجهيز" },
   { value: "shipped", label: "جاري الشحن" },
+  { value: "picked_up", label: "تم استلام الشحنة" },
+  { value: "in_transit", label: "في الطريق" },
+  { value: "out_for_delivery", label: "خرج للتوصيل" },
   { value: "delivered", label: "تم التسليم" },
   { value: "paid", label: "مدفوع" },
   { value: "cancelled", label: "ملغي" },
@@ -80,6 +86,9 @@ export const WORKFLOW_STEPS: { value: OrderStatus; label: string }[] = [
   { value: "confirmed", label: "مؤكد" },
   { value: "processing", label: "قيد التجهيز" },
   { value: "shipped", label: "جاري الشحن" },
+  { value: "picked_up", label: "تم استلام الشحنة" },
+  { value: "in_transit", label: "في الطريق" },
+  { value: "out_for_delivery", label: "خرج للتوصيل" },
   { value: "delivered", label: "تم التسليم" },
 ];
 
@@ -126,11 +135,11 @@ export function workflowAction(o: Order): { type: "advance" | "ship" | "blocked"
     if (isTransfer(o) && !o.transfer_receipt_url) {
       return { type: "blocked", label: "بانتظار إثبات التحويل" };
     }
-    return { type: "advance", label: "تأكيد الطلب", target: "processing" };
+    return { type: "advance", label: "تأكيد الطلب", target: "confirmed" };
   }
   if (o.status === "confirmed") return { type: "advance", label: "بدء التجهيز", target: "processing" };
   if (o.status === "processing") return { type: "ship", label: "إنشاء الشحنة" };
-  if (o.status === "shipped") return { type: "advance", label: "تم التسليم", target: "delivered" };
+  // shipped → picked_up → in_transit → out_for_delivery → delivered — all automatic via OTO
   if (o.status === "delivered") return { type: "advance", label: "تأكيد الدفع", target: "paid" };
   return null;
 }

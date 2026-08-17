@@ -69,7 +69,7 @@ export default async function AccountPage() {
 
   const totalSpent = orders.reduce((sum, o) => sum + Number(o.total || 0), 0);
   const pendingOrders = orders.filter((o) => ["pending", "confirmed", "processing"].includes(o.status)).length;
-  const shippedOrders = orders.filter((o) => o.status === "shipped").length;
+  const shippedOrders = orders.filter((o) => ["shipped", "picked_up", "in_transit", "out_for_delivery"].includes(o.status)).length;
   const deliveredOrders = orders.filter((o) => ["delivered", "paid"].includes(o.status)).length;
   const cancelledOrders = orders.filter((o) => o.status === "cancelled").length;
   const activeReturnOrderIds = new Set((returns || []).filter((r: any) => ["pending", "approved", "received"].includes(r.status)).map((r: any) => r.order_id));

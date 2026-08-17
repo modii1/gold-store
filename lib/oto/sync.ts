@@ -99,11 +99,19 @@ export function otoStatusLabel(status?: string | null): string {
 }
 
 function mapOrderStatus(status?: string): string {
+  const bucket = classifyStatus(status);
   const s = (status || "").toLowerCase();
-  if (s.includes("delivered")) return "delivered";
-  if (s.includes("return")) return "returned";
-  if (s.includes("cancel")) return "cancelled";
-  if (s.includes("fail")) return "shipping_error";
+
+  if (bucket === "delivered") return "delivered";
+  if (bucket === "returned") return "returned";
+  if (bucket === "cancelled" || bucket === "failed") return "cancelled";
+
+  // Granular shipping stages — match OTO keyword families
+  if (s.includes("pickedup") || s.includes("picked_up")) return "picked_up";
+  if (s.includes("outfordelivery") || s.includes("out_for_delivery") || s.includes("out for delivery") || s.includes("readyforpickup") || s.includes("ready_for_pickup") || s.includes("ready")) return "out_for_delivery";
+  if (s.includes("transit") || s.includes("ontheway") || s.includes("on_the_way") || s.includes("waytocustomer") || s.includes("way_to_customer") || s.includes("reached") || s.includes("arrived") || s.includes("leftwarehouse") || s.includes("left_warehouse") || s.includes("left_the_warehouse") || s.includes("airport") || s.includes("airline") || s.includes("customs") || s.includes("clearance") || s.includes("handedto") || s.includes("handed_to") || s.includes("international")) return "in_transit";
+
+  // on_hold / awaiting_delivery / processing / unknown → still "shipped" (جاري الشحن)
   return "shipped";
 }
 
