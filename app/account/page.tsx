@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Package, LogOut, Heart, ShoppingBag, Phone, MapPin, ExternalLink, RotateCcw, Truck, Banknote, Home, LayoutDashboard, Bell, Clock, CheckCircle2, XCircle } from "lucide-react";
+import { Package, LogOut, Heart, ShoppingBag, Phone, MapPin, ExternalLink, RotateCcw, Truck, Banknote, Home, LayoutDashboard, Bell } from "lucide-react";
 import { StoreHeader } from "@/components/storefront/header";
 import { StoreFooter } from "@/components/storefront/footer";
 import { getCustomerSession } from "@/lib/auth";
@@ -68,19 +68,14 @@ export default async function AccountPage() {
   }
 
   const totalSpent = orders.reduce((sum, o) => sum + Number(o.total || 0), 0);
-  const pendingOrders = orders.filter((o) => ["pending", "confirmed", "processing"].includes(o.status)).length;
-  const shippedOrders = orders.filter((o) => o.status === "shipped").length;
-  const deliveredOrders = orders.filter((o) => ["delivered", "paid"].includes(o.status)).length;
-  const cancelledOrders = orders.filter((o) => o.status === "cancelled").length;
+  const activeOrders = orders.filter((o) => ["confirmed", "processing", "shipped"].includes(o.status)).length;
   const activeReturnOrderIds = new Set((returns || []).filter((r: any) => ["pending", "approved", "received"].includes(r.status)).map((r: any) => r.order_id));
   const returnableOrders = orders.filter((o) => ["delivered", "paid"].includes(o.status) && !activeReturnOrderIds.has(o.id));
 
   const stats: { label: string; value?: string; money?: number; icon: typeof Package; cls: string }[] = [
     { label: "إجمالي الطلبات", value: String(orders.length), icon: Package, cls: "bg-amber-50 text-amber-700" },
-    { label: "قيد المتابعة", value: String(pendingOrders), icon: Clock, cls: "bg-indigo-50 text-indigo-700" },
-    { label: "تم الشحن", value: String(shippedOrders), icon: Truck, cls: "bg-blue-50 text-blue-700" },
-    { label: "تم التسليم", value: String(deliveredOrders), icon: CheckCircle2, cls: "bg-teal-50 text-teal-700" },
-    { label: "ملغية", value: String(cancelledOrders), icon: XCircle, cls: "bg-red-50 text-red-500" },
+    { label: "قيد التنفيذ", value: String(activeOrders), icon: Truck, cls: "bg-sky-50 text-sky-700" },
+    { label: "العناوين المحفوظة", value: String(addresses.length), icon: MapPin, cls: "bg-violet-50 text-violet-700" },
     { label: "إجمالي المشتريات", money: totalSpent, icon: Banknote, cls: "bg-emerald-50 text-emerald-700" },
   ];
 
@@ -150,7 +145,7 @@ export default async function AccountPage() {
             {/* Overview / stats */}
             <section id="overview" className="scroll-mt-24">
               <h2 className="flex items-center gap-2 text-lg font-bold text-ink"><LayoutDashboard className="h-5 w-5 text-gold" /> نظرة عامة</h2>
-              <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">
+              <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-4">
                 {stats.map((s, i) => (
                   <div key={i} className="rounded-3xl border border-sand bg-white p-5">
                     <span className={`flex h-10 w-10 items-center justify-center rounded-2xl ${s.cls}`}>
