@@ -175,7 +175,7 @@ export function CustomerOrderDrawer({ orderId, onClose, onOrderCancelled }: Prop
               {order.status !== "cancelled" && order.status !== "returned" && (
                 <Section title="سير الطلب" icon={CircleCheck}>
                   {(() => {
-                    const maxVisible = 5;
+                    const maxVisible = 4;
                     const curIdx = WORKFLOW_STEPS.findIndex((s) => s.value === order.status);
                     const total = WORKFLOW_STEPS.length;
                     const safeIdx = curIdx === -1 ? total : curIdx;
