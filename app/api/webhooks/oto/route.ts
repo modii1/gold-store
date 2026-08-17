@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { emitNotification, processEvent } from "@/lib/notifications/engine";
 import { buildEventId, ingestEvent, logNotificationEvent } from "@/lib/notifications/events";
-import { mapStatus as mapOtoStatus } from "@/lib/oto/sync";
+import { mapOrderStatus, mapStatus as mapOtoStatus } from "@/lib/oto/sync";
+import { logOrderStatusChange } from "@/lib/orders/status-log";
 
 type OtoOrderStatusPayload = {
   orderId?: string;
@@ -211,13 +212,18 @@ async function handleOrderStatus(supabase: ReturnType<typeof createAdminClient>,
 
   // Sync order status
   if (body.orderId) {
-    const { data: orders } = await supabase.from("orders").select("id").eq("order_number", Number(body.orderId)).limit(1);
+    const { data: orders } = await supabase.from("orders").select("id, status").eq("order_number", Number(body.orderId)).limit(1);
     if (orders && orders.length) {
+      const newStatus = mapOrderStatus(body.status || body.dcStatus);
+      const oldStatus = orders[0].status;
       await supabase.from("orders").update({
-        status: mapOrderStatus(body.status || body.dcStatus),
+        status: newStatus,
         tracking_number: tracking || undefined,
         tracking_url: body.trackingUrl || body.brandedTrackingURL || undefined,
       }).eq("id", orders[0].id);
+      if (oldStatus !== newStatus) {
+        await logOrderStatusChange(orders[0].id, oldStatus, newStatus, "oto-webhook", `تحديث من OTO: ${body.status || body.dcStatus}`);
+      }
     }
   }
 
@@ -332,13 +338,4 @@ function eventTypeFromStatus(status?: string): string | null {
   if (s.includes("transit") || s.includes("pickedup") || s.includes("picked_up") || s.includes("shipped")) return "shipment.in_transit";
   if (s.includes("fail")) return "shipment.failed";
   return null; // processing / unknown => no notification
-}
-
-function mapOrderStatus(status?: string): string {
-  const s = (status || "").toLowerCase();
-  if (s.includes("delivered")) return "delivered";
-  if (s.includes("return")) return "returned";
-  if (s.includes("cancel")) return "cancelled";
-  if (s.includes("fail")) return "shipping_error";
-  return "shipped";
 }

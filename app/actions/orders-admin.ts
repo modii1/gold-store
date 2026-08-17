@@ -243,7 +243,9 @@ export async function createShipmentAction(formData: FormData) {
               .eq("order_id", orderId)
               .maybeSingle();
             if (existing) {
-              await supabase.from("orders").update({ status: "shipped" }).eq("id", orderId);
+        await supabase.from("orders").update({ status: "shipped" }).eq("id", orderId);
+        await logOrderStatusChange(orderId, o.status, "shipped", "admin", "إنشاء شحنة عبر OTO");
+              await logOrderStatusChange(orderId, o.status, "shipped", "admin", "الطلب موجود مسبقاً في OTO");
               await supabase.from("shipping_logs").insert({
                 order_id: orderId,
                 event: "oto.shipment.already_existed",

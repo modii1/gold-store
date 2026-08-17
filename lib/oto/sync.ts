@@ -1,6 +1,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { otoOrderStatus } from "@/lib/oto/client";
 import { emitNotification } from "@/lib/notifications/engine";
+import { logOrderStatusChange } from "@/lib/orders/status-log";
 
 type SyncRow = {
   id: string;
@@ -71,6 +72,7 @@ function mapStatus(status?: string): string {
   return classifyStatus(status);
 }
 export { mapStatus };
+export { mapOrderStatus };
 
 /** Raw OTO status → Arabic label, so admins see OTO's exact state. */
 export function otoStatusLabel(status?: string | null): string {
@@ -225,11 +227,17 @@ export async function syncOtoShipments(limit = 100): Promise<{ total: number; up
 
           // Keep order in sync too
           if (row.order_id) {
+            const newOrderStatus = mapOrderStatus(info.status || status);
+            const { data: currentOrder } = await supabase.from("orders").select("status").eq("id", row.order_id).maybeSingle();
+            const oldOrderStatus = currentOrder?.status || null;
             await supabase.from("orders").update({
-              status: mapOrderStatus(info.status || status),
+              status: newOrderStatus,
               tracking_number: tracking || undefined,
               tracking_url: info.trackingUrl || undefined,
             }).eq("id", row.order_id);
+            if (oldOrderStatus && oldOrderStatus !== newOrderStatus) {
+              await logOrderStatusChange(row.order_id, oldOrderStatus, newOrderStatus, "oto-sync", `تحديث من OTO: ${info.status || status}`);
+            }
           }
 
           // Notification for state transitions (idempotent by OTO status+tracking)
