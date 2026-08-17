@@ -3,14 +3,14 @@
 import { useEffect, useState } from "react";
 import {
   X, Phone, MapPin, CreditCard, Truck, Box, Banknote, ExternalLink,
-  Loader2, PackageCheck, Clock, Ban,
+  Loader2, PackageCheck, Clock, Ban, CircleCheck,
 } from "lucide-react";
 import { Currency } from "@/components/storefront/currency";
 import { formatDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { Order, OrderStatusLog } from "@/types";
 import {
-  ORDER_STATUS_META, shipmentCompanyName,
+  ORDER_STATUS_META, shipmentCompanyName, WORKFLOW_STEPS,
 } from "@/lib/orders/order-meta";
 import { getCustomerOrderDetailsAction, cancelOrderAction } from "@/app/actions/orders";
 
@@ -170,6 +170,46 @@ export function CustomerOrderDrawer({ orderId, onClose, onOrderCancelled }: Prop
                   </div>
                 </div>
               </Section>
+
+              {/* Workflow Stepper */}
+              {order.status !== "cancelled" && order.status !== "returned" && (
+                <Section title="سير الطلب" icon={CircleCheck}>
+                  <div className="flex items-center justify-between gap-1">
+                    {WORKFLOW_STEPS.map((step, i) => {
+                      const stepIndex = WORKFLOW_STEPS.findIndex((s) => s.value === order.status);
+                      const isCompleted = stepIndex > -1 && i < stepIndex;
+                      const isCurrent = step.value === order.status;
+                      const isFuture = stepIndex === -1 || i > stepIndex;
+                      return (
+                        <div key={step.value} className="flex flex-1 flex-col items-center gap-1.5">
+                          <div className="flex items-center w-full">
+                            {i > 0 && (
+                              <div className={cn("h-0.5 flex-1 rounded-full", isCompleted ? "bg-gold" : "bg-stone-200")} />
+                            )}
+                            <span className={cn(
+                              "flex h-7 w-7 shrink-0 items-center justify-center rounded-full border-2 text-[10px] font-bold",
+                              isCompleted && "border-gold bg-gold text-white",
+                              isCurrent && "border-gold bg-white text-gold",
+                              isFuture && "border-stone-200 bg-white text-stone-300",
+                            )}>
+                              {isCompleted ? <CircleCheck className="h-3.5 w-3.5" /> : i + 1}
+                            </span>
+                            {i < WORKFLOW_STEPS.length - 1 && (
+                              <div className={cn("h-0.5 flex-1 rounded-full", isCompleted ? "bg-gold" : "bg-stone-200")} />
+                            )}
+                          </div>
+                          <span className={cn(
+                            "text-[10px] font-bold leading-tight text-center",
+                            isCompleted && "text-gold",
+                            isCurrent && "text-gold-dark",
+                            isFuture && "text-stone-300",
+                          )}>{step.label}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </Section>
+              )}
 
               {/* Payment */}
               <Section title="الدفع" icon={Banknote}>
