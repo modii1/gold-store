@@ -171,43 +171,60 @@ export function CustomerOrderDrawer({ orderId, onClose, onOrderCancelled }: Prop
                 </div>
               </Section>
 
-              {/* Workflow Stepper */}
+              {/* Workflow Stepper – sliding window, max 5 visible */}
               {order.status !== "cancelled" && order.status !== "returned" && (
                 <Section title="سير الطلب" icon={CircleCheck}>
-                  <div className="flex items-center justify-between gap-1">
-                    {WORKFLOW_STEPS.map((step, i) => {
-                      const stepIndex = WORKFLOW_STEPS.findIndex((s) => s.value === order.status);
-                      const isCompleted = stepIndex > -1 && i < stepIndex;
-                      const isCurrent = step.value === order.status;
-                      const isFuture = stepIndex === -1 || i > stepIndex;
-                      return (
-                        <div key={step.value} className="flex flex-1 flex-col items-center gap-1.5">
-                          <div className="flex items-center w-full">
-                            {i > 0 && (
-                              <div className={cn("h-0.5 flex-1 rounded-full", isCompleted ? "bg-gold" : "bg-stone-200")} />
-                            )}
-                            <span className={cn(
-                              "flex h-7 w-7 shrink-0 items-center justify-center rounded-full border-2 text-[10px] font-bold",
-                              isCompleted && "border-gold bg-gold text-white",
-                              isCurrent && "border-gold bg-white text-gold shadow-[0_0_0_4px_rgba(176,141,87,0.15)] animate-pulse",
-                              isFuture && "border-stone-200 bg-white text-stone-300",
-                            )}>
-                              {isCompleted ? <CircleCheck className="h-3.5 w-3.5" /> : i + 1}
-                            </span>
-                            {i < WORKFLOW_STEPS.length - 1 && (
-                              <div className={cn("h-0.5 flex-1 rounded-full", isCompleted ? "bg-gold" : "bg-stone-200")} />
-                            )}
-                          </div>
-                          <span className={cn(
-                            "text-[10px] font-bold leading-tight text-center",
-                            isCompleted && "text-gold",
-                            isCurrent && "text-gold-dark",
-                            isFuture && "text-stone-300",
-                          )}>{step.label}</span>
+                  {(() => {
+                    const maxVisible = 5;
+                    const curIdx = WORKFLOW_STEPS.findIndex((s) => s.value === order.status);
+                    const total = WORKFLOW_STEPS.length;
+                    const safeIdx = curIdx === -1 ? total : curIdx;
+                    let start = Math.max(0, safeIdx - 2);
+                    if (start + maxVisible > total) start = Math.max(0, total - maxVisible);
+                    const visible = WORKFLOW_STEPS.slice(start, start + maxVisible);
+                    const firstVisible = start > 0;
+                    const lastVisible = start + maxVisible < total;
+                    return (
+                      <>
+                        {firstVisible && <p className="mb-1 text-[10px] text-stone-400 text-center">…</p>}
+                        <div className="flex items-center justify-between gap-1">
+                          {visible.map((step, vi) => {
+                            const i = start + vi;
+                            const isCompleted = i < safeIdx;
+                            const isCurrent = i === safeIdx;
+                            const isFuture = i > safeIdx;
+                            return (
+                              <div key={step.value} className="flex flex-1 flex-col items-center gap-1.5">
+                                <div className="flex items-center w-full">
+                                  {vi > 0 && (
+                                    <div className={cn("h-0.5 flex-1 rounded-full", isCompleted ? "bg-gold" : "bg-stone-200")} />
+                                  )}
+                                  <span className={cn(
+                                    "flex h-7 w-7 shrink-0 items-center justify-center rounded-full border-2 text-[10px] font-bold",
+                                    isCompleted && "border-gold bg-gold text-white",
+                                    isCurrent && "border-gold bg-white text-gold shadow-[0_0_0_4px_rgba(176,141,87,0.15)] animate-pulse",
+                                    isFuture && "border-stone-200 bg-white text-stone-300",
+                                  )}>
+                                    {isCompleted ? <CircleCheck className="h-3.5 w-3.5" /> : i + 1}
+                                  </span>
+                                  {vi < visible.length - 1 && (
+                                    <div className={cn("h-0.5 flex-1 rounded-full", isCompleted ? "bg-gold" : "bg-stone-200")} />
+                                  )}
+                                </div>
+                                <span className={cn(
+                                  "text-[10px] font-bold leading-tight text-center",
+                                  isCompleted && "text-gold",
+                                  isCurrent && "text-gold-dark",
+                                  isFuture && "text-stone-300",
+                                )}>{step.label}</span>
+                              </div>
+                            );
+                          })}
                         </div>
-                      );
-                    })}
-                  </div>
+                        {lastVisible && <p className="mt-1 text-[10px] text-stone-400 text-center">…</p>}
+                      </>
+                    );
+                  })()}
                 </Section>
               )}
 
