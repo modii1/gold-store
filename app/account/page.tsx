@@ -69,14 +69,15 @@ export default async function AccountPage() {
 
   const totalSpent = orders.reduce((sum, o) => sum + Number(o.total || 0), 0);
   const activeOrders = orders.filter((o) => ["confirmed", "processing", "shipped"].includes(o.status)).length;
+  const activeReturns = (returns || []).filter((r: any) => ["pending", "approved", "received"].includes(r.status)).length;
   const activeReturnOrderIds = new Set((returns || []).filter((r: any) => ["pending", "approved", "received"].includes(r.status)).map((r: any) => r.order_id));
   const returnableOrders = orders.filter((o) => ["delivered", "paid"].includes(o.status) && !activeReturnOrderIds.has(o.id));
 
   const stats: { label: string; value?: string; money?: number; icon: typeof Package; cls: string }[] = [
-    { label: "إجمالي الطلبات", value: String(orders.length), icon: Package, cls: "bg-amber-50 text-amber-700" },
+    { label: "طلباتي", value: String(orders.length), icon: Package, cls: "bg-amber-50 text-amber-700" },
     { label: "قيد التنفيذ", value: String(activeOrders), icon: Truck, cls: "bg-sky-50 text-sky-700" },
-    { label: "العناوين المحفوظة", value: String(addresses.length), icon: MapPin, cls: "bg-violet-50 text-violet-700" },
-    { label: "إجمالي المشتريات", money: totalSpent, icon: Banknote, cls: "bg-emerald-50 text-emerald-700" },
+    { label: "مشترياتي", money: totalSpent, icon: Banknote, cls: "bg-emerald-50 text-emerald-700" },
+    { label: "المرتجعات", value: String(activeReturns), icon: RotateCcw, cls: "bg-violet-50 text-violet-700" },
   ];
 
   return (
