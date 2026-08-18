@@ -1,21 +1,39 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
-import { Heart, PlayCircle } from "lucide-react";
-import { useFavorites } from "./providers";
-import { effectivePrice, discountPercent, formatCurrency } from "@/lib/format";
+import { Heart, PlayCircle, Plus, Check } from "lucide-react";
+import { useCart, useFavorites } from "./providers";
+import { effectivePrice, discountPercent } from "@/lib/format";
 import { Currency } from "@/components/storefront/currency";
 import { cn } from "@/lib/utils";
 import type { Product } from "@/types";
 
 export function ProductCard({ product }: { product: Product }) {
   const { isFav, toggleFav } = useFavorites();
+  const { addToCart } = useCart();
+  const [added, setAdded] = useState(false);
   const cover = product.images?.[0]?.url;
   const hover = product.images?.[1]?.url;
   const hasVideo = product.videos && product.videos.length > 0;
   const price = effectivePrice(product);
   const disc = discountPercent(product);
   const outOfStock = product.stock <= 0;
+
+  const handleQuickAdd = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (outOfStock || added) return;
+    addToCart({
+      product_id: product.id,
+      slug: product.slug,
+      name: product.name,
+      price,
+      image: cover || null,
+    });
+    setAdded(true);
+    setTimeout(() => setAdded(false), 1500);
+  };
 
   return (
     <div className="group relative flex flex-col overflow-hidden rounded-xl bg-white border border-sand/70 shadow-sm hover:shadow-xl hover:border-gold/30 transition duration-300">
@@ -79,6 +97,22 @@ export function ProductCard({ product }: { product: Product }) {
       >
         <Heart className={cn("w-4 h-4", isFav(product.id) && "fill-red-500 text-red-500")} />
       </button>
+
+      {/* Quick Add */}
+      {!outOfStock && (
+        <button
+          onClick={handleQuickAdd}
+          aria-label="إضافة للسلة"
+          className={cn(
+            "absolute bottom-3 start-3 flex h-9 w-9 items-center justify-center rounded-full shadow border transition z-10",
+            added
+              ? "bg-emerald-500 border-emerald-500 text-white scale-110"
+              : "bg-white/90 backdrop-blur border-sand text-ink hover:bg-gold hover:border-gold hover:text-white"
+          )}
+        >
+          {added ? <Check className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
+        </button>
+      )}
 
       <div className="flex flex-1 flex-col p-3 md:p-4">
         <Link href={`/product/${product.slug}`} className="block">
