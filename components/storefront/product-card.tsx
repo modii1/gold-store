@@ -104,7 +104,7 @@ export function ProductCard({ product }: { product: Product }) {
           onClick={handleQuickAdd}
           aria-label="إضافة للسلة"
           className={cn(
-            "absolute bottom-3 start-3 flex h-9 w-9 items-center justify-center rounded-full shadow border transition z-10",
+            "absolute bottom-3 end-3 flex h-9 w-9 items-center justify-center rounded-full shadow border transition z-10",
             added
               ? "bg-emerald-500 border-emerald-500 text-white scale-110"
               : "bg-white/90 backdrop-blur border-sand text-ink hover:bg-gold hover:border-gold hover:text-white"
