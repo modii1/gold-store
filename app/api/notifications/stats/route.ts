@@ -28,19 +28,35 @@ export async function GET(req: NextRequest) {
   const byChannel: Record<string, number> = {};
   for (const channel of ["in_app", "email", "sms", "push", "whatsapp"]) {
     const { count } = await supabase.from("notification_deliveries").select("*", { count: "exact", head: true }).eq("channel", channel).gte("created_at", since);
-    byChannel[channel] = count ?? 0;
+    const c = count ?? 0;
+    if (c > 0) byChannel[channel] = c;
   }
 
-  const { count: success } = await supabase.from("notification_deliveries").select("*", { count: "exact", head: true }).in("status", ["sent", "delivered"]).gte("created_at", since);
-  const { count: failed } = await supabase.from("notification_deliveries").select("*", { count: "exact", head: true }).in("status", ["failed", "permanent_failed"]).gte("created_at", since);
+  // Count distinct notifications (not delivery rows) to avoid double-counting
+  // when an order creates both admin + customer notifications.
+  const { data: successRows } = await supabase
+    .from("notification_deliveries")
+    .select("notification_id", { count: "exact" })
+    .in("status", ["sent", "delivered"])
+    .gte("created_at", since);
+  const successSet = new Set((successRows || []).map((r: { notification_id: string }) => r.notification_id));
+  const success = successSet.size;
 
-  const deliveriesTotal = (success ?? 0) + (failed ?? 0);
-  const successRate = deliveriesTotal ? Math.round(((success ?? 0) / deliveriesTotal) * 1000) / 10 : 100;
+  const { data: failedRows } = await supabase
+    .from("notification_deliveries")
+    .select("notification_id", { count: "exact" })
+    .in("status", ["failed", "permanent_failed"])
+    .gte("created_at", since);
+  const failedSet = new Set((failedRows || []).map((r: { notification_id: string }) => r.notification_id));
+  const failed = failedSet.size;
+
+  const deliveriesTotal = success + failed;
+  const successRate = deliveriesTotal ? Math.round((success / deliveriesTotal) * 1000) / 10 : 100;
 
   return NextResponse.json({
     total: total ?? 0,
-    success: success ?? 0,
-    failed: failed ?? 0,
+    success,
+    failed,
     successRate,
     bySeverity,
     byChannel,

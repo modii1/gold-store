@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, Tag, ShoppingBag, ShieldCheck, Truck, Landmark, Sparkles, MapPin, CheckCircle2 } from "lucide-react";
+import { Loader2, Tag, ShoppingBag, ShieldCheck, Truck, Landmark, MapPin, CheckCircle2 } from "lucide-react";
 import { useCart } from "@/components/storefront/providers";
 import { createOrderAction, validateCouponAction } from "@/app/actions/orders";
 import { getCheckoutRatesAction, reverseGeocodeAction, type CheckoutShippingOption } from "@/app/actions/shipping";
@@ -240,11 +240,7 @@ export function CheckoutForm({ settings, shipping, payment, customer, savedAddre
               })}
             </div>
           )}
-          {liveOptions && liveOptions.some((o) => o.live) && (
-            <p className="mt-3 flex items-center gap-1 text-xs text-stone-400">
-              <Sparkles className="w-3.5 h-3.5 text-gold" /> أسعار حية من OTO — تُحسب حسب المدينة والوزن
-            </p>
-          )}
+
         </section>
 
         {/* طريقة الدفع */}

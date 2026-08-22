@@ -19,6 +19,7 @@ type OrderInfo = {
   order_number: number | null;
   shipping_method: string | null;
   delivery_option_name: string | null;
+  customer_identifier?: string | null;
 };
 
 /**
@@ -123,9 +124,10 @@ function eventTypeFromStatus(status?: string): string | null {
   if (s.includes("return") || s.includes("rto")) return "return.received";
   if (s.includes("cancel")) return "shipment.cancelled";
   if (s.includes("onhold") || s.includes("on_hold") || s.includes("suspend")) return "shipment.on_hold";
-  if (s.includes("outfordelivery") || s.includes("out for delivery")) return "shipment.out_for_delivery";
-  if (s.includes("transit") || s.includes("pickedup") || s.includes("picked_up") || s.includes("shipped")) return "shipment.in_transit";
-  if (s.includes("fail")) return "shipment.failed";
+  if (s.includes("outfordelivery") || s.includes("out for delivery") || s.includes("out_for_delivery")) return "shipment.out_for_delivery";
+  if (s.includes("readyforpickup") || s.includes("ready_for_pickup") || s.includes("ready")) return "shipment.out_for_delivery";
+  if (s.includes("transit") || s.includes("pickedup") || s.includes("picked_up") || s.includes("shipped") || s.includes("ontheway") || s.includes("on_the_way") || s.includes("waytocustomer") || s.includes("way_to_customer") || s.includes("leftwarehouse") || s.includes("left_warehouse") || s.includes("airport") || s.includes("airline") || s.includes("customs") || s.includes("clearance")) return "shipment.in_transit";
+  if (s.includes("fail") || s.includes("unabletoassign") || s.includes("unable_to_assign")) return "shipment.failed";
   return null;
 }
 
@@ -152,15 +154,15 @@ export async function syncOtoShipments(limit = 100): Promise<{ total: number; up
 
   // Pull linked order info (order number, carrier / delivery option) so
   // shipments always show a useful name even before OTO assigns tracking.
-  const orderIds = Array.from(new Set(rows.map((r) => r.order_id).filter(Boolean))) as string[];
-  const orders = new Map<string, OrderInfo>();
-  if (orderIds.length) {
-    const { data: orderRows } = await supabase
-      .from("orders")
-      .select("id, order_number, shipping_method, delivery_option_name")
-      .in("id", orderIds);
-    (orderRows || []).forEach((o) => orders.set(o.id, o as OrderInfo));
-  }
+    const orderIds = Array.from(new Set(rows.map((r) => r.order_id).filter(Boolean))) as string[];
+    const orders = new Map<string, OrderInfo & { customer_identifier?: string | null }>();
+    if (orderIds.length) {
+      const { data: orderRows } = await supabase
+        .from("orders")
+        .select("id, order_number, shipping_method, delivery_option_name, customer_identifier")
+        .in("id", orderIds);
+      (orderRows || []).forEach((o) => orders.set(o.id, o as OrderInfo & { customer_identifier?: string | null }));
+    }
   let updated = 0;
   let failed = 0;
   let skipped = 0;
@@ -248,8 +250,9 @@ export async function syncOtoShipments(limit = 100): Promise<{ total: number; up
               eventType,
               orderId: row.order_id,
               shipmentId: row.id,
+              customerIdentifier: order?.customer_identifier ?? null,
               payload: {
-                carrier_name: info.deliveryCompany,
+                carrier_name: info.deliveryCompany || company,
                 tracking_number: tracking,
                 tracking_url: info.trackingUrl,
                 shipping_status: info.status,

@@ -261,17 +261,18 @@ export async function getCustomerOrderDetailsAction(orderId: string) {
 
   if (!order) return { error: "الطلب غير موجود" };
 
-  const shipments = await supabase
+  const admin = createAdminClient();
+  const shipments = await admin
     .from("shipments")
     .select("*")
     .eq("order_id", orderId)
     .order("created_at", { ascending: false });
 
-  const statusLog = await supabase
+  const statusLog = await admin
     .from("order_status_log")
     .select("*")
     .eq("order_id", orderId)
-    .order("created_at", { ascending: false });
+    .order("created_at", { ascending: true });
 
   return {
     order: order as Order,
@@ -284,8 +285,8 @@ export async function cancelOrderAction(orderId: string) {
   const session = await getCustomerSession();
   if (!session) return { error: "غير مصرح" };
 
-  const supabase = await createClient();
-  const { data: order } = await supabase
+  const customerClient = await createClient();
+  const { data: order } = await customerClient
     .from("orders")
     .select("id, status")
     .eq("id", orderId)
@@ -297,10 +298,11 @@ export async function cancelOrderAction(orderId: string) {
     return { error: "لا يمكن إلغاء الطلب في هذه المرحلة" };
   }
 
-  const { error } = await supabase.from("orders").update({ status: "cancelled" }).eq("id", orderId);
+  const admin = createAdminClient();
+  const { error } = await admin.from("orders").update({ status: "cancelled" }).eq("id", orderId);
   if (error) return { error: error.message };
 
-  await supabase.from("order_status_log").insert({
+  await admin.from("order_status_log").insert({
     order_id: orderId,
     old_status: order.status,
     new_status: "cancelled",

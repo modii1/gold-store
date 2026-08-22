@@ -305,29 +305,27 @@ export async function processEvent(args: {
     }
   }
 
-  // --- Customer recipient ---
+  // --- Customer recipient (always create row; deliveries only if channels exist) ---
   if (customerIdentifier) {
     const prefs = await getCustomerPreferences(customerIdentifier);
     const customerChannels = filterChannelsForCustomer(category, channels, prefs);
-    if (customerChannels.length) {
-      const customerNotificationId = await createNotificationRow({
-        userType: "customer",
-        userId: customerIdentifier,
-        customerId: customerIdentifier,
-        orderId,
-        orderNumber: args.orderNumber,
-        shipmentId,
-        eventType,
-        category,
-        severity,
-        title: customerTitle,
-        message: customerMessage,
-        metadata: { ...payload },
-        actionUrl: orderId ? "/account#orders" : null,
-      });
-      if (customerNotificationId) {
-        await createDeliveries(customerNotificationId, customerChannels);
-      }
+    const customerNotificationId = await createNotificationRow({
+      userType: "customer",
+      userId: customerIdentifier,
+      customerId: customerIdentifier,
+      orderId,
+      orderNumber: args.orderNumber,
+      shipmentId,
+      eventType,
+      category,
+      severity,
+      title: customerTitle,
+      message: customerMessage,
+      metadata: { ...payload },
+      actionUrl: orderId ? "/account#orders" : null,
+    });
+    if (customerNotificationId && customerChannels.length) {
+      await createDeliveries(customerNotificationId, customerChannels);
     }
   }
 
@@ -359,7 +357,7 @@ let lastRepairRunAt = 0;
  */
 export async function repairStaleNotifications(limit = 100): Promise<number> {
   const now = Date.now();
-  if (now - lastRepairRunAt < 30_000) return 0;
+  if (now - lastRepairRunAt < 10_000) return 0;
   lastRepairRunAt = now;
 
   const supabase = createAdminClient();
@@ -372,10 +370,10 @@ export async function repairStaleNotifications(limit = 100): Promise<number> {
   let repaired = 0;
   for (const row of (data as StoredNotificationRow[] | null) || []) {
     const meta = (row.metadata || {}) as Record<string, unknown>;
-    if (meta.repaired === true) continue;
+    if (meta.repair_skip === true) continue;
     try {
       const builtIn = BUILT_IN_TEMPLATES.find((t) => t.event_type === row.type);
-      if (!builtIn) continue; // custom/unknown event — leave untouched
+      if (!builtIn) continue;
 
       const variables = await enrichVariables(
         {
@@ -387,22 +385,32 @@ export async function repairStaleNotifications(limit = 100): Promise<number> {
         row.shipment_id
       );
 
-      const template = await loadTemplate(row.type);
       const isCustomer = row.user_type === "customer";
       const override = isCustomer ? CUSTOMER_TEMPLATE_OVERRIDES[row.type] : undefined;
-      const newTitle = renderTemplateTitle(override?.title ?? template.title, variables);
-      const rendered = renderTemplate(override?.body ?? template.body, variables);
+      const templateBody = override?.body ?? builtIn.body;
+      const templateTitle = override?.title ?? builtIn.title;
+      const newTitle = renderTemplateTitle(templateTitle, variables);
+      const rendered = renderTemplate(templateBody, variables);
       const hasLeftover = /\{\{/.test(rendered);
+
+      if (hasLeftover) continue;
+
+      const titleChanged = newTitle !== row.title;
+      const messageChanged = rendered !== row.message;
+
+      if (!titleChanged && !messageChanged) {
+        if ((meta.repaired === true) !== true) {
+          await supabase.from("notifications").update({ metadata: { ...meta, repaired: true } }).eq("id", row.id);
+        }
+        continue;
+      }
 
       const patch: Record<string, unknown> = {
         metadata: { ...meta, repaired: true },
         updated_at: new Date().toISOString(),
       };
-      if (newTitle !== row.title) patch.title = newTitle;
-      if (!hasLeftover && rendered !== row.message) patch.message = rendered;
-      else if (hasLeftover && /\{\{/.test(row.message)) {
-        patch.message = row.message.replace(/\{\{[\w.]+\}\}/g, "").replace(/\s{2,}/g, " ").trim();
-      }
+      if (titleChanged) patch.title = newTitle;
+      if (messageChanged) patch.message = rendered;
 
       await supabase.from("notifications").update(patch).eq("id", row.id);
       repaired += 1;

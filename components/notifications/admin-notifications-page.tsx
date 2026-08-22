@@ -168,13 +168,14 @@ export function AdminNotificationsPage() {
           <StatCard label="معدل النجاح" value={stats ? `${stats.successRate}%` : undefined} color="text-gold" bg="bg-amber-50" loading={statsLoading} />
         </div>
 
-        {(stats?.byChannel.email || stats?.byChannel.sms || stats?.byChannel.push) && (
+        {Object.keys(stats?.byChannel || {}).length > 0 && (
           <div className="mt-4 flex flex-wrap items-center gap-4 text-xs text-stone-500">
             <span className="font-semibold text-stone-600">حسب القناة:</span>
-            <span>داخل التطبيق: {stats?.byChannel.in_app ?? 0}</span>
-            <span>البريد: {stats?.byChannel.email ?? 0}</span>
-            <span>SMS: {stats?.byChannel.sms ?? 0}</span>
-            <span>Push: {stats?.byChannel.push ?? 0}</span>
+            {stats?.byChannel.in_app && <span>داخل التطبيق: {stats.byChannel.in_app}</span>}
+            {stats?.byChannel.email && <span>البريد: {stats.byChannel.email}</span>}
+            {stats?.byChannel.sms && <span>SMS: {stats.byChannel.sms}</span>}
+            {stats?.byChannel.push && <span>Push: {stats.byChannel.push}</span>}
+            {stats?.byChannel.whatsapp && <span>WhatsApp: {stats.byChannel.whatsapp}</span>}
           </div>
         )}
       </section>

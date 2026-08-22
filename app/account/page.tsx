@@ -12,8 +12,9 @@ import { getCategoriesList } from "@/lib/services/products";
 import { formatDate } from "@/lib/format";
 import { Currency } from "@/components/storefront/currency";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { createReturnRequestAction } from "@/app/actions/customer-data";
+import { createReturnRequestAction, deleteAddressAction } from "@/app/actions/customer-data";
 import { CustomerOrdersSection } from "@/components/customer-orders-section";
+import { NotificationBell } from "@/components/notifications/notification-bell";
 
 export const metadata: Metadata = { title: "لوحة حسابي | لمعة" };
 
@@ -67,7 +68,9 @@ export default async function AccountPage() {
     // The account page remains usable if optional customer tables are unavailable.
   }
 
-  const totalSpent = orders.reduce((sum, o) => sum + Number(o.total || 0), 0);
+  const totalSpent = orders
+    .filter((o) => ["delivered", "paid"].includes(o.status))
+    .reduce((sum, o) => sum + Number(o.total || 0), 0);
   const pendingOrders = orders.filter((o) => ["pending", "confirmed", "processing"].includes(o.status)).length;
   const shippedOrders = orders.filter((o) => ["shipped", "picked_up", "in_transit", "out_for_delivery"].includes(o.status)).length;
   const deliveredOrders = orders.filter((o) => ["delivered", "paid"].includes(o.status)).length;
@@ -94,9 +97,12 @@ export default async function AccountPage() {
             <h1 className="text-2xl md:text-3xl font-bold text-ink">أهلاً {session.name.split(" ")[0]} 👋</h1>
             <p className="mt-1 text-sm text-stone-500">لوحة حسابك — إدارة طلباتك وعناوينك واسترجاعاتك</p>
           </div>
-          <Link href="/shop" className="flex items-center gap-2 rounded-full bg-ink px-6 py-2.5 text-sm font-bold text-ivory hover:bg-gold transition">
-            <ShoppingBag className="h-4 w-4" /> متابعة التسوق
-          </Link>
+          <div className="flex items-center gap-3">
+            <NotificationBell scope="customer" />
+            <Link href="/shop" className="flex items-center gap-2 rounded-full bg-ink px-6 py-2.5 text-sm font-bold text-ivory hover:bg-gold transition">
+              <ShoppingBag className="h-4 w-4" /> متابعة التسوق
+            </Link>
+          </div>
         </div>
 
         <div className="mt-8 flex flex-col gap-6 lg:flex-row">
@@ -179,7 +185,13 @@ export default async function AccountPage() {
                   <article key={address.id} className="rounded-2xl border border-sand p-4">
                     <div className="flex items-center justify-between"><b>{address.label || "عنواني"}</b>{address.is_default && <span className="text-xs font-bold text-emerald-700">الافتراضي</span>}</div>
                     <p className="mt-2 text-sm text-stone-500">{[address.address, address.city, address.region].filter(Boolean).join("، ") || "موقع محدد بالخريطة"}</p>
-                    {address.maps_url && <a href={address.maps_url} target="_blank" rel="noreferrer" className="mt-3 inline-flex items-center gap-1 text-xs font-bold text-gold">فتح الخريطة <ExternalLink className="h-3 w-3" /></a>}
+                    <div className="mt-3 flex items-center gap-3">
+                      {address.maps_url && <a href={address.maps_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs font-bold text-gold">فتح الخريطة <ExternalLink className="h-3 w-3" /></a>}
+                      <form action={deleteAddressAction}>
+                        <input type="hidden" name="address_id" value={address.id} />
+                        <button type="submit" className="text-xs font-bold text-red-500 hover:text-red-700 hover:underline transition">حذف</button>
+                      </form>
+                    </div>
                   </article>
                 ))}
                 {(addresses || []).length === 0 && <p className="rounded-2xl border border-dashed border-sand bg-stone-50 p-4 text-sm text-stone-500">ستُحفظ عناوينك تلقائياً عند إتمام الطلب.</p>}

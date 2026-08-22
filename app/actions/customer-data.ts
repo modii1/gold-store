@@ -34,6 +34,20 @@ export async function saveCustomerAddressAction(formData: FormData) {
   return { success: true };
 }
 
+export async function deleteAddressAction(formData: FormData) {
+  const session = await getCustomerSession();
+  if (!session) return;
+  const addressId = String(formData.get("address_id") || "");
+  if (!addressId) return;
+  const supabase = createAdminClient();
+  await supabase
+    .from("addresses")
+    .delete()
+    .eq("id", addressId)
+    .eq("customer_identifier", session.phone);
+  revalidatePath("/account");
+}
+
 export async function createReturnRequestAction(formData: FormData) {
   const session = await getCustomerSession();
   const orderId = String(formData.get("order_id") || "");
