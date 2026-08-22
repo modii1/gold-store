@@ -2,6 +2,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { otoOrderStatus } from "@/lib/oto/client";
 import { emitNotification } from "@/lib/notifications/engine";
 import { logOrderStatusChange } from "@/lib/orders/status-log";
+import { ORDER_STATUS_META } from "@/lib/orders/order-meta";
 
 type SyncRow = {
   id: string;
@@ -17,6 +18,7 @@ type SyncRow = {
 type OrderInfo = {
   id: string;
   order_number: number | null;
+  customer_name?: string | null;
   shipping_method: string | null;
   delivery_option_name: string | null;
   customer_identifier?: string | null;
@@ -159,7 +161,7 @@ export async function syncOtoShipments(limit = 100): Promise<{ total: number; up
     if (orderIds.length) {
       const { data: orderRows } = await supabase
         .from("orders")
-        .select("id, order_number, shipping_method, delivery_option_name, customer_identifier")
+        .select("id, order_number, customer_name, shipping_method, delivery_option_name, customer_identifier")
         .in("id", orderIds);
       (orderRows || []).forEach((o) => orders.set(o.id, o as OrderInfo & { customer_identifier?: string | null }));
     }
@@ -239,6 +241,21 @@ export async function syncOtoShipments(limit = 100): Promise<{ total: number; up
             }).eq("id", row.order_id);
             if (oldOrderStatus && oldOrderStatus !== newOrderStatus) {
               await logOrderStatusChange(row.order_id, oldOrderStatus, newOrderStatus, "oto-sync", `تحديث من OTO: ${info.status || status}`);
+              await emitNotification({
+                source: "oto",
+                externalEventId: `order.status_changed.${row.order_id}.${newOrderStatus}.${Date.now()}`,
+                eventType: "order.status_changed",
+                orderId: row.order_id,
+                orderNumber: order?.order_number ?? null,
+                customerIdentifier: order?.customer_identifier ?? null,
+                payload: {
+                  customer_name: order?.customer_name ?? null,
+                  order_number: order?.order_number ?? null,
+                  status_label: ORDER_STATUS_META[newOrderStatus as keyof typeof ORDER_STATUS_META]?.label || newOrderStatus,
+                  old_status: oldOrderStatus,
+                  new_status: newOrderStatus,
+                },
+              });
             }
           }
 

@@ -4,6 +4,7 @@ import { emitNotification, processEvent } from "@/lib/notifications/engine";
 import { buildEventId, ingestEvent, logNotificationEvent } from "@/lib/notifications/events";
 import { mapOrderStatus, mapStatus as mapOtoStatus } from "@/lib/oto/sync";
 import { logOrderStatusChange } from "@/lib/orders/status-log";
+import { ORDER_STATUS_META } from "@/lib/orders/order-meta";
 
 type OtoOrderStatusPayload = {
   orderId?: string;
@@ -223,6 +224,21 @@ async function handleOrderStatus(supabase: ReturnType<typeof createAdminClient>,
       }).eq("id", orders[0].id);
       if (oldStatus !== newStatus) {
         await logOrderStatusChange(orders[0].id, oldStatus, newStatus, "oto-webhook", `تحديث من OTO: ${body.status || body.dcStatus}`);
+        await emitNotification({
+          source: "oto",
+          externalEventId: `order.status_changed.${orders[0].id}.${newStatus}.${Date.now()}`,
+          eventType: "order.status_changed",
+          orderId: orders[0].id,
+          orderNumber: internalOrderNumber,
+          customerIdentifier,
+          payload: {
+            customer_name: null,
+            order_number: internalOrderNumber,
+            status_label: ORDER_STATUS_META[newStatus as keyof typeof ORDER_STATUS_META]?.label || newStatus,
+            old_status: oldStatus,
+            new_status: newStatus,
+          },
+        });
       }
     }
   }

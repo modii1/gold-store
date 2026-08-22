@@ -104,6 +104,15 @@ export const BUILT_IN_TEMPLATES: Omit<NotificationTemplate, "is_active">[] = [
     channels: ["in_app", "email", "sms"],
   },
   {
+    event_type: "order.status_changed",
+    name: "تحديث حالة الطلب",
+    title: "تحديث حالة — طلب #{{order_number}}",
+    body: "تم تحديث حالة الطلب #{{order_number}} إلى {{status_label}}.",
+    severity: "info",
+    category: "orders",
+    channels: ["in_app"],
+  },
+  {
     event_type: "order.cancelled",
     name: "إلغاء الطلب",
     title: "إلغاء — طلب #{{order_number}}",
@@ -347,6 +356,10 @@ export const CUSTOMER_TEMPLATE_OVERRIDES: Record<string, { title: string; body: 
   "order.payment_success": {
     title: "تم تأكيد الدفع",
     body: "مرحبًا {{customer_name}}، تم تأكيد الدفع لطلبك رقم #{{order_number}} بقيمة {{order_total}} ر.س. جاري تجهيز الطلب للشحن.",
+  },
+  "order.status_changed": {
+    title: "تم تحديث طلبك",
+    body: "مرحبًا {{customer_name}}، تم تحديث حالة طلبك رقم #{{order_number}} إلى «{{status_label}}».",
   },
   "order.payment_failed": {
     title: "لم يتم تأكيد الدفع",

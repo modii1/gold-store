@@ -8,6 +8,7 @@ import type { Rule, ChannelCode } from "./types";
 
 export const BUILT_IN_RULES: Omit<Rule, "is_active">[] = [
   { event_type: "order.created", name: "طلب جديد", condition: {}, channels: ["in_app", "email"], recipients: ["admin"] },
+  { event_type: "order.status_changed", name: "تحديث حالة الطلب", condition: {}, channels: ["in_app"], recipients: ["admin"] },
   { event_type: "order.payment_success", name: "تم الدفع", condition: {}, channels: ["in_app", "email", "sms"], recipients: ["admin", "finance"] },
   { event_type: "order.payment_failed", name: "فشل الدفع", condition: {}, channels: ["in_app", "email", "sms"], recipients: ["admin", "finance"] },
   { event_type: "order.cancelled", name: "إلغاء الطلب", condition: {}, channels: ["in_app"], recipients: ["admin"] },

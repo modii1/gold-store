@@ -8,6 +8,7 @@ import { otoCreateOrder, getAccessToken } from "@/lib/oto/client";
 import { logOrderStatusChange, getOrderStatusLog, getOrderNotes } from "@/lib/orders/status-log";
 import { exportOrdersCsv } from "@/lib/orders/query";
 import { isTransfer } from "@/lib/orders/order-meta";
+import { ORDER_STATUS_META } from "@/lib/orders/order-meta";
 import { emitNotification } from "@/lib/notifications/engine";
 import type { Order, Carrier, OrdersQueryParams, OrderDetails, OrderStatus } from "@/types";
 
@@ -18,13 +19,32 @@ export async function updateOrderStatusAction(formData: FormData) {
 
   const supabase = createAdminClient();
 
-  const { data: current } = await supabase.from("orders").select("status").eq("id", id).maybeSingle();
+  const { data: current } = await supabase.from("orders").select("status, order_number, customer_identifier, customer_name").eq("id", id).maybeSingle();
   const oldStatus = current?.status || null;
 
   const { error } = await supabase.from("orders").update({ status }).eq("id", id);
   if (error) return { error: error.message };
 
   await logOrderStatusChange(id, oldStatus, status, "admin");
+
+  if (oldStatus !== status && current) {
+    const statusLabel = ORDER_STATUS_META[status as keyof typeof ORDER_STATUS_META]?.label || status;
+    await emitNotification({
+      source: "admin",
+      externalEventId: `order.status_changed.${id}.${status}.${Date.now()}`,
+      eventType: "order.status_changed",
+      orderId: id,
+      orderNumber: current.order_number,
+      customerIdentifier: current.customer_identifier,
+      payload: {
+        customer_name: current.customer_name,
+        order_number: current.order_number,
+        status_label: statusLabel,
+        old_status: oldStatus,
+        new_status: status,
+      },
+    });
+  }
 
   revalidatePath("/admin/orders");
   revalidatePath(`/admin/orders/${id}`);
