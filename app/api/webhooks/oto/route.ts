@@ -323,6 +323,21 @@ async function handleOrderStatus(supabase: ReturnType<typeof createAdminClient>,
 }
 
 async function handleShipmentError(supabase: ReturnType<typeof createAdminClient>, body: OtoShipmentErrorPayload) {
+  let internalOrderId: string | null = null;
+  let customerIdentifier: string | null = null;
+  let internalOrderNumber: number | null = null;
+  if (body.orderId) {
+    const { data: orders } = await supabase.from("orders")
+      .select("id, customer_identifier, order_number, customer_name")
+      .eq("order_number", Number(body.orderId))
+      .limit(1);
+    if (orders && orders.length) {
+      internalOrderId = orders[0].id;
+      customerIdentifier = orders[0].customer_identifier || null;
+      internalOrderNumber = orders[0].order_number;
+    }
+  }
+
   await supabase.from("shipping_logs").insert({
     event: "oto.webhook.shipmentError",
     level: "error",
@@ -334,9 +349,11 @@ async function handleShipmentError(supabase: ReturnType<typeof createAdminClient
     source: "oto",
     externalEventId: buildEventId("oto", ["shipmentError", body.orderId ?? "", body.errorCode ?? "", body.errorMessage ?? ""]),
     eventType: "shipment.failed",
-    orderNumber: body.orderId ? Number(body.orderId) || null : null,
+    orderId: internalOrderId,
+    orderNumber: internalOrderNumber,
+    customerIdentifier,
     payload: {
-      order_number: body.orderId,
+      order_number: internalOrderNumber,
       carrier_name: body.deliveryCompany || "OTO",
       error_message: body.errorMessage || "خطأ غير معروف",
     },
@@ -351,7 +368,8 @@ function eventTypeFromStatus(status?: string): string | null {
   if (s.includes("onhold") || s.includes("on_hold") || s.includes("suspend")) return "shipment.on_hold";
   if (s.includes("outfordelivery") || s.includes("out for delivery") || s.includes("out_for_delivery")) return "shipment.out_for_delivery";
   if (s.includes("readyforpickup") || s.includes("ready_for_pickup") || s.includes("ready")) return "shipment.out_for_delivery";
-  if (s.includes("transit") || s.includes("pickedup") || s.includes("picked_up") || s.includes("shipped") || s.includes("ontheway") || s.includes("on_the_way") || s.includes("waytocustomer") || s.includes("way_to_customer") || s.includes("leftwarehouse") || s.includes("left_warehouse") || s.includes("airport") || s.includes("airline") || s.includes("customs") || s.includes("clearance")) return "shipment.in_transit";
+  if (s.includes("transit") || s.includes("pickedup") || s.includes("picked_up") || s.includes("shipped") || s.includes("ontheway") || s.includes("on_the_way") || s.includes("waytocustomer") || s.includes("way_to_customer") || s.includes("leftwarehouse") || s.includes("left_warehouse") || s.includes("airport") || s.includes("airline") || s.includes("customs") || s.includes("clearance") || s.includes("processing") || s.includes("accepted") || s.includes("dispatch")) return "shipment.in_transit";
   if (s.includes("fail") || s.includes("unabletoassign") || s.includes("unable_to_assign")) return "shipment.failed";
-  return null;
+  if (s.includes("hold") || s.includes("pending") || s.includes("await") || s.includes("queue")) return "shipment.on_hold";
+  return "shipment.in_transit";
 }
