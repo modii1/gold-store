@@ -402,10 +402,50 @@ export async function createShipmentAction(formData: FormData) {
     carrier = api[0] || all[0] || null;
   }
   if (!carrier) return { error: "لا توجد شركة شحن مسجلة — أضف شركة من صفحة الشحن" };
-  if (carrier.mode !== "api") return { error: `شركة «${carrier.name}» في وضع السعر الثابت — لا تدعم إنشاء شحنة تلقائية` };
 
   const weightGrams = await computeWeightGrams(supabase, o);
   const description = (o.items || []).map((it) => `${it.name} ×${it.qty}`).join("، ").slice(0, 100) || "طلب متجر";
+
+  // Fixed-price carriers: manual shipment record (no API call)
+  if (carrier.mode !== "api") {
+    await supabase.from("orders").update({
+      carrier_code: carrier.code,
+      shipping_method: carrier.name,
+      status: "shipped",
+    }).eq("id", orderId);
+
+    const { data: existingShip } = await supabase.from("shipments").select("id").eq("order_id", orderId).maybeSingle();
+    if (existingShip) {
+      await supabase.from("shipments").update({
+        delivery_company: carrier.name,
+        status: "processing",
+        updated_at: new Date().toISOString(),
+      }).eq("id", existingShip.id);
+    } else {
+      await supabase.from("shipments").insert({
+        order_id: orderId,
+        delivery_company: carrier.name,
+        status: "processing",
+      });
+    }
+
+    await logOrderStatusChange(orderId, o.status, "shipped", "admin", `شحن يدوي عبر ${carrier.name}`);
+
+    await emitNotification({
+      source: "system",
+      externalEventId: `shipment.created.${orderId}.manual.${Date.now()}`,
+      eventType: "shipment.created",
+      orderId,
+      orderNumber: o.order_number,
+      customerIdentifier: (o as Order & { customer_identifier?: string }).customer_identifier ?? null,
+      payload: { carrier_name: carrier.name },
+    });
+
+    revalidatePath("/admin/orders");
+    revalidatePath("/admin/shipments");
+    revalidatePath("/admin/dashboard");
+    return { success: true, trackingNumber: null, trackingUrl: null, message: `تم تسجيل الشحنة يدوياً عبر ${carrier.name}` };
+  }
 
   try {
     const result = await createCarrierShipment(carrier, {
