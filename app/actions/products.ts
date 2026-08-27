@@ -35,6 +35,7 @@ export async function saveProductAction(formData: FormData) {
   const seo_title = (formData.get("seo_title") as string)?.trim() || null;
   const seo_description = (formData.get("seo_description") as string)?.trim() || null;
   const keywords = (formData.get("keywords") as string)?.trim() || null;
+  const specs = JSON.parse((formData.get("specs") as string) || "[]") as { label: string; value: string }[];
 
   const images = JSON.parse((formData.get("images") as string) || "[]");
   const videos = JSON.parse((formData.get("videos") as string) || "[]");
@@ -45,11 +46,11 @@ export async function saveProductAction(formData: FormData) {
   const supabase = createAdminClient();
   const slug = slugify(name);
 
-  const payload = {
+  const payload: any = {
     name, slug, price, sale_price, category, description,
     sku, barcode, weight, weight_grams, karat, material, color, brand,
     stock, images, videos, is_available, featured, is_best_seller,
-    seo_title, seo_description, keywords,
+    seo_title, seo_description, keywords, specs: specs.filter((s) => s.label.trim() && s.value.trim()),
   };
 
   let productId = id;

@@ -8,6 +8,7 @@ import { saveProductAction } from "@/app/actions/products";
 import type { Product, MediaItem } from "@/types";
 
 type VariantRow = { color: string; color_hex: string; size: string; sku: string; price: string; sale_price: string; stock: string; image_url: string };
+type SpecRow = { label: string; value: string };
 
 export function ProductForm({ product }: { product?: Product }) {
   const router = useRouter();
@@ -21,6 +22,16 @@ export function ProductForm({ product }: { product?: Product }) {
     const v = (product as any)?.variants as any[] | undefined;
     if (v?.length) return v.map((x) => ({ color: x.color || "", color_hex: x.color_hex || "#D4AF37", size: x.size || "", sku: x.sku || "", price: x.price != null ? String(x.price) : "", sale_price: x.sale_price != null ? String(x.sale_price) : "", stock: String(x.stock ?? 0), image_url: x.image_url || "" }));
     return [];
+  });
+  const [specs, setSpecs] = useState<SpecRow[]>(() => {
+    const s = (product as any)?.specs as SpecRow[] | undefined;
+    if (s?.length) return s;
+    // migrate legacy fields into specs for editing
+    const legacy: SpecRow[] = [];
+    if ((product as any)?.sku) legacy.push({ label: "SKU", value: (product as any).sku });
+    if ((product as any)?.brand) legacy.push({ label: "العلامة", value: (product as any).brand });
+    // color/karat/material legacy shown only if no variants
+    return legacy;
   });
 
   const imageInput = useRef<HTMLInputElement>(null);
@@ -71,6 +82,7 @@ export function ProductForm({ product }: { product?: Product }) {
     setError("");
 
     const formData = new FormData(e.currentTarget);
+    formData.set("specs", JSON.stringify(specs));
     // Gallery source: variants if any variants exist (including empty after delete), else legacy images
     let effectiveImages: MediaItem[];
     if (variants.length > 0) {
@@ -164,6 +176,27 @@ export function ProductForm({ product }: { product?: Product }) {
           <label className="block text-sm font-semibold text-stone-700 mb-1">وصف SEO</label>
           <textarea name="seo_description" rows={2} defaultValue={product?.seo_description || ""}
             className="w-full rounded-xl border border-stone-200 px-4 py-2.5 text-sm focus:border-gold focus:outline-none focus:ring-2 focus:ring-gold/20 resize-y" />
+        </div>
+
+        {/* Custom Specs — عنوان + قيمة (حقل حر) */}
+        <div className="rounded-2xl border border-sand bg-cream/40 p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <h3 className="font-bold text-ink text-sm">المواصفات المخصصة <span className="text-xs font-normal text-stone-400">— أضف أي حقل (العنوان + القيمة)</span></h3>
+            <button type="button" onClick={() => setSpecs((p) => [...p, { label: "", value: "" }])} className="rounded-full bg-white border border-gold px-4 py-1.5 text-xs font-bold text-gold hover:bg-gold hover:text-white transition">+ إضافة حقل</button>
+          </div>
+          {specs.length === 0 ? (
+            <p className="text-xs text-stone-400 text-center py-3 border border-dashed border-sand rounded-xl bg-white">لا توجد مواصفات — اضغط "إضافة حقل" مثلاً: العنوان "الطول" والقيمة "20 سم"</p>
+          ) : (
+            <div className="space-y-2">
+              {specs.map((s, idx) => (
+                <div key={idx} className="flex gap-2 items-center">
+                  <input value={s.label} onChange={(e) => setSpecs((p) => p.map((r, i) => i === idx ? { ...r, label: e.target.value } : r))} placeholder="العنوان (مثلاً: الطول)" className="flex-1 rounded-xl border border-stone-200 px-3 py-2 text-sm focus:border-gold focus:outline-none" />
+                  <input value={s.value} onChange={(e) => setSpecs((p) => p.map((r, i) => i === idx ? { ...r, value: e.target.value } : r))} placeholder="القيمة (مثلاً: 20 سم)" className="flex-1 rounded-xl border border-stone-200 px-3 py-2 text-sm focus:border-gold focus:outline-none" />
+                  <button type="button" onClick={() => setSpecs((p) => p.filter((_, i) => i !== idx))} className="h-9 w-9 flex items-center justify-center rounded-xl bg-rose-50 text-rose-600 hover:bg-rose-100"><X className="w-4 h-4" /></button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         <div className="flex flex-wrap gap-6">

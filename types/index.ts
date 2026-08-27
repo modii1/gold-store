@@ -43,6 +43,7 @@ export type Product = {
   is_best_seller: boolean;
   seo_title: string | null;
   seo_description: string | null;
+  specs?: { label: string; value: string }[] | null;
   created_at: string;
   variants?: ProductVariant[];
 };

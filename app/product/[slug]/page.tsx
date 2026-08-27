@@ -57,13 +57,21 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
     aggregateRating: stats.count > 0 ? { "@type": "AggregateRating", ratingValue: stats.rating, reviewCount: stats.count } : undefined,
   };
 
-  const specs: { label: string; value: string }[] = [];
-  if (product.sku) specs.push({ label: "SKU", value: product.sku });
-  if (product.weight) specs.push({ label: "الوزن", value: product.weight });
-  if (product.karat) specs.push({ label: "العيار", value: product.karat });
-  if (product.material) specs.push({ label: "المادة", value: product.material });
-  if (product.color) specs.push({ label: "اللون", value: product.color });
-  if (product.brand) specs.push({ label: "العلامة", value: product.brand });
+  let specs: { label: string; value: string }[] = [];
+  const custom = (product as any).specs as { label: string; value: string }[] | null;
+  if (custom?.length) {
+    specs = custom;
+  } else {
+    if (product.sku) specs.push({ label: "SKU", value: product.sku });
+    if (product.brand) specs.push({ label: "العلامة", value: product.brand });
+    // weight/karat/material removed from admin but keep for legacy products
+    if ((product as any).weight) specs.push({ label: "الوزن", value: (product as any).weight });
+    if ((product as any).karat) specs.push({ label: "العيار", value: (product as any).karat });
+    if ((product as any).material) specs.push({ label: "المادة", value: (product as any).material });
+    // color only if no variants (variants have visual selector)
+    const hasVariants = (product as any).variants?.length > 0;
+    if (!hasVariants && product.color) specs.push({ label: "اللون", value: product.color });
+  }
 
   return (
     <>

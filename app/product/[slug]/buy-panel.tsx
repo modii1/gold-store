@@ -34,11 +34,13 @@ export function BuyPanel({ product, settings }: { product: Product; settings: Se
   // --- Variant mode (Amazon style) ---
   const colors = useMemo(() => {
     if (!hasVariants) return [];
-    const map = new Map<string, { name: string; hex: string; stock: number }>();
+    const map = new Map<string, { name: string; hex: string; stock: number; key: string }>();
     for (const v of variants!) {
-      if (!v.color) continue;
-      const key = v.color.trim();
-      const entry = map.get(key) || { name: key, hex: v.color_hex || fallbackHex(key), stock: 0 };
+      const raw = v.color?.trim() || "";
+      const key = raw || "__none__";
+      const name = raw || "بدون لون";
+      const hex = v.color_hex || (name === "بدون لون" ? "#E7E7E7" : fallbackHex(name));
+      const entry = map.get(key) || { name, hex, stock: 0, key };
       entry.stock += v.stock;
       if (v.color_hex) entry.hex = v.color_hex;
       map.set(key, entry);
@@ -75,7 +77,11 @@ export function BuyPanel({ product, settings }: { product: Product; settings: Se
 
   const availableSizes = useMemo(() => {
     if (!hasVariants) return [];
-    const list = variants!.filter((v) => !selectedColor || v.color === selectedColor).map((v) => v.size).filter(Boolean) as string[];
+    const list = variants!.filter((v) => {
+      if (!selectedColor) return true;
+      if (selectedColor === "بدون لون") return !v.color?.trim();
+      return v.color === selectedColor;
+    }).map((v) => v.size).filter(Boolean) as string[];
     return Array.from(new Set(list.map((s) => s.trim())));
   }, [variants, hasVariants, selectedColor]);
 
@@ -85,7 +91,7 @@ export function BuyPanel({ product, settings }: { product: Product; settings: Se
     if (!hasVariants) return null;
     return (
       variants!.find((v) => {
-        const colorMatch = selectedColor ? v.color === selectedColor : !v.color;
+        const colorMatch = selectedColor ? (selectedColor === "بدون لون" ? !v.color?.trim() : v.color === selectedColor) : !v.color?.trim();
         const sizeMatch = hasSizeOptions ? v.size === selectedSize : true;
         if (hasSizeOptions && !selectedSize) return false;
         if (selectedColor && hasSizeOptions) return colorMatch && sizeMatch;
@@ -135,7 +141,7 @@ export function BuyPanel({ product, settings }: { product: Product; settings: Se
   const handleColorSelect = (c: string, idx: number) => {
     setSelectedColor(c);
     setSelectedSize(null);
-    const v = variants?.find((x) => x.color === c);
+    const v = variants?.find((x) => (c === "بدون لون" ? !x.color?.trim() : x.color === c));
     const imageIdx = v?.image_url ? (product.images || []).findIndex((im) => im.url === v.image_url) : idx;
     window.dispatchEvent(new CustomEvent("color-select", { detail: { color: c, index: imageIdx >= 0 ? imageIdx : idx, image_url: v?.image_url || undefined } }));
   };
