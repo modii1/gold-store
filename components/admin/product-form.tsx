@@ -87,7 +87,7 @@ export function ProductForm({ product }: { product?: Product }) {
   };
 
   return (
-    <form onSubmit={handleSubmit} className="grid gap-6 lg:grid-cols-2">
+    <form onSubmit={handleSubmit} className="space-y-6">
       <div className="space-y-4 rounded-2xl border border-amber-100 bg-white p-6">
         <h2 className="font-bold text-stone-800">معلومات المنتج</h2>
 
@@ -206,7 +206,7 @@ export function ProductForm({ product }: { product?: Product }) {
       </div>
 
       {/* Smart Variants — full width, responsive */}
-      <div className="lg:col-span-2 rounded-2xl border-2 border-gold/20 bg-cream/40 p-4 md:p-6 space-y-4">
+      <div className="rounded-2xl border-2 border-gold/20 bg-cream/40 p-4 md:p-6 space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <h3 className="font-bold text-ink">توليفات المنتج <span className="text-xs font-normal text-stone-500">— كل صورة لها لونها + مقاس حر</span></h3>
           <button type="button" onClick={() => setVariants((p) => [...p, { color: "", color_hex: "#D4AF37", size: "", sku: "", price: "", sale_price: "", stock: "0", image_url: "" }])} className="rounded-full bg-gold px-5 py-2 text-xs font-bold text-white hover:bg-gold-light shrink-0">+ إضافة توليفة</button>
