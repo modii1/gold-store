@@ -66,19 +66,19 @@ export function ProductGallery({ product }: { product: Product }) {
         muted
         playsInline
         preload="metadata"
-        className="h-full w-full object-contain p-2 md:p-4"
+        className={cn("h-full w-full", autoPlay ? "object-contain p-4" : "object-cover")}
       />
     ) : (
       // eslint-disable-next-line @next/next/no-img-element
-       <img src={displayItem.url} alt={product.name} className="h-full w-full object-contain p-2 md:p-6 select-none" draggable={false} fetchPriority="high" />
+       <img src={displayItem.url} alt={product.name} className={cn("h-full w-full select-none", autoPlay ? "object-contain p-4 md:p-8" : "object-cover")} draggable={false} fetchPriority="high" />
     );
 
   return (
     <div className="space-y-4">
       <div
         className={cn(
-          "relative overflow-hidden rounded-2xl bg-white border border-sand shadow-sm aspect-square md:aspect-[4/5]",
-          fullscreen && "fixed inset-0 z-[120] rounded-none bg-white flex items-center justify-center"
+          "relative overflow-hidden rounded-2xl bg-cream border border-sand shadow-sm aspect-[4/5]",
+          fullscreen && "fixed inset-0 z-[120] rounded-none bg-cream flex items-center justify-center"
         )}
       >
         <div
