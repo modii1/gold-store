@@ -20,16 +20,24 @@ export function ProductCard({ product }: { product: Product }) {
   const disc = discountPercent(product);
   const outOfStock = product.stock <= 0;
 
+  const colors = product.color ? product.color.split(/[،,]/).map((c) => c.trim()).filter(Boolean) : [];
+  const hasMultipleColors = colors.length > 1;
+
   const handleQuickAdd = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
     if (outOfStock || added) return;
+    if (hasMultipleColors) {
+      window.location.href = `/product/${product.slug}`;
+      return;
+    }
     addToCart({
       product_id: product.id,
       slug: product.slug,
       name: product.name,
       price,
       image: cover || null,
+      color: colors[0] || null,
     });
     setAdded(true);
     setTimeout(() => setAdded(false), 1500);
@@ -122,6 +130,15 @@ export function ProductCard({ product }: { product: Product }) {
           {product.brand && <p className="mt-0.5 text-xs text-stone-400">{product.brand}</p>}
         </Link>
 
+        {colors.length > 0 && (
+          <div className="mt-2 flex items-center gap-1.5">
+            {colors.slice(0, 4).map((c) => (
+              <span key={c} title={c} className="h-3.5 w-3.5 rounded-full border border-black/10 shadow-sm" style={{ background: ({ "ذهبي": "#D4AF37", "فضي": "#C0C0C0", "روز قولد": "#B76E79", "روز": "#B76E79", "أسود": "#1A1A1A", "أبيض": "#F5F5F5", "أحمر": "#C0392B", "أزرق": "#2E86AB", "أخضر": "#27AE60", "بنفسجي": "#8E44AD", "بني": "#8B5A2B", "بيج": "#D8CAB5" } as any)[c] || "#D4AF37" }} />
+            ))}
+            {colors.length > 4 && <span className="text-[10px] text-stone-400">+{colors.length - 4}</span>}
+            <span className="text-[10px] text-stone-400">· {colors.join("، ")}</span>
+          </div>
+        )}
         <div className="mt-auto pt-2 flex items-baseline gap-2">
           <Currency value={price} className="text-lg md:text-xl font-bold text-gold" />
           {disc > 0 && product.sale_price && (

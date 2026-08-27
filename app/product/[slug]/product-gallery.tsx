@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { PlayCircle, Image as ImageIcon, Maximize2, ZoomIn, ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Product } from "@/types";
@@ -11,6 +11,20 @@ export function ProductGallery({ product }: { product: Product }) {
     ...(product.images || []).map((i) => ({ ...i, type: "image" as const })),
   ];
   const [active, setActive] = useState(0);
+
+  // Sync gallery image when color selected in BuyPanel (color index -> image index)
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent<{ index: number }>).detail;
+      const videoCount = (product.videos || []).length;
+      const imageCount = (product.images || []).length;
+      if (detail.index >= 0 && detail.index < imageCount) {
+        setActive(videoCount + detail.index);
+      }
+    };
+    window.addEventListener("color-select" as any, handler);
+    return () => window.removeEventListener("color-select" as any, handler);
+  }, [product.videos, product.images]);
   const [fullscreen, setFullscreen] = useState(false);
   const [zoomed, setZoomed] = useState(false);
   const [touchStart, setTouchStart] = useState<number | null>(null);

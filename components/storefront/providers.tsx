@@ -10,6 +10,7 @@ export type CartItem = {
   price: number;
   qty: number;
   image: string | null;
+  color?: string | null;
 };
 
 type CartCtx = {
@@ -19,7 +20,7 @@ type CartCtx = {
   isOpen: boolean;
   addToCart: (item: Omit<CartItem, "qty"> & { qty?: number }) => void;
   removeFromCart: (productId: string) => void;
-  updateQty: (productId: string, qty: number) => void;
+  updateQty: (productId: string, qty: number, color?: string | null) => void;
   clearCart: () => void;
   openCart: () => void;
   closeCart: () => void;
@@ -58,9 +59,9 @@ export function StoreProviders({ settings, children }: { settings: Settings; chi
 
   const addToCart = useCallback((item: Omit<CartItem, "qty"> & { qty?: number }) => {
     setItems((prev) => {
-      const existing = prev.find((i) => i.product_id === item.product_id);
+      const existing = prev.find((i) => i.product_id === item.product_id && (i.color || null) === (item.color || null));
       if (existing) {
-        return prev.map((i) => (i.product_id === item.product_id ? { ...i, qty: i.qty + (item.qty || 1) } : i));
+        return prev.map((i) => (i.product_id === item.product_id && (i.color || null) === (item.color || null) ? { ...i, qty: i.qty + (item.qty || 1) } : i));
       }
       return [...prev, { ...item, qty: item.qty || 1 }];
     });
@@ -70,11 +71,11 @@ export function StoreProviders({ settings, children }: { settings: Settings; chi
     setItems((prev) => prev.filter((i) => i.product_id !== productId));
   }, [setItems]);
 
-  const updateQty = useCallback((productId: string, qty: number) => {
+  const updateQty = useCallback((productId: string, qty: number, color?: string | null) => {
     setItems((prev) =>
       qty <= 0
-        ? prev.filter((i) => i.product_id !== productId)
-        : prev.map((i) => (i.product_id === productId ? { ...i, qty } : i))
+        ? prev.filter((i) => !(i.product_id === productId && (i.color || null) === (color || null)))
+        : prev.map((i) => (i.product_id === productId && (color === undefined || (i.color || null) === (color || null)) ? { ...i, qty } : i))
     );
   }, [setItems]);
 

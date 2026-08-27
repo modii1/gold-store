@@ -2,19 +2,21 @@ import { StoreHeader } from "@/components/storefront/header";
 import { StoreFooter } from "@/components/storefront/footer";
 import { Hero } from "@/components/storefront/hero";
 import { CategoryStrip } from "@/components/storefront/category-strip";
+import { ColorStrip } from "@/components/storefront/color-strip";
 import { FeaturesStrip } from "@/components/storefront/features-strip";
 import { ProductSection } from "@/components/storefront/product-section";
 import { getSettings } from "@/lib/services/settings";
-import { getCategoriesList, getLatestProducts, getBestSellers, getFeaturedProducts, getOnSaleProducts } from "@/lib/services/products";
+import { getCategoriesList, getLatestProducts, getBestSellers, getFeaturedProducts, getOnSaleProducts, getFacetValues } from "@/lib/services/products";
 
 export default async function HomePage() {
-  const [settings, categories, latest, bestSellers, featured, onSale] = await Promise.all([
+  const [settings, categories, latest, bestSellers, featured, onSale, colors] = await Promise.all([
     getSettings(),
     getCategoriesList(),
     getLatestProducts(8),
     getBestSellers(8),
     getFeaturedProducts(8),
     getOnSaleProducts(8),
+    getFacetValues("color"),
   ]);
 
   return (
@@ -23,6 +25,7 @@ export default async function HomePage() {
       <main className="flex-1">
         <Hero settings={settings} />
         <CategoryStrip categories={categories} />
+        <ColorStrip colors={colors} />
         <FeaturesStrip />
 
         <ProductSection

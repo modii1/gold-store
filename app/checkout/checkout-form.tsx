@@ -276,7 +276,7 @@ export function CheckoutForm({ settings, shipping, payment, customer, savedAddre
 
           <div className="max-h-64 overflow-y-auto space-y-3">
             {items.map((item) => (
-              <div key={item.product_id} className="flex items-center gap-3">
+              <div key={`${item.product_id}-${item.color || ""}`} className="flex items-center gap-3">
                 {item.image ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={item.image} alt="" className="h-14 w-14 rounded-lg object-cover" />

@@ -43,7 +43,7 @@ export function CartDrawer({ settings }: { settings: Settings }) {
             </div>
           ) : (
             items.map((item) => (
-              <article key={item.product_id} className="flex gap-3 rounded-xl bg-white border border-sand p-3">
+              <article key={`${item.product_id}-${item.color || ""}`} className="flex gap-3 rounded-xl bg-white border border-sand p-3">
                 {item.image ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={item.image} alt={item.name} loading="lazy" className="h-20 w-20 rounded-lg object-cover" />
@@ -52,13 +52,14 @@ export function CartDrawer({ settings }: { settings: Settings }) {
                 )}
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-bold text-ink line-clamp-2">{item.name}</p>
+                  {item.color && <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-cream px-2 py-0.5 text-[11px] font-bold text-stone-600 border border-sand">اللون: {item.color}</span>}
                   <Currency value={item.price} className="mt-1 text-sm font-bold text-gold" />
                   <div className="mt-2 flex items-center gap-2">
-                    <button onClick={() => updateQty(item.product_id, item.qty - 1)} className="h-7 w-7 rounded-md border border-sand flex items-center justify-center text-stone-500 hover:border-gold hover:text-gold transition">
+                    <button onClick={() => updateQty(item.product_id, item.qty - 1, item.color)} className="h-7 w-7 rounded-md border border-sand flex items-center justify-center text-stone-500 hover:border-gold hover:text-gold transition">
                       <Minus className="w-3.5 h-3.5" />
                     </button>
                     <span className="w-7 text-center text-sm font-bold">{item.qty}</span>
-                    <button onClick={() => updateQty(item.product_id, item.qty + 1)} className="h-7 w-7 rounded-md border border-sand flex items-center justify-center text-stone-500 hover:border-gold hover:text-gold transition">
+                    <button onClick={() => updateQty(item.product_id, item.qty + 1, item.color)} className="h-7 w-7 rounded-md border border-sand flex items-center justify-center text-stone-500 hover:border-gold hover:text-gold transition">
                       <Plus className="w-3.5 h-3.5" />
                     </button>
                     <button onClick={() => removeFromCart(item.product_id)} className="me-auto text-stone-300 hover:text-red-500 transition">

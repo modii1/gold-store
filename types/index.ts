@@ -119,6 +119,7 @@ export type OrderItem = {
   qty: number;
   image?: string | null;
   sku?: string | null;
+  color?: string | null;
 };
 
 export type OrderStatus =

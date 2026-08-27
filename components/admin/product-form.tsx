@@ -130,9 +130,10 @@ export function ProductForm({ product }: { product?: Product }) {
               className="w-full rounded-xl border border-stone-200 px-4 py-2.5 text-sm focus:border-gold focus:outline-none focus:ring-2 focus:ring-gold/20" />
           </div>
           <div>
-            <label className="block text-sm font-semibold text-stone-700 mb-1">اللون</label>
-            <input name="color" defaultValue={product?.color || ""} placeholder="مثال: ذهبي"
+            <label className="block text-sm font-semibold text-stone-700 mb-1">اللون (خيارات العميل)</label>
+            <input name="color" defaultValue={product?.color || ""} placeholder="مثال: ذهبي، فضي، روز قولد — افصلي بفاصلة"
               className="w-full rounded-xl border border-stone-200 px-4 py-2.5 text-sm focus:border-gold focus:outline-none focus:ring-2 focus:ring-gold/20" />
+            <p className="mt-1 text-[11px] text-stone-400">عدة ألوان؟ افصلي بفاصلة (، أو ,). ستظهر للعميل كبطاقات اختيار.</p>
           </div>
         </div>
 

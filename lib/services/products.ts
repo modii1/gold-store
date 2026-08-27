@@ -196,7 +196,16 @@ export async function getFacetValues(column: "karat" | "material" | "color" | "b
     const set = new Set<string>();
     (data || []).forEach((r) => {
       const v = (r as Record<string, unknown>)[column];
-      if (typeof v === "string") set.add(v);
+      if (typeof v === "string") {
+        if (column === "color") {
+          v.split(/[،,]/).forEach((s: string) => {
+            const t = s.trim();
+            if (t) set.add(t);
+          });
+        } else {
+          set.add(v);
+        }
+      }
     });
     return Array.from(set).slice(0, 30);
   } catch {
