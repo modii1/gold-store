@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { PlayCircle, Image as ImageIcon, Maximize2, ZoomIn, ChevronLeft, ChevronRight } from "lucide-react";
+import { PlayCircle, Image as ImageIcon, Maximize2, ZoomIn, ChevronLeft, ChevronRight, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Product } from "@/types";
 
@@ -36,6 +36,12 @@ export function ProductGallery({ product }: { product: Product }) {
   const [fullscreen, setFullscreen] = useState(false);
   const [zoomed, setZoomed] = useState(false);
   const [touchStart, setTouchStart] = useState<number | null>(null);
+  useEffect(() => {
+    if (!fullscreen) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setFullscreen(false); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [fullscreen]);
   const current = items[active];
   const displayItem = override ? { url: override, type: "image" as const } : current;
 
@@ -124,13 +130,31 @@ export function ProductGallery({ product }: { product: Product }) {
           </>
         )}
         {fullscreen && (
-          <button
-            onClick={() => setFullscreen(false)}
-            className="absolute top-4 start-4 flex h-10 w-10 items-center justify-center rounded-full bg-white/85 backdrop-blur text-ink shadow"
-            aria-label="إغلاق"
-          >
-            <Maximize2 className="w-5 h-5 rotate-45" />
-          </button>
+          <>
+            <button
+              onClick={() => setFullscreen(false)}
+              className="absolute top-4 start-4 flex h-10 w-10 items-center justify-center rounded-full bg-ink text-white shadow-lg hover:bg-gold transition z-10"
+              aria-label="إغلاق"
+            >
+              <X className="w-5 h-5" />
+            </button>
+            {items.length > 1 && (
+              <>
+                <button onClick={previous} className="absolute right-4 top-1/2 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-ink shadow-lg hover:text-gold transition z-10" aria-label="السابق">
+                  <ChevronRight className="h-6 w-6" />
+                </button>
+                <button onClick={next} className="absolute left-4 top-1/2 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-ink shadow-lg hover:text-gold transition z-10" aria-label="التالي">
+                  <ChevronLeft className="h-6 w-6" />
+                </button>
+                <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex gap-1.5 bg-black/50 backdrop-blur rounded-full px-3 py-1.5">
+                  {items.map((_, i) => (
+                    <span key={i} className={cn("h-1.5 rounded-full transition-all", i === active && !override ? "w-5 bg-white" : override ? "w-1.5 bg-white/60" : "w-1.5 bg-white/60")} />
+                  ))}
+                  {override && <span className="h-1.5 w-5 rounded-full bg-gold" />}
+                </div>
+              </>
+            )}
+          </>
         )}
       </div>
 
