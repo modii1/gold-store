@@ -196,53 +196,6 @@ export function ProductForm({ product }: { product?: Product }) {
           </label>
         </div>
 
-        {/* Smart Variants — Amazon/Noon style: visual color + free size + image per variant */}
-        <div className="rounded-2xl border-2 border-gold/20 bg-cream/40 p-4 space-y-3">
-          <div className="flex items-center justify-between">
-            <h3 className="font-bold text-ink flex items-center gap-2">توليفات المنتج <span className="text-xs font-normal text-stone-400">— كل صورة لها لونها + مقاس حر</span></h3>
-            <button type="button" onClick={() => setVariants((p) => [...p, { color: "", color_hex: "#D4AF37", size: "", sku: "", price: "", sale_price: "", stock: "0", image_url: "" }])} className="rounded-full bg-gold px-4 py-1.5 text-xs font-bold text-white hover:bg-gold-light">+ إضافة توليفة</button>
-          </div>
-          {variants.length === 0 ? (
-            <p className="text-xs text-stone-500 text-center py-4">لا توجد توليفات — المنتج يُباع كقطعة واحدة. أضف توليفة لكل لون/مقاس مع صورته الخاصة.</p>
-          ) : (
-            <div className="space-y-3">
-              {variants.map((v, idx) => (
-                <div key={idx} className="grid gap-2 rounded-xl border border-sand bg-white p-3 md:grid-cols-[88px_1fr] items-start">
-                  <label className="relative aspect-square overflow-hidden rounded-lg border border-sand bg-cream flex items-center justify-center cursor-pointer group">
-                    {v.image_url ? <img src={v.image_url} alt="" className="h-full w-full object-cover" /> : <span className="text-[10px] text-stone-400">صورة اللون</span>}
-                    <input type="file" accept="image/*" className="hidden" onChange={(e) => e.target.files?.[0] && uploadVariantImage(e.target.files[0], idx)} />
-                    <span className="absolute inset-0 bg-black/0 group-hover:bg-black/10 flex items-center justify-center opacity-0 group-hover:opacity-100 transition"><Upload className="w-5 h-5 text-white" /></span>
-                  </label>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="col-span-2 flex gap-2">
-                      <div className="flex-1">
-                        <label className="text-[11px] font-bold text-stone-600">اللون (نص)</label>
-                        <div className="flex gap-1 mt-1">
-                          <input value={v.color} onChange={(e) => setVariants((p) => p.map((r, i) => i === idx ? { ...r, color: e.target.value } : r))} placeholder="ذهبي" className="flex-1 rounded-lg border border-stone-200 px-2 py-1.5 text-xs focus:border-gold focus:outline-none" />
-                          <input type="color" value={v.color_hex} onChange={(e) => setVariants((p) => p.map((r, i) => i === idx ? { ...r, color_hex: e.target.value } : r))} className="h-8 w-10 rounded-lg border border-stone-200 p-0.5 cursor-pointer" title="لون الدائرة" />
-                          <span className="h-8 w-8 rounded-full border border-black/10 shrink-0" style={{ background: v.color_hex }} />
-                        </div>
-                      </div>
-                      <div className="flex-1">
-                        <label className="text-[11px] font-bold text-stone-600">المقاس (حر — نص أو رقم)</label>
-                        <input value={v.size} onChange={(e) => setVariants((p) => p.map((r, i) => i === idx ? { ...r, size: e.target.value } : r))} placeholder="مثلاً: 42 أو متوسط أو S" className="mt-1 w-full rounded-lg border border-stone-200 px-2 py-1.5 text-xs focus:border-gold focus:outline-none" />
-                      </div>
-                    </div>
-                    <input value={v.sku} onChange={(e) => setVariants((p) => p.map((r, i) => i === idx ? { ...r, sku: e.target.value } : r))} placeholder="SKU" className="rounded-lg border border-stone-200 px-2 py-1.5 text-xs focus:border-gold focus:outline-none" dir="ltr" />
-                    <input value={v.price} onChange={(e) => setVariants((p) => p.map((r, i) => i === idx ? { ...r, price: e.target.value } : r))} placeholder="سعر خاص" type="number" step="0.01" className="rounded-lg border border-stone-200 px-2 py-1.5 text-xs focus:border-gold focus:outline-none" />
-                    <input value={v.sale_price} onChange={(e) => setVariants((p) => p.map((r, i) => i === idx ? { ...r, sale_price: e.target.value } : r))} placeholder="سعر خصم" type="number" step="0.01" className="rounded-lg border border-stone-200 px-2 py-1.5 text-xs focus:border-gold focus:outline-none" />
-                    <div className="flex gap-1">
-                      <input value={v.stock} onChange={(e) => setVariants((p) => p.map((r, i) => i === idx ? { ...r, stock: e.target.value } : r))} placeholder="مخزون" type="number" min="0" className="flex-1 rounded-lg border border-stone-200 px-2 py-1.5 text-xs focus:border-gold focus:outline-none" />
-                      <button type="button" onClick={() => setVariants((p) => p.filter((_, i) => i !== idx))} className="rounded-lg bg-rose-50 px-2 text-rose-600 hover:bg-rose-100"><X className="w-4 h-4" /></button>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-          <p className="text-[11px] text-stone-400">كل توليفة = لون بصري (دائرة) + صورة ثابتة + مقاس حر. العميل يختار دائرة اللون فتتبدل الصورة فوراً، ثم يختار المقاس المتاح لذلك اللون فقط.</p>
-        </div>
-
         {error && <p className="text-sm text-red-600">{error}</p>}
 
         <button type="submit" disabled={loading || uploading}
@@ -250,6 +203,76 @@ export function ProductForm({ product }: { product?: Product }) {
           {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
           {product ? "حفظ التعديلات" : "إضافة المنتج"}
         </button>
+      </div>
+
+      {/* Smart Variants — full width, responsive */}
+      <div className="lg:col-span-2 rounded-2xl border-2 border-gold/20 bg-cream/40 p-4 md:p-6 space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <h3 className="font-bold text-ink">توليفات المنتج <span className="text-xs font-normal text-stone-500">— كل صورة لها لونها + مقاس حر</span></h3>
+          <button type="button" onClick={() => setVariants((p) => [...p, { color: "", color_hex: "#D4AF37", size: "", sku: "", price: "", sale_price: "", stock: "0", image_url: "" }])} className="rounded-full bg-gold px-5 py-2 text-xs font-bold text-white hover:bg-gold-light shrink-0">+ إضافة توليفة</button>
+        </div>
+        {variants.length === 0 ? (
+          <p className="text-xs text-stone-500 text-center py-6 rounded-xl border border-dashed border-sand bg-white">لا توجد توليفات — المنتج يُباع كقطعة واحدة. أضف توليفة لكل لون/مقاس مع صورته الخاصة.</p>
+        ) : (
+          <>
+            {/* Desktop table header */}
+            <div className="hidden md:grid grid-cols-[96px_1.2fr_1fr_0.9fr_0.9fr_0.9fr_0.7fr_36px] gap-2 px-2 text-[11px] font-bold text-stone-500">
+              <span>الصورة</span><span>اللون</span><span>المقاس</span><span>SKU</span><span>السعر</span><span>سعر خصم</span><span>مخزون</span><span></span>
+            </div>
+            <div className="space-y-3">
+              {variants.map((v, idx) => (
+                <div key={idx} className="rounded-xl border border-sand bg-white p-3">
+                  {/* Mobile: stacked */}
+                  <div className="md:hidden space-y-3">
+                    <label className="relative aspect-square w-full max-w-[140px] mx-auto overflow-hidden rounded-xl border-2 border-dashed border-sand bg-cream flex items-center justify-center cursor-pointer">
+                      {v.image_url ? <img src={v.image_url} alt="" className="h-full w-full object-cover" /> : <span className="text-xs text-stone-400">اضغط لرفع صورة اللون</span>}
+                      <input type="file" accept="image/*" className="hidden" onChange={(e) => e.target.files?.[0] && uploadVariantImage(e.target.files[0], idx)} />
+                    </label>
+                    <div>
+                      <label className="text-xs font-bold text-stone-700">اللون</label>
+                      <div className="mt-1 flex gap-2">
+                        <input value={v.color} onChange={(e) => setVariants((p) => p.map((r, i) => i === idx ? { ...r, color: e.target.value } : r))} placeholder="ذهبي" className="flex-1 rounded-xl border border-stone-200 px-3 py-2.5 text-sm focus:border-gold focus:outline-none" />
+                        <input type="color" value={v.color_hex} onChange={(e) => setVariants((p) => p.map((r, i) => i === idx ? { ...r, color_hex: e.target.value } : r))} className="h-10 w-12 rounded-xl border border-stone-200 p-1 cursor-pointer" />
+                        <span className="h-10 w-10 rounded-full border-2 border-white shadow shrink-0" style={{ background: v.color_hex }} />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="text-xs font-bold text-stone-700">المقاس (حر)</label>
+                      <input value={v.size} onChange={(e) => setVariants((p) => p.map((r, i) => i === idx ? { ...r, size: e.target.value } : r))} placeholder="مثلاً: 42 أو متوسط أو S" className="mt-1 w-full rounded-xl border border-stone-200 px-3 py-2.5 text-sm focus:border-gold focus:outline-none" />
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <input value={v.sku} onChange={(e) => setVariants((p) => p.map((r, i) => i === idx ? { ...r, sku: e.target.value } : r))} placeholder="SKU" className="rounded-xl border border-stone-200 px-3 py-2.5 text-sm focus:border-gold focus:outline-none" dir="ltr" />
+                      <input value={v.stock} onChange={(e) => setVariants((p) => p.map((r, i) => i === idx ? { ...r, stock: e.target.value } : r))} placeholder="مخزون" type="number" min="0" className="rounded-xl border border-stone-200 px-3 py-2.5 text-sm focus:border-gold focus:outline-none" />
+                      <input value={v.price} onChange={(e) => setVariants((p) => p.map((r, i) => i === idx ? { ...r, price: e.target.value } : r))} placeholder="سعر خاص" type="number" step="0.01" className="rounded-xl border border-stone-200 px-3 py-2.5 text-sm focus:border-gold focus:outline-none" />
+                      <input value={v.sale_price} onChange={(e) => setVariants((p) => p.map((r, i) => i === idx ? { ...r, sale_price: e.target.value } : r))} placeholder="سعر خصم" type="number" step="0.01" className="rounded-xl border border-stone-200 px-3 py-2.5 text-sm focus:border-gold focus:outline-none" />
+                    </div>
+                    <button type="button" onClick={() => setVariants((p) => p.filter((_, i) => i !== idx))} className="w-full rounded-xl bg-rose-50 py-2.5 text-sm font-bold text-rose-600 hover:bg-rose-100">حذف التوليفة</button>
+                  </div>
+                  {/* Desktop: table row */}
+                  <div className="hidden md:grid grid-cols-[96px_1.2fr_1fr_0.9fr_0.9fr_0.9fr_0.7fr_36px] gap-2 items-center">
+                    <label className="relative h-20 w-20 overflow-hidden rounded-xl border border-sand bg-cream flex items-center justify-center cursor-pointer group shrink-0">
+                      {v.image_url ? <img src={v.image_url} alt="" className="h-full w-full object-cover" /> : <span className="text-[11px] text-stone-400">صورة</span>}
+                      <input type="file" accept="image/*" className="hidden" onChange={(e) => e.target.files?.[0] && uploadVariantImage(e.target.files[0], idx)} />
+                      <span className="absolute inset-0 bg-black/0 group-hover:bg-black/10 flex items-center justify-center opacity-0 group-hover:opacity-100 transition"><Upload className="w-4 h-4 text-white" /></span>
+                      {v.color_hex && <span className="absolute top-1 start-1 h-4 w-4 rounded-full border-2 border-white shadow" style={{ background: v.color_hex }} />}
+                    </label>
+                    <div className="flex gap-1 items-center">
+                      <input value={v.color} onChange={(e) => setVariants((p) => p.map((r, i) => i === idx ? { ...r, color: e.target.value } : r))} placeholder="ذهبي" className="flex-1 min-w-0 rounded-lg border border-stone-200 px-2 py-2 text-sm focus:border-gold focus:outline-none" />
+                      <input type="color" value={v.color_hex} onChange={(e) => setVariants((p) => p.map((r, i) => i === idx ? { ...r, color_hex: e.target.value } : r))} className="h-8 w-8 rounded-lg border border-stone-200 p-0.5 cursor-pointer shrink-0" />
+                    </div>
+                    <input value={v.size} onChange={(e) => setVariants((p) => p.map((r, i) => i === idx ? { ...r, size: e.target.value } : r))} placeholder="42 / متوسط" className="w-full rounded-lg border border-stone-200 px-2 py-2 text-sm focus:border-gold focus:outline-none" />
+                    <input value={v.sku} onChange={(e) => setVariants((p) => p.map((r, i) => i === idx ? { ...r, sku: e.target.value } : r))} placeholder="SKU" className="w-full rounded-lg border border-stone-200 px-2 py-2 text-sm focus:border-gold focus:outline-none" dir="ltr" />
+                    <input value={v.price} onChange={(e) => setVariants((p) => p.map((r, i) => i === idx ? { ...r, price: e.target.value } : r))} placeholder="سعر" type="number" step="0.01" className="w-full rounded-lg border border-stone-200 px-2 py-2 text-sm focus:border-gold focus:outline-none" />
+                    <input value={v.sale_price} onChange={(e) => setVariants((p) => p.map((r, i) => i === idx ? { ...r, sale_price: e.target.value } : r))} placeholder="خصم" type="number" step="0.01" className="w-full rounded-lg border border-stone-200 px-2 py-2 text-sm focus:border-gold focus:outline-none" />
+                    <input value={v.stock} onChange={(e) => setVariants((p) => p.map((r, i) => i === idx ? { ...r, stock: e.target.value } : r))} placeholder="مخزون" type="number" min="0" className="w-full rounded-lg border border-stone-200 px-2 py-2 text-sm focus:border-gold focus:outline-none" />
+                    <button type="button" onClick={() => setVariants((p) => p.filter((_, i) => i !== idx))} className="h-8 w-8 flex items-center justify-center rounded-lg bg-rose-50 text-rose-600 hover:bg-rose-100"><X className="w-4 h-4" /></button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+        <p className="text-[11px] text-stone-400 text-center">كل توليفة = دائرة لون + صورة ثابتة + مقاس حر. العميل يختار اللون فتتبدل الصورة، ثم المقاس.</p>
       </div>
 
       <div className="space-y-6">
