@@ -51,7 +51,26 @@ export async function getProducts(query: ProductQuery = {}): Promise<ProductResu
   builder = applyMulti(builder as any, "brand", query.brand, (list) => (builder as any).in("brand", list));
   builder = applyMulti(builder as any, "karat", query.karat, (list) => (builder as any).in("karat", list));
   builder = applyMulti(builder as any, "material", query.material, (list) => (builder as any).in("material", list));
-  builder = applyMulti(builder as any, "color", query.color, (list) => (builder as any).in("color", list));
+  // color filter — variant-aware: match products.color OR any variant color
+  if (query.color) {
+    const colorList = Array.isArray(query.color) ? query.color : [query.color];
+    try {
+      const admin = createAdminClient();
+      const { data: vRows } = await admin.from("product_variants").select("product_id").in("color", colorList).eq("is_active", true);
+      const variantIds = (vRows || []).map((r: any) => r.product_id);
+      if (variantIds.length) {
+        // products where base color matches OR id in variantIds
+        const idsOr = variantIds.map((id: string) => `id.eq.${id}`).join(",");
+        // Use or with color filter + variant ids
+        // Fallback: if variantIds found, broaden to include them
+        builder = (builder as any).or(`color.in.(${colorList.join(",")}),${idsOr}`);
+      } else {
+        builder = applyMulti(builder as any, "color", query.color, (list) => (builder as any).in("color", list));
+      }
+    } catch {
+      builder = applyMulti(builder as any, "color", query.color, (list) => (builder as any).in("color", list));
+    }
+  }
   if (query.inStock) builder = builder.gt("stock", 0);
   if (query.onSale) builder = builder.gt("sale_price", 0);
   if (query.featured) builder = builder.eq("featured", true);
