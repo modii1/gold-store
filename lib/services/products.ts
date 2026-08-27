@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import type { Product, Category, Brand } from "@/types";
 
 export type ProductSort = "newest" | "best" | "price_asc" | "price_desc";
@@ -104,7 +105,8 @@ export async function getProduct(slug: string): Promise<Product | null> {
     if (!data) return null;
     const product = data as Product;
     try {
-      const { data: variants } = await supabase.from("product_variants").select("*").eq("product_id", product.id).eq("is_active", true).order("sort_order");
+      const admin = createAdminClient();
+      const { data: variants } = await admin.from("product_variants").select("*").eq("product_id", product.id).eq("is_active", true).order("sort_order");
       if (variants?.length) (product as any).variants = variants;
     } catch {}
     return product;
