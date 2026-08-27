@@ -70,11 +70,12 @@ export function ProductForm({ product }: { product?: Product }) {
     setError("");
 
     const formData = new FormData(e.currentTarget);
-    // Gallery now comes from variants — auto-build images from variant image_urls if no legacy images
-    let effectiveImages = images;
-    if (variants.length > 0) {
-      const variantImages = variants.filter((v) => v.image_url).map((v) => ({ url: v.image_url }));
-      if (variantImages.length) effectiveImages = variantImages;
+    // Gallery comes from variants — variant images are the source of truth
+    let effectiveImages: MediaItem[];
+    if (variants.some((v) => v.image_url || v.color || v.size)) {
+      effectiveImages = variants.filter((v) => v.image_url).map((v) => ({ url: v.image_url }));
+    } else {
+      effectiveImages = images;
     }
     formData.set("images", JSON.stringify(effectiveImages));
     formData.set("videos", JSON.stringify(videos));
