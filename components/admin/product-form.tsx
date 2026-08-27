@@ -64,16 +64,19 @@ export function ProductForm({ product }: { product?: Product }) {
     setUploading(false);
   };
 
+  const hadVariants = !!((product as any)?.variants?.length);
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setLoading(true);
     setError("");
 
     const formData = new FormData(e.currentTarget);
-    // Gallery comes from variants — variant images are the source of truth
+    // Gallery source: variants if any variants exist (including empty after delete), else legacy images
     let effectiveImages: MediaItem[];
-    if (variants.some((v) => v.image_url || v.color || v.size)) {
+    if (variants.length > 0) {
       effectiveImages = variants.filter((v) => v.image_url).map((v) => ({ url: v.image_url }));
+    } else if (hadVariants) {
+      effectiveImages = []; // user deleted all variants — clear gallery too
     } else {
       effectiveImages = images;
     }
@@ -206,10 +209,17 @@ export function ProductForm({ product }: { product?: Product }) {
                 <div key={idx} className="rounded-xl border border-sand bg-white p-3">
                   {/* Mobile: stacked */}
                   <div className="md:hidden space-y-3">
-                    <label className="relative aspect-square w-full max-w-[140px] mx-auto overflow-hidden rounded-xl border-2 border-dashed border-sand bg-cream flex items-center justify-center cursor-pointer">
-                      {v.image_url ? <img src={v.image_url} alt="" className="h-full w-full object-cover" /> : <span className="text-xs text-stone-400">اضغط لرفع صورة اللون</span>}
-                      <input type="file" accept="image/*" className="hidden" onChange={(e) => e.target.files?.[0] && uploadVariantImage(e.target.files[0], idx)} />
-                    </label>
+                    <div className="relative aspect-square w-full max-w-[140px] mx-auto">
+                      <label className="absolute inset-0 overflow-hidden rounded-xl border-2 border-dashed border-sand bg-cream flex items-center justify-center cursor-pointer">
+                        {v.image_url ? <img src={v.image_url} alt="" className="h-full w-full object-cover" /> : <span className="text-xs text-stone-400">اضغط لرفع صورة اللون</span>}
+                        <input type="file" accept="image/*" className="hidden" onChange={(e) => e.target.files?.[0] && uploadVariantImage(e.target.files[0], idx)} />
+                      </label>
+                      {v.image_url && (
+                        <button type="button" onClick={() => setVariants((p) => p.map((r, i) => i === idx ? { ...r, image_url: "" } : r))} className="absolute -top-2 -left-2 h-7 w-7 rounded-full bg-rose-500 text-white shadow flex items-center justify-center">
+                          <X className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
                     <div>
                       <label className="text-xs font-bold text-stone-700">اللون</label>
                       <div className="mt-1 flex gap-2">
@@ -232,12 +242,19 @@ export function ProductForm({ product }: { product?: Product }) {
                   </div>
                   {/* Desktop: table row */}
                   <div className="hidden md:grid grid-cols-[96px_1.2fr_1fr_0.9fr_0.9fr_0.9fr_0.7fr_36px] gap-2 items-center">
-                    <label className="relative h-20 w-20 overflow-hidden rounded-xl border border-sand bg-cream flex items-center justify-center cursor-pointer group shrink-0">
-                      {v.image_url ? <img src={v.image_url} alt="" className="h-full w-full object-cover" /> : <span className="text-[11px] text-stone-400">صورة</span>}
-                      <input type="file" accept="image/*" className="hidden" onChange={(e) => e.target.files?.[0] && uploadVariantImage(e.target.files[0], idx)} />
-                      <span className="absolute inset-0 bg-black/0 group-hover:bg-black/10 flex items-center justify-center opacity-0 group-hover:opacity-100 transition"><Upload className="w-4 h-4 text-white" /></span>
-                      {v.color_hex && <span className="absolute top-1 start-1 h-4 w-4 rounded-full border-2 border-white shadow" style={{ background: v.color_hex }} />}
-                    </label>
+                    <div className="relative h-20 w-20 shrink-0">
+                      <label className="absolute inset-0 overflow-hidden rounded-xl border border-sand bg-cream flex items-center justify-center cursor-pointer group">
+                        {v.image_url ? <img src={v.image_url} alt="" className="h-full w-full object-cover" /> : <span className="text-[11px] text-stone-400">صورة</span>}
+                        <input type="file" accept="image/*" className="hidden" onChange={(e) => e.target.files?.[0] && uploadVariantImage(e.target.files[0], idx)} />
+                        <span className="absolute inset-0 bg-black/0 group-hover:bg-black/10 flex items-center justify-center opacity-0 group-hover:opacity-100 transition"><Upload className="w-4 h-4 text-white" /></span>
+                        {v.color_hex && <span className="absolute top-1 start-1 h-4 w-4 rounded-full border-2 border-white shadow" style={{ background: v.color_hex }} />}
+                      </label>
+                      {v.image_url && (
+                        <button type="button" onClick={() => setVariants((p) => p.map((r, i) => i === idx ? { ...r, image_url: "" } : r))} className="absolute -top-1.5 -left-1.5 h-6 w-6 rounded-full bg-rose-500 text-white shadow flex items-center justify-center">
+                          <X className="w-3 h-3" />
+                        </button>
+                      )}
+                    </div>
                     <div className="flex gap-1 items-center">
                       <input value={v.color} onChange={(e) => setVariants((p) => p.map((r, i) => i === idx ? { ...r, color: e.target.value } : r))} placeholder="ذهبي" className="flex-1 min-w-0 rounded-lg border border-stone-200 px-2 py-2 text-sm focus:border-gold focus:outline-none" />
                       <input type="color" value={v.color_hex} onChange={(e) => setVariants((p) => p.map((r, i) => i === idx ? { ...r, color_hex: e.target.value } : r))} className="h-8 w-8 rounded-lg border border-stone-200 p-0.5 cursor-pointer shrink-0" />
