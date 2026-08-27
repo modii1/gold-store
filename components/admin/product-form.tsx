@@ -70,7 +70,13 @@ export function ProductForm({ product }: { product?: Product }) {
     setError("");
 
     const formData = new FormData(e.currentTarget);
-    formData.set("images", JSON.stringify(images));
+    // Gallery now comes from variants — auto-build images from variant image_urls if no legacy images
+    let effectiveImages = images;
+    if (variants.length > 0) {
+      const variantImages = variants.filter((v) => v.image_url).map((v) => ({ url: v.image_url }));
+      if (variantImages.length) effectiveImages = variantImages;
+    }
+    formData.set("images", JSON.stringify(effectiveImages));
     formData.set("videos", JSON.stringify(videos));
     formData.set("variants", JSON.stringify(variants));
     if (product) formData.set("id", product.id);
@@ -129,32 +135,7 @@ export function ProductForm({ product }: { product?: Product }) {
             <input name="brand" defaultValue={product?.brand || ""} placeholder="مثال: لمعة"
               className="w-full rounded-xl border border-stone-200 px-4 py-2.5 text-sm focus:border-gold focus:outline-none focus:ring-2 focus:ring-gold/20" />
           </div>
-          <div>
-            <label className="block text-sm font-semibold text-stone-700 mb-1">الوزن</label>
-            <input name="weight" defaultValue={product?.weight || ""} placeholder="مثال: 12 غرام"
-              className="w-full rounded-xl border border-stone-200 px-4 py-2.5 text-sm focus:border-gold focus:outline-none focus:ring-2 focus:ring-gold/20" />
-          </div>
-          <div>
-            <label className="block text-sm font-semibold text-stone-700 mb-1">الوزن بالجرام (للشحن)</label>
-            <input name="weight_grams" type="number" min="0" step="0.1" defaultValue={product?.weight_grams ?? ""} placeholder="مثال: 500"
-              className="w-full rounded-xl border border-stone-200 px-4 py-2.5 text-sm focus:border-gold focus:outline-none focus:ring-2 focus:ring-gold/20" />
-          </div>
-          <div>
-            <label className="block text-sm font-semibold text-stone-700 mb-1">العيار / القيراط</label>
-            <input name="karat" defaultValue={product?.karat || ""} placeholder="مثال: عيار 18"
-              className="w-full rounded-xl border border-stone-200 px-4 py-2.5 text-sm focus:border-gold focus:outline-none focus:ring-2 focus:ring-gold/20" />
-          </div>
-          <div>
-            <label className="block text-sm font-semibold text-stone-700 mb-1">المادة</label>
-            <input name="material" defaultValue={product?.material || ""} placeholder="مثال: ذهب / مطلي"
-              className="w-full rounded-xl border border-stone-200 px-4 py-2.5 text-sm focus:border-gold focus:outline-none focus:ring-2 focus:ring-gold/20" />
-          </div>
-          <div>
-            <label className="block text-sm font-semibold text-stone-700 mb-1">اللون (قديم - سيتم ترحيله للفاريانت)</label>
-            <input name="color" defaultValue={product?.color || ""} placeholder="مثال: ذهبي"
-              className="w-full rounded-xl border border-stone-200 px-4 py-2.5 text-sm focus:border-gold focus:outline-none focus:ring-2 focus:ring-gold/20" />
-            <p className="mt-1 text-[11px] text-stone-400">يُنصح باستخدام جدول الفاريانت أسفل (لون دائرة + مقاس حر + صورة).</p>
-          </div>
+          {/* حقول الوزن/العيار/المادة أُلغيت — النظام الآن توليفات (لون دائرة + مقاس حر + صورة ثابتة) */}
         </div>
 
         <div>
@@ -276,34 +257,22 @@ export function ProductForm({ product }: { product?: Product }) {
       </div>
 
       <div className="space-y-6">
-        <div className="rounded-2xl border border-amber-100 bg-white p-6">
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="font-bold text-stone-800 flex items-center gap-2">
-              <ImageIcon className="w-5 h-5 text-gold" /> الصور
-            </h2>
-            <button type="button" onClick={() => imageInput.current?.click()} disabled={uploading}
-              className="flex items-center gap-1.5 rounded-lg bg-amber-50 px-3 py-1.5 text-xs font-bold text-gold hover:bg-amber-100 transition disabled:opacity-50">
-              <Upload className="w-3.5 h-3.5" /> رفع صور
-            </button>
-            <input ref={imageInput} type="file" accept="image/*" multiple hidden
-              onChange={(e) => e.target.files && uploadFiles(e.target.files, "images")} />
-          </div>
-
-          {images.length === 0 ? (
-            <p className="text-sm text-stone-400 text-center py-6">لا توجد صور — ارفع صور عالية الجودة</p>
-          ) : (
-            <div className="grid grid-cols-3 gap-2">
-              {images.map((img, i) => (
-                <div key={i} className="relative rounded-lg overflow-hidden aspect-square group">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={img.url} alt="" className="h-full w-full object-cover" />
-                  <button type="button" onClick={() => setImages(images.filter((_, idx) => idx !== i))}
-                    className="absolute top-1 start-1 flex h-6 w-6 items-center justify-center rounded-full bg-black/60 text-white md:opacity-0 md:group-hover:opacity-100 transition">
-                    <X className="w-3.5 h-3.5" />
-                  </button>
+        <div className="rounded-2xl border border-gold/20 bg-white p-6">
+          <h2 className="font-bold text-stone-800 flex items-center gap-2"><ImageIcon className="w-5 h-5 text-gold" /> صور التوليفات</h2>
+          <p className="mt-2 text-xs text-stone-500 leading-relaxed">الصور الآن تُرفع <b>لكل توليفة على حدة</b> (كل صورة لها لونها). لا حاجة لرفع صور عامة — معرض المنتج يُبنى تلقائيًا من صور التوليفات.</p>
+          {variants.length > 0 && variants.some((v) => v.image_url) ? (
+            <div className="mt-4 grid grid-cols-4 sm:grid-cols-6 gap-2">
+              {variants.filter((v) => v.image_url).map((v, i) => (
+                <div key={i} className="relative aspect-square overflow-hidden rounded-xl border border-sand">
+                  <img src={v.image_url} alt={v.color || ""} className="h-full w-full object-cover" />
+                  <span className="absolute bottom-1 start-1 rounded-full bg-black/60 px-1.5 py-0.5 text-[10px] font-bold text-white flex items-center gap-1">
+                    <span className="h-3 w-3 rounded-full border border-white" style={{ background: v.color_hex }} /> {v.color || "—"} {v.size ? `· ${v.size}` : ""}
+                  </span>
                 </div>
               ))}
             </div>
+          ) : (
+            <p className="mt-4 text-xs text-stone-400 text-center py-4 border border-dashed border-sand rounded-xl">لم ترفع صور توليفات بعد — أضف توليفة وارفع صورتها</p>
           )}
         </div>
 
