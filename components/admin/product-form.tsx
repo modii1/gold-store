@@ -7,6 +7,8 @@ import { createClient } from "@/lib/supabase/client";
 import { saveProductAction } from "@/app/actions/products";
 import type { Product, MediaItem } from "@/types";
 
+type VariantRow = { color: string; color_hex: string; size: string; sku: string; price: string; sale_price: string; stock: string; image_url: string };
+
 export function ProductForm({ product }: { product?: Product }) {
   const router = useRouter();
   const supabase = createClient();
@@ -15,6 +17,11 @@ export function ProductForm({ product }: { product?: Product }) {
   const [images, setImages] = useState<MediaItem[]>(product?.images || []);
   const [videos, setVideos] = useState<MediaItem[]>(product?.videos || []);
   const [uploading, setUploading] = useState(false);
+  const [variants, setVariants] = useState<VariantRow[]>(() => {
+    const v = (product as any)?.variants as any[] | undefined;
+    if (v?.length) return v.map((x) => ({ color: x.color || "", color_hex: x.color_hex || "#D4AF37", size: x.size || "", sku: x.sku || "", price: x.price != null ? String(x.price) : "", sale_price: x.sale_price != null ? String(x.sale_price) : "", stock: String(x.stock ?? 0), image_url: x.image_url || "" }));
+    return [];
+  });
 
   const imageInput = useRef<HTMLInputElement>(null);
   const videoInput = useRef<HTMLInputElement>(null);
@@ -45,6 +52,18 @@ export function ProductForm({ product }: { product?: Product }) {
     setUploading(false);
   };
 
+  const uploadVariantImage = async (file: File, idx: number) => {
+    setUploading(true);
+    const ext = file.name.split(".").pop() || "";
+    const path = `variants/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+    const { error: upErr } = await supabase.storage.from("products").upload(path, file, { cacheControl: "3600" });
+    if (!upErr) {
+      const { data: pub } = supabase.storage.from("products").getPublicUrl(path);
+      setVariants((prev) => prev.map((r, i) => (i === idx ? { ...r, image_url: pub.publicUrl } : r)));
+    } else setError(upErr.message);
+    setUploading(false);
+  };
+
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setLoading(true);
@@ -53,6 +72,7 @@ export function ProductForm({ product }: { product?: Product }) {
     const formData = new FormData(e.currentTarget);
     formData.set("images", JSON.stringify(images));
     formData.set("videos", JSON.stringify(videos));
+    formData.set("variants", JSON.stringify(variants));
     if (product) formData.set("id", product.id);
 
     const result = await saveProductAction(formData);
@@ -130,10 +150,10 @@ export function ProductForm({ product }: { product?: Product }) {
               className="w-full rounded-xl border border-stone-200 px-4 py-2.5 text-sm focus:border-gold focus:outline-none focus:ring-2 focus:ring-gold/20" />
           </div>
           <div>
-            <label className="block text-sm font-semibold text-stone-700 mb-1">اللون (خيارات العميل)</label>
-            <input name="color" defaultValue={product?.color || ""} placeholder="مثال: ذهبي، فضي، روز قولد — افصلي بفاصلة"
+            <label className="block text-sm font-semibold text-stone-700 mb-1">اللون (قديم - سيتم ترحيله للفاريانت)</label>
+            <input name="color" defaultValue={product?.color || ""} placeholder="مثال: ذهبي"
               className="w-full rounded-xl border border-stone-200 px-4 py-2.5 text-sm focus:border-gold focus:outline-none focus:ring-2 focus:ring-gold/20" />
-            <p className="mt-1 text-[11px] text-stone-400">عدة ألوان؟ افصلي بفاصلة (، أو ,). ستظهر للعميل كبطاقات اختيار.</p>
+            <p className="mt-1 text-[11px] text-stone-400">يُنصح باستخدام جدول الفاريانت أسفل (لون دائرة + مقاس حر + صورة).</p>
           </div>
         </div>
 
@@ -174,6 +194,53 @@ export function ProductForm({ product }: { product?: Product }) {
             <input name="is_best_seller" type="checkbox" defaultChecked={product?.is_best_seller || false} className="accent-gold" />
             الأكثر مبيعاً
           </label>
+        </div>
+
+        {/* Smart Variants — Amazon/Noon style: visual color + free size + image per variant */}
+        <div className="rounded-2xl border-2 border-gold/20 bg-cream/40 p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <h3 className="font-bold text-ink flex items-center gap-2">توليفات المنتج <span className="text-xs font-normal text-stone-400">— كل صورة لها لونها + مقاس حر</span></h3>
+            <button type="button" onClick={() => setVariants((p) => [...p, { color: "", color_hex: "#D4AF37", size: "", sku: "", price: "", sale_price: "", stock: "0", image_url: "" }])} className="rounded-full bg-gold px-4 py-1.5 text-xs font-bold text-white hover:bg-gold-light">+ إضافة توليفة</button>
+          </div>
+          {variants.length === 0 ? (
+            <p className="text-xs text-stone-500 text-center py-4">لا توجد توليفات — المنتج يُباع كقطعة واحدة. أضف توليفة لكل لون/مقاس مع صورته الخاصة.</p>
+          ) : (
+            <div className="space-y-3">
+              {variants.map((v, idx) => (
+                <div key={idx} className="grid gap-2 rounded-xl border border-sand bg-white p-3 md:grid-cols-[88px_1fr] items-start">
+                  <label className="relative aspect-square overflow-hidden rounded-lg border border-sand bg-cream flex items-center justify-center cursor-pointer group">
+                    {v.image_url ? <img src={v.image_url} alt="" className="h-full w-full object-cover" /> : <span className="text-[10px] text-stone-400">صورة اللون</span>}
+                    <input type="file" accept="image/*" className="hidden" onChange={(e) => e.target.files?.[0] && uploadVariantImage(e.target.files[0], idx)} />
+                    <span className="absolute inset-0 bg-black/0 group-hover:bg-black/10 flex items-center justify-center opacity-0 group-hover:opacity-100 transition"><Upload className="w-5 h-5 text-white" /></span>
+                  </label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="col-span-2 flex gap-2">
+                      <div className="flex-1">
+                        <label className="text-[11px] font-bold text-stone-600">اللون (نص)</label>
+                        <div className="flex gap-1 mt-1">
+                          <input value={v.color} onChange={(e) => setVariants((p) => p.map((r, i) => i === idx ? { ...r, color: e.target.value } : r))} placeholder="ذهبي" className="flex-1 rounded-lg border border-stone-200 px-2 py-1.5 text-xs focus:border-gold focus:outline-none" />
+                          <input type="color" value={v.color_hex} onChange={(e) => setVariants((p) => p.map((r, i) => i === idx ? { ...r, color_hex: e.target.value } : r))} className="h-8 w-10 rounded-lg border border-stone-200 p-0.5 cursor-pointer" title="لون الدائرة" />
+                          <span className="h-8 w-8 rounded-full border border-black/10 shrink-0" style={{ background: v.color_hex }} />
+                        </div>
+                      </div>
+                      <div className="flex-1">
+                        <label className="text-[11px] font-bold text-stone-600">المقاس (حر — نص أو رقم)</label>
+                        <input value={v.size} onChange={(e) => setVariants((p) => p.map((r, i) => i === idx ? { ...r, size: e.target.value } : r))} placeholder="مثلاً: 42 أو متوسط أو S" className="mt-1 w-full rounded-lg border border-stone-200 px-2 py-1.5 text-xs focus:border-gold focus:outline-none" />
+                      </div>
+                    </div>
+                    <input value={v.sku} onChange={(e) => setVariants((p) => p.map((r, i) => i === idx ? { ...r, sku: e.target.value } : r))} placeholder="SKU" className="rounded-lg border border-stone-200 px-2 py-1.5 text-xs focus:border-gold focus:outline-none" dir="ltr" />
+                    <input value={v.price} onChange={(e) => setVariants((p) => p.map((r, i) => i === idx ? { ...r, price: e.target.value } : r))} placeholder="سعر خاص" type="number" step="0.01" className="rounded-lg border border-stone-200 px-2 py-1.5 text-xs focus:border-gold focus:outline-none" />
+                    <input value={v.sale_price} onChange={(e) => setVariants((p) => p.map((r, i) => i === idx ? { ...r, sale_price: e.target.value } : r))} placeholder="سعر خصم" type="number" step="0.01" className="rounded-lg border border-stone-200 px-2 py-1.5 text-xs focus:border-gold focus:outline-none" />
+                    <div className="flex gap-1">
+                      <input value={v.stock} onChange={(e) => setVariants((p) => p.map((r, i) => i === idx ? { ...r, stock: e.target.value } : r))} placeholder="مخزون" type="number" min="0" className="flex-1 rounded-lg border border-stone-200 px-2 py-1.5 text-xs focus:border-gold focus:outline-none" />
+                      <button type="button" onClick={() => setVariants((p) => p.filter((_, i) => i !== idx))} className="rounded-lg bg-rose-50 px-2 text-rose-600 hover:bg-rose-100"><X className="w-4 h-4" /></button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+          <p className="text-[11px] text-stone-400">كل توليفة = لون بصري (دائرة) + صورة ثابتة + مقاس حر. العميل يختار دائرة اللون فتتبدل الصورة فوراً، ثم يختار المقاس المتاح لذلك اللون فقط.</p>
         </div>
 
         {error && <p className="text-sm text-red-600">{error}</p>}

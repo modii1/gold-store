@@ -20,8 +20,11 @@ export function ProductCard({ product }: { product: Product }) {
   const disc = discountPercent(product);
   const outOfStock = product.stock <= 0;
 
-  const colors = product.color ? product.color.split(/[،,]/).map((c) => c.trim()).filter(Boolean) : [];
-  const hasMultipleColors = colors.length > 1;
+  const variantList = (product as any).variants as any[] | undefined;
+  const colors: { name: string; hex: string }[] = variantList?.length
+    ? Array.from(new Map(variantList.filter((v: any) => v.color).map((v: any) => [v.color.trim(), { name: v.color.trim(), hex: v.color_hex || ({ "ذهبي": "#D4AF37", "فضي": "#C0C0C0", "روز قولد": "#B76E79", "روز": "#B76E79" } as any)[v.color.trim()] || "#D4AF37" }])).values())
+    : (product.color ? product.color.split(/[،,]/).map((c) => c.trim()).filter(Boolean).map((c) => ({ name: c, hex: ({ "ذهبي": "#D4AF37", "فضي": "#C0C0C0", "روز قولد": "#B76E79" } as any)[c] || "#D4AF37" })) : []);
+  const hasMultipleColors = variantList ? variantList.length > 1 : colors.length > 1;
 
   const handleQuickAdd = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -31,13 +34,17 @@ export function ProductCard({ product }: { product: Product }) {
       window.location.href = `/product/${product.slug}`;
       return;
     }
+    const single = variantList?.length === 1 ? variantList[0] : null;
     addToCart({
       product_id: product.id,
+      variant_id: single?.id || null,
       slug: product.slug,
-      name: product.name,
-      price,
-      image: cover || null,
-      color: colors[0] || null,
+      name: single ? `${product.name} — ${[single.color, single.size].filter(Boolean).join(" / ")}` : product.name,
+      price: single?.sale_price ?? single?.price ?? price,
+      image: single?.image_url || cover || null,
+      color: single?.color || colors[0]?.name || null,
+      size: single?.size || null,
+      sku: single?.sku || product.sku,
     });
     setAdded(true);
     setTimeout(() => setAdded(false), 1500);
@@ -133,10 +140,10 @@ export function ProductCard({ product }: { product: Product }) {
         {colors.length > 0 && (
           <div className="mt-2 flex items-center gap-1.5">
             {colors.slice(0, 4).map((c) => (
-              <span key={c} title={c} className="h-3.5 w-3.5 rounded-full border border-black/10 shadow-sm" style={{ background: ({ "ذهبي": "#D4AF37", "فضي": "#C0C0C0", "روز قولد": "#B76E79", "روز": "#B76E79", "أسود": "#1A1A1A", "أبيض": "#F5F5F5", "أحمر": "#C0392B", "أزرق": "#2E86AB", "أخضر": "#27AE60", "بنفسجي": "#8E44AD", "بني": "#8B5A2B", "بيج": "#D8CAB5" } as any)[c] || "#D4AF37" }} />
+              <span key={c.name} title={c.name} className="h-3.5 w-3.5 rounded-full border border-black/10 shadow-sm" style={{ background: c.hex }} />
             ))}
             {colors.length > 4 && <span className="text-[10px] text-stone-400">+{colors.length - 4}</span>}
-            <span className="text-[10px] text-stone-400">· {colors.join("، ")}</span>
+            <span className="text-[10px] text-stone-400">· {colors.map((c) => c.name).join("، ")}</span>
           </div>
         )}
         <div className="mt-auto pt-2 flex items-baseline gap-2">

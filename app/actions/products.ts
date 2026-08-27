@@ -52,12 +52,43 @@ export async function saveProductAction(formData: FormData) {
     seo_title, seo_description, keywords,
   };
 
+  let productId = id;
   if (id) {
     const { error } = await supabase.from("products").update(payload).eq("id", id);
     if (error) return { error: error.message };
   } else {
-    const { error } = await supabase.from("products").insert(payload);
+    const { data, error } = await supabase.from("products").insert(payload).select("id").single();
     if (error) return { error: error.message };
+    productId = (data as any).id;
+  }
+
+  // Variants (Amazon style) — JSON array from form
+  const variantsRaw = formData.get("variants") as string | null;
+  if (variantsRaw && productId) {
+    try {
+      const variants = JSON.parse(variantsRaw) as any[];
+      await supabase.from("product_variants").delete().eq("product_id", productId);
+      const rows = variants.filter((v) => (v.color || v.size) && v.image_url).map((v, i) => ({
+        product_id: productId,
+        color: (v.color || "").trim() || null,
+        color_hex: (v.color_hex || "").trim() || null,
+        size: (v.size || "").trim() || null,
+        sku: (v.sku || "").trim() || null,
+        price: v.price ? parseFloat(v.price) : null,
+        sale_price: v.sale_price ? parseFloat(v.sale_price) : null,
+        stock: parseInt(v.stock) || 0,
+        image_url: v.image_url || null,
+        sort_order: i,
+        is_active: true,
+      }));
+      if (rows.length) {
+        const { error: vErr } = await supabase.from("product_variants").insert(rows);
+        if (vErr) return { error: vErr.message };
+      }
+      // keep products.color in sync for faceting (first color)
+      const firstColor = rows[0]?.color || null;
+      if (firstColor) await supabase.from("products").update({ color: firstColor }).eq("id", productId);
+    } catch {}
   }
 
   revalidatePath("/");

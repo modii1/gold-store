@@ -75,14 +75,39 @@ export async function getProducts(query: ProductQuery = {}): Promise<ProductResu
 
   const { data, count, error } = await builder;
   if (error) return { products: [], total: 0 };
-  return { products: (data as Product[]) || [], total: count ?? 0 };
+  const products = (data as Product[]) || [];
+  // attach variant colors for card dots (Amazon style) — bulk fetch
+  try {
+    const ids = products.map((p) => p.id);
+    if (ids.length) {
+      const supabase2 = await createClient();
+      const { data: vRows } = await supabase2.from("product_variants").select("product_id, color, color_hex, size").in("product_id", ids).eq("is_active", true);
+      const map = new Map<string, any[]>();
+      (vRows || []).forEach((r: any) => {
+        const arr = map.get(r.product_id) || [];
+        arr.push(r);
+        map.set(r.product_id, arr);
+      });
+      for (const p of products) {
+        const v = map.get(p.id);
+        if (v?.length) (p as any).variants = v;
+      }
+    }
+  } catch {}
+  return { products, total: count ?? 0 };
 }
 
 export async function getProduct(slug: string): Promise<Product | null> {
   try {
     const supabase = await createClient();
     const { data } = await supabase.from("products").select("*").eq("slug", slug).maybeSingle();
-    return (data as Product) || null;
+    if (!data) return null;
+    const product = data as Product;
+    try {
+      const { data: variants } = await supabase.from("product_variants").select("*").eq("product_id", product.id).eq("is_active", true).order("sort_order");
+      if (variants?.length) (product as any).variants = variants;
+    } catch {}
+    return product;
   } catch {
     return null;
   }
@@ -108,7 +133,9 @@ export async function getFeaturedProducts(limit = 8): Promise<Product[]> {
       .eq("is_available", true)
       .order("created_at", { ascending: false })
       .limit(limit);
-    return (data as Product[]) || [];
+    const products = (data as Product[]) || [];
+    try { const ids = products.map((p) => p.id); if (ids.length) { const { data: vRows } = await supabase.from("product_variants").select("product_id, color, color_hex, size").in("product_id", ids).eq("is_active", true); const map = new Map<string, any[]>(); (vRows || []).forEach((r: any) => { const a = map.get(r.product_id) || []; a.push(r); map.set(r.product_id, a); }); for (const p of products) { const v = map.get(p.id); if (v?.length) (p as any).variants = v; } } } catch {}
+    return products;
   } catch {
     return [];
   }
@@ -124,7 +151,9 @@ export async function getBestSellers(limit = 8): Promise<Product[]> {
       .eq("is_available", true)
       .order("created_at", { ascending: false })
       .limit(limit);
-    return (data as Product[]) || [];
+    const products = (data as Product[]) || [];
+    try { const ids = products.map((p) => p.id); if (ids.length) { const { data: vRows } = await supabase.from("product_variants").select("product_id, color, color_hex, size").in("product_id", ids).eq("is_active", true); const map = new Map<string, any[]>(); (vRows || []).forEach((r: any) => { const a = map.get(r.product_id) || []; a.push(r); map.set(r.product_id, a); }); for (const p of products) { const v = map.get(p.id); if (v?.length) (p as any).variants = v; } } } catch {}
+    return products;
   } catch {
     return [];
   }
@@ -139,7 +168,9 @@ export async function getLatestProducts(limit = 8): Promise<Product[]> {
       .eq("is_available", true)
       .order("created_at", { ascending: false })
       .limit(limit);
-    return (data as Product[]) || [];
+    const products = (data as Product[]) || [];
+    try { const ids = products.map((p) => p.id); if (ids.length) { const { data: vRows } = await supabase.from("product_variants").select("product_id, color, color_hex, size").in("product_id", ids).eq("is_active", true); const map = new Map<string, any[]>(); (vRows || []).forEach((r: any) => { const a = map.get(r.product_id) || []; a.push(r); map.set(r.product_id, a); }); for (const p of products) { const v = map.get(p.id); if (v?.length) (p as any).variants = v; } } } catch {}
+    return products;
   } catch {
     return [];
   }
@@ -155,7 +186,9 @@ export async function getOnSaleProducts(limit = 8): Promise<Product[]> {
       .gt("sale_price", 0)
       .order("created_at", { ascending: false })
       .limit(limit);
-    return (data as Product[]) || [];
+    const products = (data as Product[]) || [];
+    try { const ids = products.map((p) => p.id); if (ids.length) { const { data: vRows } = await supabase.from("product_variants").select("product_id, color, color_hex, size").in("product_id", ids).eq("is_active", true); const map = new Map<string, any[]>(); (vRows || []).forEach((r: any) => { const a = map.get(r.product_id) || []; a.push(r); map.set(r.product_id, a); }); for (const p of products) { const v = map.get(p.id); if (v?.length) (p as any).variants = v; } } } catch {}
+    return products;
   } catch {
     return [];
   }
@@ -188,12 +221,19 @@ export async function getBrandsList(): Promise<Brand[]> {
 export async function getFacetValues(column: "karat" | "material" | "color" | "brand"): Promise<string[]> {
   try {
     const supabase = await createClient();
+    const set = new Set<string>();
+    if (column === "color") {
+      const { data: vData } = await supabase.from("product_variants").select("color").eq("is_active", true).not("color", "is", null);
+      (vData || []).forEach((r: any) => {
+        const v = r.color as string;
+        if (typeof v === "string" && v.trim()) set.add(v.trim());
+      });
+    }
     const { data } = await supabase
       .from("products")
       .select(column)
       .eq("is_available", true)
       .not(column, "is", null);
-    const set = new Set<string>();
     (data || []).forEach((r) => {
       const v = (r as Record<string, unknown>)[column];
       if (typeof v === "string") {

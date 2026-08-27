@@ -3,6 +3,22 @@ export type MediaItem = {
   caption?: string;
 };
 
+export type ProductVariant = {
+  id: string;
+  product_id: string;
+  color: string | null;
+  color_hex: string | null;
+  size: string | null;
+  sku: string | null;
+  price: number | null;
+  sale_price: number | null;
+  stock: number;
+  image_url: string | null;
+  sort_order: number;
+  is_active: boolean;
+  created_at: string;
+};
+
 export type Product = {
   id: string;
   name: string;
@@ -28,6 +44,7 @@ export type Product = {
   seo_title: string | null;
   seo_description: string | null;
   created_at: string;
+  variants?: ProductVariant[];
 };
 
 export type Category = {
@@ -114,12 +131,14 @@ export type Banner = {
 
 export type OrderItem = {
   product_id: string;
+  variant_id?: string | null;
   name: string;
   price: number;
   qty: number;
   image?: string | null;
   sku?: string | null;
   color?: string | null;
+  size?: string | null;
 };
 
 export type OrderStatus =
