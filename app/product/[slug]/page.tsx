@@ -69,7 +69,7 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
     <>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
       <StoreHeader settings={settings} categories={categories} />
-      <main className="flex-1 mx-auto max-w-7xl px-4 md:px-6 py-8">
+      <main className="flex-1 mx-auto max-w-screen-2xl px-4 md:px-6 xl:px-10 py-6 md:py-8">
         {/* Breadcrumbs */}
         <nav className="flex flex-wrap items-center gap-1.5 text-xs text-stone-400 mb-6">
           <a href="/" className="hover:text-gold transition">الرئيسية</a>
@@ -85,10 +85,12 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
           <span className="text-gold font-semibold line-clamp-1">{product.name}</span>
         </nav>
 
-        <div className="grid gap-10 lg:grid-cols-2">
-          <ProductGallery product={product} />
+        <div className="grid gap-6 md:gap-8 lg:grid-cols-2 lg:gap-10 xl:gap-12 items-start">
+          <div className="lg:sticky lg:top-6">
+            <ProductGallery product={product} />
+          </div>
 
-          <div className="space-y-6">
+          <div className="space-y-4 md:space-y-5 min-w-0">
             <div>
               {product.brand && <p className="text-xs font-semibold tracking-widest text-gold-dark uppercase">{product.brand}</p>}
               <h1 className="mt-1 text-2xl md:text-3xl font-bold text-ink leading-snug">{product.name}</h1>
@@ -125,13 +127,13 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
             )}
 
             {specs.length > 0 && (
-              <div className="rounded-2xl border border-sand bg-white p-5">
-                <h2 className="font-bold text-ink mb-3">المواصفات</h2>
-                <dl className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm">
+              <div className="rounded-2xl border border-sand bg-white p-4 md:p-5">
+                <h2 className="font-bold text-ink mb-3 text-sm">المواصفات</h2>
+                <dl className="grid grid-cols-2 sm:grid-cols-3 gap-2 md:gap-3">
                   {specs.map((s) => (
-                    <div key={s.label} className="flex justify-between border-b border-sand/60 pb-2">
-                      <dt className="text-stone-400">{s.label}</dt>
-                      <dd className="font-bold text-ink text-start" dir="ltr">{s.value}</dd>
+                    <div key={s.label} className="rounded-xl bg-cream border border-sand px-3 py-3 text-center">
+                      <dt className="text-[11px] font-semibold tracking-widest text-stone-400 uppercase">{s.label}</dt>
+                      <dd className="mt-1 text-sm font-bold text-ink truncate" dir="ltr">{s.value}</dd>
                     </div>
                   ))}
                 </dl>
