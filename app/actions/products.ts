@@ -35,6 +35,7 @@ export async function saveProductAction(formData: FormData) {
   const seo_title = (formData.get("seo_title") as string)?.trim() || null;
   const seo_description = (formData.get("seo_description") as string)?.trim() || null;
   const keywords = (formData.get("keywords") as string)?.trim() || null;
+  const specs = JSON.parse((formData.get("specs") as string) || "[]") as { label: string; value: string }[];
 
   const images = JSON.parse((formData.get("images") as string) || "[]");
   const videos = JSON.parse((formData.get("videos") as string) || "[]");
@@ -45,19 +46,50 @@ export async function saveProductAction(formData: FormData) {
   const supabase = createAdminClient();
   const slug = slugify(name);
 
-  const payload = {
+  const payload: any = {
     name, slug, price, sale_price, category, description,
     sku, barcode, weight, weight_grams, karat, material, color, brand,
     stock, images, videos, is_available, featured, is_best_seller,
-    seo_title, seo_description, keywords,
+    seo_title, seo_description, keywords, specs: specs.filter((s) => s.label.trim() && s.value.trim()),
   };
 
+  let productId = id;
   if (id) {
     const { error } = await supabase.from("products").update(payload).eq("id", id);
     if (error) return { error: error.message };
   } else {
-    const { error } = await supabase.from("products").insert(payload);
+    const { data, error } = await supabase.from("products").insert(payload).select("id").single();
     if (error) return { error: error.message };
+    productId = (data as any).id;
+  }
+
+  // Variants (Amazon style) — JSON array from form
+  const variantsRaw = formData.get("variants") as string | null;
+  if (variantsRaw && productId) {
+    try {
+      const variants = JSON.parse(variantsRaw) as any[];
+      await supabase.from("product_variants").delete().eq("product_id", productId);
+      const rows = variants.filter((v) => v.color?.trim() || v.size?.trim()).map((v, i) => ({
+        product_id: productId,
+        color: (v.color || "").trim() || null,
+        color_hex: (v.color_hex || "").trim() || null,
+        size: (v.size || "").trim() || null,
+        sku: (v.sku || "").trim() || null,
+        price: v.price ? parseFloat(v.price) : null,
+        sale_price: v.sale_price ? parseFloat(v.sale_price) : null,
+        stock: parseInt(v.stock) || 0,
+        image_url: v.image_url || null,
+        sort_order: i,
+        is_active: true,
+      }));
+      if (rows.length) {
+        const { error: vErr } = await supabase.from("product_variants").insert(rows);
+        if (vErr) return { error: vErr.message };
+      }
+      // keep products.color in sync for faceting (first color)
+      const firstColor = rows[0]?.color || null;
+      if (firstColor) await supabase.from("products").update({ color: firstColor }).eq("id", productId);
+    } catch {}
   }
 
   revalidatePath("/");

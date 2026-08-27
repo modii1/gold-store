@@ -7,6 +7,9 @@ import { createClient } from "@/lib/supabase/client";
 import { saveProductAction } from "@/app/actions/products";
 import type { Product, MediaItem } from "@/types";
 
+type VariantRow = { color: string; color_hex: string; size: string; sku: string; price: string; sale_price: string; stock: string; image_url: string };
+type SpecRow = { label: string; value: string };
+
 export function ProductForm({ product }: { product?: Product }) {
   const router = useRouter();
   const supabase = createClient();
@@ -15,6 +18,21 @@ export function ProductForm({ product }: { product?: Product }) {
   const [images, setImages] = useState<MediaItem[]>(product?.images || []);
   const [videos, setVideos] = useState<MediaItem[]>(product?.videos || []);
   const [uploading, setUploading] = useState(false);
+  const [variants, setVariants] = useState<VariantRow[]>(() => {
+    const v = (product as any)?.variants as any[] | undefined;
+    if (v?.length) return v.map((x) => ({ color: x.color || "", color_hex: x.color_hex || "#D4AF37", size: x.size || "", sku: x.sku || "", price: x.price != null ? String(x.price) : "", sale_price: x.sale_price != null ? String(x.sale_price) : "", stock: String(x.stock ?? 0), image_url: x.image_url || "" }));
+    return [];
+  });
+  const [specs, setSpecs] = useState<SpecRow[]>(() => {
+    const s = (product as any)?.specs as SpecRow[] | undefined;
+    if (s?.length) return s;
+    // migrate legacy fields into specs for editing
+    const legacy: SpecRow[] = [];
+    if ((product as any)?.sku) legacy.push({ label: "SKU", value: (product as any).sku });
+    if ((product as any)?.brand) legacy.push({ label: "العلامة", value: (product as any).brand });
+    // color/karat/material legacy shown only if no variants
+    return legacy;
+  });
 
   const imageInput = useRef<HTMLInputElement>(null);
   const videoInput = useRef<HTMLInputElement>(null);
@@ -45,14 +63,38 @@ export function ProductForm({ product }: { product?: Product }) {
     setUploading(false);
   };
 
+  const uploadVariantImage = async (file: File, idx: number) => {
+    setUploading(true);
+    const ext = file.name.split(".").pop() || "";
+    const path = `variants/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+    const { error: upErr } = await supabase.storage.from("products").upload(path, file, { cacheControl: "3600" });
+    if (!upErr) {
+      const { data: pub } = supabase.storage.from("products").getPublicUrl(path);
+      setVariants((prev) => prev.map((r, i) => (i === idx ? { ...r, image_url: pub.publicUrl } : r)));
+    } else setError(upErr.message);
+    setUploading(false);
+  };
+
+  const hadVariants = !!((product as any)?.variants?.length);
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setLoading(true);
     setError("");
 
     const formData = new FormData(e.currentTarget);
-    formData.set("images", JSON.stringify(images));
+    formData.set("specs", JSON.stringify(specs));
+    // Gallery source: variants if any variants exist (including empty after delete), else legacy images
+    let effectiveImages: MediaItem[];
+    if (variants.length > 0) {
+      effectiveImages = variants.filter((v) => v.image_url).map((v) => ({ url: v.image_url }));
+    } else if (hadVariants) {
+      effectiveImages = []; // user deleted all variants — clear gallery too
+    } else {
+      effectiveImages = images;
+    }
+    formData.set("images", JSON.stringify(effectiveImages));
     formData.set("videos", JSON.stringify(videos));
+    formData.set("variants", JSON.stringify(variants));
     if (product) formData.set("id", product.id);
 
     const result = await saveProductAction(formData);
@@ -67,7 +109,7 @@ export function ProductForm({ product }: { product?: Product }) {
   };
 
   return (
-    <form onSubmit={handleSubmit} className="grid gap-6 lg:grid-cols-2">
+    <form onSubmit={handleSubmit} className="space-y-6">
       <div className="space-y-4 rounded-2xl border border-amber-100 bg-white p-6">
         <h2 className="font-bold text-stone-800">معلومات المنتج</h2>
 
@@ -109,31 +151,7 @@ export function ProductForm({ product }: { product?: Product }) {
             <input name="brand" defaultValue={product?.brand || ""} placeholder="مثال: لمعة"
               className="w-full rounded-xl border border-stone-200 px-4 py-2.5 text-sm focus:border-gold focus:outline-none focus:ring-2 focus:ring-gold/20" />
           </div>
-          <div>
-            <label className="block text-sm font-semibold text-stone-700 mb-1">الوزن</label>
-            <input name="weight" defaultValue={product?.weight || ""} placeholder="مثال: 12 غرام"
-              className="w-full rounded-xl border border-stone-200 px-4 py-2.5 text-sm focus:border-gold focus:outline-none focus:ring-2 focus:ring-gold/20" />
-          </div>
-          <div>
-            <label className="block text-sm font-semibold text-stone-700 mb-1">الوزن بالجرام (للشحن)</label>
-            <input name="weight_grams" type="number" min="0" step="0.1" defaultValue={product?.weight_grams ?? ""} placeholder="مثال: 500"
-              className="w-full rounded-xl border border-stone-200 px-4 py-2.5 text-sm focus:border-gold focus:outline-none focus:ring-2 focus:ring-gold/20" />
-          </div>
-          <div>
-            <label className="block text-sm font-semibold text-stone-700 mb-1">العيار / القيراط</label>
-            <input name="karat" defaultValue={product?.karat || ""} placeholder="مثال: عيار 18"
-              className="w-full rounded-xl border border-stone-200 px-4 py-2.5 text-sm focus:border-gold focus:outline-none focus:ring-2 focus:ring-gold/20" />
-          </div>
-          <div>
-            <label className="block text-sm font-semibold text-stone-700 mb-1">المادة</label>
-            <input name="material" defaultValue={product?.material || ""} placeholder="مثال: ذهب / مطلي"
-              className="w-full rounded-xl border border-stone-200 px-4 py-2.5 text-sm focus:border-gold focus:outline-none focus:ring-2 focus:ring-gold/20" />
-          </div>
-          <div>
-            <label className="block text-sm font-semibold text-stone-700 mb-1">اللون</label>
-            <input name="color" defaultValue={product?.color || ""} placeholder="مثال: ذهبي"
-              className="w-full rounded-xl border border-stone-200 px-4 py-2.5 text-sm focus:border-gold focus:outline-none focus:ring-2 focus:ring-gold/20" />
-          </div>
+          {/* حقول الوزن/العيار/المادة أُلغيت — النظام الآن توليفات (لون دائرة + مقاس حر + صورة ثابتة) */}
         </div>
 
         <div>
@@ -160,6 +178,27 @@ export function ProductForm({ product }: { product?: Product }) {
             className="w-full rounded-xl border border-stone-200 px-4 py-2.5 text-sm focus:border-gold focus:outline-none focus:ring-2 focus:ring-gold/20 resize-y" />
         </div>
 
+        {/* Custom Specs — عنوان + قيمة (حقل حر) */}
+        <div className="rounded-2xl border border-sand bg-cream/40 p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <h3 className="font-bold text-ink text-sm">المواصفات المخصصة <span className="text-xs font-normal text-stone-400">— أضف أي حقل (العنوان + القيمة)</span></h3>
+            <button type="button" onClick={() => setSpecs((p) => [...p, { label: "", value: "" }])} className="rounded-full bg-white border border-gold px-4 py-1.5 text-xs font-bold text-gold hover:bg-gold hover:text-white transition">+ إضافة حقل</button>
+          </div>
+          {specs.length === 0 ? (
+            <p className="text-xs text-stone-400 text-center py-3 border border-dashed border-sand rounded-xl bg-white">لا توجد مواصفات — اضغط "إضافة حقل" مثلاً: العنوان "الطول" والقيمة "20 سم"</p>
+          ) : (
+            <div className="space-y-2">
+              {specs.map((s, idx) => (
+                <div key={idx} className="flex gap-2 items-center">
+                  <input value={s.label} onChange={(e) => setSpecs((p) => p.map((r, i) => i === idx ? { ...r, label: e.target.value } : r))} placeholder="العنوان (مثلاً: الطول)" className="flex-1 rounded-xl border border-stone-200 px-3 py-2 text-sm focus:border-gold focus:outline-none" />
+                  <input value={s.value} onChange={(e) => setSpecs((p) => p.map((r, i) => i === idx ? { ...r, value: e.target.value } : r))} placeholder="القيمة (مثلاً: 20 سم)" className="flex-1 rounded-xl border border-stone-200 px-3 py-2 text-sm focus:border-gold focus:outline-none" />
+                  <button type="button" onClick={() => setSpecs((p) => p.filter((_, i) => i !== idx))} className="h-9 w-9 flex items-center justify-center rounded-xl bg-rose-50 text-rose-600 hover:bg-rose-100"><X className="w-4 h-4" /></button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
         <div className="flex flex-wrap gap-6">
           <label className="flex items-center gap-2 text-sm text-stone-600">
             <input name="is_available" type="checkbox" defaultChecked={product ? product.is_available : true} className="accent-gold" />
@@ -184,35 +223,107 @@ export function ProductForm({ product }: { product?: Product }) {
         </button>
       </div>
 
-      <div className="space-y-6">
-        <div className="rounded-2xl border border-amber-100 bg-white p-6">
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="font-bold text-stone-800 flex items-center gap-2">
-              <ImageIcon className="w-5 h-5 text-gold" /> الصور
-            </h2>
-            <button type="button" onClick={() => imageInput.current?.click()} disabled={uploading}
-              className="flex items-center gap-1.5 rounded-lg bg-amber-50 px-3 py-1.5 text-xs font-bold text-gold hover:bg-amber-100 transition disabled:opacity-50">
-              <Upload className="w-3.5 h-3.5" /> رفع صور
-            </button>
-            <input ref={imageInput} type="file" accept="image/*" multiple hidden
-              onChange={(e) => e.target.files && uploadFiles(e.target.files, "images")} />
-          </div>
-
-          {images.length === 0 ? (
-            <p className="text-sm text-stone-400 text-center py-6">لا توجد صور — ارفع صور عالية الجودة</p>
-          ) : (
-            <div className="grid grid-cols-3 gap-2">
-              {images.map((img, i) => (
-                <div key={i} className="relative rounded-lg overflow-hidden aspect-square group">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={img.url} alt="" className="h-full w-full object-cover" />
-                  <button type="button" onClick={() => setImages(images.filter((_, idx) => idx !== i))}
-                    className="absolute top-1 start-1 flex h-6 w-6 items-center justify-center rounded-full bg-black/60 text-white md:opacity-0 md:group-hover:opacity-100 transition">
-                    <X className="w-3.5 h-3.5" />
-                  </button>
+      {/* Smart Variants — full width, responsive */}
+      <div className="rounded-2xl border-2 border-gold/20 bg-cream/40 p-4 md:p-6 space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <h3 className="font-bold text-ink">توليفات المنتج <span className="text-xs font-normal text-stone-500">— كل صورة لها لونها + مقاس حر</span></h3>
+          <button type="button" onClick={() => setVariants((p) => [...p, { color: "", color_hex: "#D4AF37", size: "", sku: "", price: "", sale_price: "", stock: "0", image_url: "" }])} className="rounded-full bg-gold px-5 py-2 text-xs font-bold text-white hover:bg-gold-light shrink-0">+ إضافة توليفة</button>
+        </div>
+        {variants.length === 0 ? (
+          <p className="text-xs text-stone-500 text-center py-6 rounded-xl border border-dashed border-sand bg-white">لا توجد توليفات — المنتج يُباع كقطعة واحدة. أضف توليفة لكل لون/مقاس مع صورته الخاصة.</p>
+        ) : (
+          <>
+            {/* Desktop table header */}
+            <div className="hidden md:grid grid-cols-[96px_1.2fr_1fr_0.9fr_0.9fr_0.9fr_0.7fr_36px] gap-2 px-2 text-[11px] font-bold text-stone-500">
+              <span>الصورة</span><span>اللون</span><span>المقاس</span><span>SKU</span><span>السعر</span><span>سعر خصم</span><span>مخزون</span><span></span>
+            </div>
+            <div className="space-y-3">
+              {variants.map((v, idx) => (
+                <div key={idx} className="rounded-xl border border-sand bg-white p-3">
+                  {/* Mobile: stacked */}
+                  <div className="md:hidden space-y-3">
+                    <div className="relative aspect-square w-full max-w-[140px] mx-auto">
+                      <label className="absolute inset-0 overflow-hidden rounded-xl border-2 border-dashed border-sand bg-cream flex items-center justify-center cursor-pointer">
+                        {v.image_url ? <img src={v.image_url} alt="" className="h-full w-full object-cover" /> : <span className="text-xs text-stone-400">اضغط لرفع صورة اللون</span>}
+                        <input type="file" accept="image/*" className="hidden" onChange={(e) => e.target.files?.[0] && uploadVariantImage(e.target.files[0], idx)} />
+                      </label>
+                      {v.image_url && (
+                        <button type="button" onClick={() => setVariants((p) => p.map((r, i) => i === idx ? { ...r, image_url: "" } : r))} className="absolute -top-2 -left-2 h-7 w-7 rounded-full bg-rose-500 text-white shadow flex items-center justify-center">
+                          <X className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+                    <div>
+                      <label className="text-xs font-bold text-stone-700">اللون</label>
+                      <div className="mt-1 flex gap-2">
+                        <input value={v.color} onChange={(e) => setVariants((p) => p.map((r, i) => i === idx ? { ...r, color: e.target.value } : r))} placeholder="ذهبي" className="flex-1 rounded-xl border border-stone-200 px-3 py-2.5 text-sm focus:border-gold focus:outline-none" />
+                        <input type="color" value={v.color_hex} onChange={(e) => setVariants((p) => p.map((r, i) => i === idx ? { ...r, color_hex: e.target.value } : r))} className="h-10 w-12 rounded-xl border border-stone-200 p-1 cursor-pointer" />
+                        <span className="h-10 w-10 rounded-full border-2 border-white shadow shrink-0" style={{ background: v.color_hex }} />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="text-xs font-bold text-stone-700">المقاس (حر)</label>
+                      <input value={v.size} onChange={(e) => setVariants((p) => p.map((r, i) => i === idx ? { ...r, size: e.target.value } : r))} placeholder="مثلاً: 42 أو متوسط أو S" className="mt-1 w-full rounded-xl border border-stone-200 px-3 py-2.5 text-sm focus:border-gold focus:outline-none" />
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <input value={v.sku} onChange={(e) => setVariants((p) => p.map((r, i) => i === idx ? { ...r, sku: e.target.value } : r))} placeholder="SKU" className="rounded-xl border border-stone-200 px-3 py-2.5 text-sm focus:border-gold focus:outline-none" dir="ltr" />
+                      <input value={v.stock} onChange={(e) => setVariants((p) => p.map((r, i) => i === idx ? { ...r, stock: e.target.value } : r))} placeholder="مخزون" type="number" min="0" className="rounded-xl border border-stone-200 px-3 py-2.5 text-sm focus:border-gold focus:outline-none" />
+                      <input value={v.price} onChange={(e) => setVariants((p) => p.map((r, i) => i === idx ? { ...r, price: e.target.value } : r))} placeholder="سعر خاص" type="number" step="0.01" className="rounded-xl border border-stone-200 px-3 py-2.5 text-sm focus:border-gold focus:outline-none" />
+                      <input value={v.sale_price} onChange={(e) => setVariants((p) => p.map((r, i) => i === idx ? { ...r, sale_price: e.target.value } : r))} placeholder="سعر خصم" type="number" step="0.01" className="rounded-xl border border-stone-200 px-3 py-2.5 text-sm focus:border-gold focus:outline-none" />
+                    </div>
+                    <button type="button" onClick={() => setVariants((p) => p.filter((_, i) => i !== idx))} className="w-full rounded-xl bg-rose-50 py-2.5 text-sm font-bold text-rose-600 hover:bg-rose-100">حذف التوليفة</button>
+                  </div>
+                  {/* Desktop: table row */}
+                  <div className="hidden md:grid grid-cols-[96px_1.2fr_1fr_0.9fr_0.9fr_0.9fr_0.7fr_36px] gap-2 items-center">
+                    <div className="relative h-20 w-20 shrink-0">
+                      <label className="absolute inset-0 overflow-hidden rounded-xl border border-sand bg-cream flex items-center justify-center cursor-pointer group">
+                        {v.image_url ? <img src={v.image_url} alt="" className="h-full w-full object-cover" /> : <span className="text-[11px] text-stone-400">صورة</span>}
+                        <input type="file" accept="image/*" className="hidden" onChange={(e) => e.target.files?.[0] && uploadVariantImage(e.target.files[0], idx)} />
+                        <span className="absolute inset-0 bg-black/0 group-hover:bg-black/10 flex items-center justify-center opacity-0 group-hover:opacity-100 transition"><Upload className="w-4 h-4 text-white" /></span>
+                        {v.color_hex && <span className="absolute top-1 start-1 h-4 w-4 rounded-full border-2 border-white shadow" style={{ background: v.color_hex }} />}
+                      </label>
+                      {v.image_url && (
+                        <button type="button" onClick={() => setVariants((p) => p.map((r, i) => i === idx ? { ...r, image_url: "" } : r))} className="absolute -top-1.5 -left-1.5 h-6 w-6 rounded-full bg-rose-500 text-white shadow flex items-center justify-center">
+                          <X className="w-3 h-3" />
+                        </button>
+                      )}
+                    </div>
+                    <div className="flex gap-1 items-center">
+                      <input value={v.color} onChange={(e) => setVariants((p) => p.map((r, i) => i === idx ? { ...r, color: e.target.value } : r))} placeholder="ذهبي" className="flex-1 min-w-0 rounded-lg border border-stone-200 px-2 py-2 text-sm focus:border-gold focus:outline-none" />
+                      <input type="color" value={v.color_hex} onChange={(e) => setVariants((p) => p.map((r, i) => i === idx ? { ...r, color_hex: e.target.value } : r))} className="h-8 w-8 rounded-lg border border-stone-200 p-0.5 cursor-pointer shrink-0" />
+                    </div>
+                    <input value={v.size} onChange={(e) => setVariants((p) => p.map((r, i) => i === idx ? { ...r, size: e.target.value } : r))} placeholder="42 / متوسط" className="w-full rounded-lg border border-stone-200 px-2 py-2 text-sm focus:border-gold focus:outline-none" />
+                    <input value={v.sku} onChange={(e) => setVariants((p) => p.map((r, i) => i === idx ? { ...r, sku: e.target.value } : r))} placeholder="SKU" className="w-full rounded-lg border border-stone-200 px-2 py-2 text-sm focus:border-gold focus:outline-none" dir="ltr" />
+                    <input value={v.price} onChange={(e) => setVariants((p) => p.map((r, i) => i === idx ? { ...r, price: e.target.value } : r))} placeholder="سعر" type="number" step="0.01" className="w-full rounded-lg border border-stone-200 px-2 py-2 text-sm focus:border-gold focus:outline-none" />
+                    <input value={v.sale_price} onChange={(e) => setVariants((p) => p.map((r, i) => i === idx ? { ...r, sale_price: e.target.value } : r))} placeholder="خصم" type="number" step="0.01" className="w-full rounded-lg border border-stone-200 px-2 py-2 text-sm focus:border-gold focus:outline-none" />
+                    <input value={v.stock} onChange={(e) => setVariants((p) => p.map((r, i) => i === idx ? { ...r, stock: e.target.value } : r))} placeholder="مخزون" type="number" min="0" className="w-full rounded-lg border border-stone-200 px-2 py-2 text-sm focus:border-gold focus:outline-none" />
+                    <button type="button" onClick={() => setVariants((p) => p.filter((_, i) => i !== idx))} className="h-8 w-8 flex items-center justify-center rounded-lg bg-rose-50 text-rose-600 hover:bg-rose-100"><X className="w-4 h-4" /></button>
+                  </div>
                 </div>
               ))}
             </div>
+          </>
+        )}
+        <p className="text-[11px] text-stone-400 text-center">كل توليفة = دائرة لون + صورة ثابتة + مقاس حر. العميل يختار اللون فتتبدل الصورة، ثم المقاس.</p>
+      </div>
+
+      <div className="space-y-6">
+        <div className="rounded-2xl border border-gold/20 bg-white p-6">
+          <h2 className="font-bold text-stone-800 flex items-center gap-2"><ImageIcon className="w-5 h-5 text-gold" /> صور التوليفات</h2>
+          <p className="mt-2 text-xs text-stone-500 leading-relaxed">الصور الآن تُرفع <b>لكل توليفة على حدة</b> (كل صورة لها لونها). لا حاجة لرفع صور عامة — معرض المنتج يُبنى تلقائيًا من صور التوليفات.</p>
+          {variants.length > 0 && variants.some((v) => v.image_url) ? (
+            <div className="mt-4 grid grid-cols-4 sm:grid-cols-6 gap-2">
+              {variants.filter((v) => v.image_url).map((v, i) => (
+                <div key={i} className="relative aspect-square overflow-hidden rounded-xl border border-sand">
+                  <img src={v.image_url} alt={v.color || ""} className="h-full w-full object-cover" />
+                  <span className="absolute bottom-1 start-1 rounded-full bg-black/60 px-1.5 py-0.5 text-[10px] font-bold text-white flex items-center gap-1">
+                    <span className="h-3 w-3 rounded-full border border-white" style={{ background: v.color_hex }} /> {v.color || "—"} {v.size ? `· ${v.size}` : ""}
+                  </span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="mt-4 text-xs text-stone-400 text-center py-4 border border-dashed border-sand rounded-xl">لم ترفع صور توليفات بعد — أضف توليفة وارفع صورتها</p>
           )}
         </div>
 
