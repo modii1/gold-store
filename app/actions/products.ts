@@ -68,7 +68,7 @@ export async function saveProductAction(formData: FormData) {
     try {
       const variants = JSON.parse(variantsRaw) as any[];
       await supabase.from("product_variants").delete().eq("product_id", productId);
-      const rows = variants.filter((v) => (v.color || v.size) && v.image_url).map((v, i) => ({
+      const rows = variants.filter((v) => v.color?.trim() || v.size?.trim()).map((v, i) => ({
         product_id: productId,
         color: (v.color || "").trim() || null,
         color_hex: (v.color_hex || "").trim() || null,

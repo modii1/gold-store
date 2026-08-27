@@ -11,8 +11,8 @@ export default async function AdminLayout({ children }: { children: React.ReactN
 
   return (
     <div className="min-h-screen bg-stone-50 pb-16 md:pb-0">
-      <div className="mx-auto flex max-w-7xl gap-6 px-4 py-6 md:px-6">
-        <div className="hidden w-64 shrink-0 md:block">
+      <div className="mx-auto flex max-w-screen-2xl gap-6 px-4 py-6 md:px-6 xl:px-10">
+        <div className="hidden w-64 shrink-0 md:block xl:w-72">
           <div className="sticky top-6">
             <AdminSidebar />
           </div>
