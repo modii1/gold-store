@@ -20,13 +20,12 @@ export default async function CategoryPage({
   const category = categories.find((c) => c.slug === slug);
   if (!category) notFound();
 
-  const [products, karat, material, color, brand] = await Promise.all([
+  const [products, karat, material, brand] = await Promise.all([
     getProducts({
       category: category.name,
       brand: sp.brand as string | string[] | undefined,
       karat: sp.karat as string | string[] | undefined,
       material: sp.material as string | string[] | undefined,
-      color: sp.color as string | string[] | undefined,
       minPrice: val("min") ? parseFloat(val("min")!) : undefined,
       maxPrice: val("max") ? parseFloat(val("max")!) : undefined,
       inStock: val("in_stock") === "1",
@@ -38,7 +37,6 @@ export default async function CategoryPage({
     }),
     getFacetValues("karat"),
     getFacetValues("material"),
-    getFacetValues("color"),
     getFacetValues("brand"),
   ]);
 
@@ -47,7 +45,7 @@ export default async function CategoryPage({
       <StoreHeader settings={settings} categories={categories} />
       <main className="flex-1">
         <ShopContent
-          init={{ products: products.products, total: products.total, categories, facets: { karat, material, color, brand }, perPage: 24 }}
+          init={{ products: products.products, total: products.total, categories, facets: { karat, material, brand }, perPage: 24 }}
           fixedCategory={category.name}
           basePath={`/category/${slug}`}
         />
