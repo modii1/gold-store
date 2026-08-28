@@ -286,14 +286,7 @@ export async function getFacetValues(column: "karat" | "material" | "color" | "b
     (data || []).forEach((r) => {
       const v = (r as Record<string, unknown>)[column];
       if (typeof v === "string") {
-        if (column === "color") {
-          v.split(/[طŒ,]/).forEach((s: string) => {
-            const t = s.trim();
-            if (t) set.add(t);
-          });
-        } else {
-          set.add(v);
-        }
+        set.add(v);
       }
     });
     return Array.from(set).slice(0, 30);
