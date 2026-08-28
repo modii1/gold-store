@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
 import { Cairo } from "next/font/google";
 import "./globals.css";
+import "leaflet/dist/leaflet.css";
 import { getSettings } from "@/lib/services/settings";
 import { StoreProviders } from "@/components/storefront/providers";
+import { PageViewTracker } from "@/components/analytics/page-view-tracker";
 
 const cairo = Cairo({
   subsets: ["arabic", "latin"],
@@ -40,7 +42,10 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   return (
     <html lang="ar" dir="rtl" className={`${cairo.variable} h-full antialiased`} style={designStyle}>
       <body className="min-h-full flex flex-col bg-background font-cairo">
-        <StoreProviders settings={settings}>{children}</StoreProviders>
+        <StoreProviders settings={settings}>
+          <PageViewTracker />
+          {children}
+        </StoreProviders>
       </body>
     </html>
   );

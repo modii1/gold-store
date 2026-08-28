@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useEffect, useMemo, useState, useCallback } from "react";
 import type { Settings } from "@/types";
+import { trackEvent } from "@/lib/analytics/client";
 
 export type CartItem = {
   product_id: string;
@@ -68,10 +69,25 @@ export function StoreProviders({ settings, children }: { settings: Settings; chi
       }
       return [...prev, { ...item, qty: item.qty || 1 }];
     });
+    try {
+      trackEvent({ event: "add_to_cart", product_id: item.product_id, product_slug: item.slug, metadata: { qty: item.qty || 1, price: item.price } });
+    } catch {
+      /* ignore */
+    }
   }, [setItems]);
 
   const removeFromCart = useCallback((productId: string) => {
-    setItems((prev) => prev.filter((i) => i.product_id !== productId));
+    setItems((prev) => {
+      const removed = prev.find((i) => i.product_id === productId);
+      if (removed) {
+        try {
+          trackEvent({ event: "remove_from_cart", product_id: productId, product_slug: removed.slug, metadata: { qty: removed.qty } });
+        } catch {
+          /* ignore */
+        }
+      }
+      return prev.filter((i) => i.product_id !== productId);
+    });
   }, [setItems]);
 
   const updateQty = useCallback((productId: string, qty: number, color?: string | null, size?: string | null, variantId?: string | null) => {

@@ -232,6 +232,7 @@ export type Settings = {
   account_name: string | null;
   shipping_fee: number;
   free_shipping_threshold: number;
+  shipping_display_mode: "all" | "pickup";
   commercial_register: string | null;
   tax_number: string | null;
   footer_text: string | null;

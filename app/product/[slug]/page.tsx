@@ -5,6 +5,8 @@ import { StoreFooter } from "@/components/storefront/footer";
 import { ProductSection } from "@/components/storefront/product-section";
 import { ProductGallery } from "./product-gallery";
 import { BuyPanel } from "./buy-panel";
+import { ProductViewTracker } from "@/components/analytics/product-view-tracker";
+import { LiveViewersBadge } from "@/components/analytics/live-viewers-badge";
 import { getSettings } from "@/lib/services/settings";
 import { getProduct, getProductStats, getRelatedProducts } from "@/lib/services/products";
 import { getCategoriesList } from "@/lib/services/products";
@@ -76,6 +78,7 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
   return (
     <>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
+      <ProductViewTracker productId={product.id} slug={product.slug} />
       <StoreHeader settings={settings} categories={categories} />
       <main className="flex-1 mx-auto max-w-screen-2xl px-4 md:px-6 xl:px-10 py-6 md:py-8">
         {/* Breadcrumbs */}
@@ -103,6 +106,7 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
               {product.brand && <p className="text-xs font-semibold tracking-widest text-gold-dark uppercase">{product.brand}</p>}
               <h1 className="mt-1 text-2xl md:text-3xl font-bold text-ink leading-snug">{product.name}</h1>
               <div className="mt-2 flex flex-wrap items-center gap-3 text-xs">
+                <LiveViewersBadge productId={product.id} />
                 {stats.count > 0 && (
                   <span className="flex items-center gap-1 text-amber-500 font-semibold">
                     {"★".repeat(Math.round(stats.rating))} <span className="text-stone-400 font-normal">({stats.rating} · {stats.count} {pluralizeArabic(stats.count, "تقييم", "تقييمين", "تقييمات")})</span>

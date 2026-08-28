@@ -13,8 +13,6 @@ export async function getCheckoutData() {
   const [{ data: payment }] = await Promise.all([
     supabase.from("payment_methods").select("*").eq("is_active", true).order("sort_order"),
   ]);
-
-  // Try carriers first; if the table doesn't exist yet, fall back to legacy shipping_methods
   let shipping: Carrier[] = [];
   try {
     const { data: carriers, error } = await supabase
@@ -38,9 +36,20 @@ export async function getCheckoutData() {
     }
   }
 
+  // Default store city (from OTO origin) used to show shipping options immediately
+  // when the customer picks a spot on the map, without waiting for a full address lookup.
+  let defaultCity = "بريدة";
+  try {
+    const { data: otoCfg } = await createAdminClient().from("oto_config").select("origin_city").eq("id", 1).maybeSingle();
+    if ((otoCfg as { origin_city?: string } | null)?.origin_city) defaultCity = (otoCfg as { origin_city: string }).origin_city;
+  } catch {
+    // ignore
+  }
+
   return {
     shipping,
     payment: (payment as PaymentMethod[]) || [],
+    defaultCity,
   };
 }
 
@@ -79,6 +88,11 @@ export async function createOrderAction(formData: FormData) {
   const region = (formData.get("region") as string).trim() || null;
   const address = (formData.get("address") as string).trim() || null;
   const nationalAddress = (formData.get("national_address") as string).trim() || null;
+  const buildingNumberRaw = (formData.get("building_number") as string).trim() || "";
+  // Saudi National Address building number is exactly 4 digits (e.g. 1234).
+  // Reject anything that isn't exactly 4 digits; empty is allowed.
+  const buildingNumber = buildingNumberRaw ? (/^\d{4}$/.test(buildingNumberRaw) ? buildingNumberRaw : null) : null;
+  if (buildingNumberRaw && !buildingNumber) return { error: "رقم المبنى يجب أن يكون 4 أرقام فقط" };
   const latitude = Number(formData.get("latitude")) || null;
   const longitude = Number(formData.get("longitude")) || null;
   const mapsUrl = (formData.get("maps_url") as string)?.trim() || null;
@@ -184,8 +198,9 @@ export async function createOrderAction(formData: FormData) {
       customer_city: city,
       region,
       address,
-       national_address: nationalAddress,
-       latitude,
+      building_number: buildingNumber,
+      national_address: nationalAddress,
+      latitude,
        longitude,
        maps_url: mapsUrl,
       items,
@@ -226,10 +241,10 @@ export async function createOrderAction(formData: FormData) {
     const admin = createAdminClient();
     const { data: existing } = await admin.from("addresses").select("id").eq("customer_identifier", phone).eq("city", city || null).eq("address", address || null).maybeSingle();
     if (existing?.id) {
-      await admin.from("addresses").update({ region: region || null, national_address: nationalAddress || null, latitude: latitude || null, longitude: longitude || null, maps_url: mapsUrl || null }).eq("id", existing.id);
+      await admin.from("addresses").update({ region: region || null, building_number: buildingNumber, national_address: nationalAddress || null, latitude: latitude || null, longitude: longitude || null, maps_url: mapsUrl || null }).eq("id", existing.id);
     } else {
       const { count } = await admin.from("addresses").select("id", { count: "exact", head: true }).eq("customer_identifier", phone);
-      await admin.from("addresses").insert({ customer_identifier: phone, full_name: name, phone, label: "عنوان الطلب", city: city || null, region: region || null, address: address || null, national_address: nationalAddress || null, latitude: latitude || null, longitude: longitude || null, maps_url: mapsUrl || null, is_default: !count });
+      await admin.from("addresses").insert({ customer_identifier: phone, full_name: name, phone, label: "عنوان الطلب", city: city || null, region: region || null, address: address || null, building_number: buildingNumber, national_address: nationalAddress || null, latitude: latitude || null, longitude: longitude || null, maps_url: mapsUrl || null, is_default: !count });
     }
     revalidatePath("/account");
   }

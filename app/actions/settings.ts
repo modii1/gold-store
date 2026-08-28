@@ -10,7 +10,7 @@ export async function updateSettingsAction(formData: FormData) {
     "announcement", "whatsapp", "phone", "email", "address",
     "instagram", "tiktok", "snapchat", "twitter",
     "payment_instructions", "bank_name", "iban", "account_name",
-    "shipping_fee", "free_shipping_threshold",
+    "shipping_fee", "free_shipping_threshold", "shipping_display_mode",
     "commercial_register", "tax_number", "footer_text",
     "font_family", "base_font_size", "heading_scale", "primary_color",
     "accent_color", "background_color", "text_color", "card_radius",

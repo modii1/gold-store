@@ -4,20 +4,23 @@ import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, Tag, ShoppingBag, ShieldCheck, Truck, Landmark, MapPin, CheckCircle2 } from "lucide-react";
 import { useCart } from "@/components/storefront/providers";
+import { trackEvent } from "@/lib/analytics/client";
 import { createOrderAction, validateCouponAction } from "@/app/actions/orders";
-import { getCheckoutRatesAction, reverseGeocodeAction, type CheckoutShippingOption } from "@/app/actions/shipping";
+import { getCheckoutRatesAction, reverseGeocodeNationalAction, type CheckoutShippingOption } from "@/app/actions/shipping";
+import { LocationMap } from "@/components/checkout/location-map";
 import { Currency } from "@/components/storefront/currency";
 import { cn } from "@/lib/utils";
 import type { Settings, Carrier, PaymentMethod } from "@/types";
 
-type SavedAddress = { id: string; label: string | null; city: string | null; region: string | null; address: string | null; national_address: string | null; latitude: number | null; longitude: number | null; maps_url: string | null; is_default: boolean };
+type SavedAddress = { id: string; label: string | null; city: string | null; region: string | null; address: string | null; national_address: string | null; building_number: string | null; latitude: number | null; longitude: number | null; maps_url: string | null; is_default: boolean };
 
-export function CheckoutForm({ settings, shipping, payment, customer, savedAddresses }: { settings: Settings; shipping: Carrier[]; payment: PaymentMethod[]; customer: { name: string; phone: string } | null; savedAddresses: SavedAddress[] }) {
+export function CheckoutForm({ settings, shipping, payment, customer, savedAddresses, defaultCity }: { settings: Settings; shipping: Carrier[]; payment: PaymentMethod[]; customer: { name: string; phone: string } | null; savedAddresses: SavedAddress[]; defaultCity?: string }) {
   const { items, subtotal, clearCart } = useCart();
   const router = useRouter();
   const [city, setCity] = useState("");
   const [region, setRegion] = useState("");
   const [nationalAddress, setNationalAddress] = useState("");
+  const [buildingNumber, setBuildingNumber] = useState("");
   const [addressText, setAddressText] = useState("");
   const [liveOptions, setLiveOptions] = useState<CheckoutShippingOption[] | null>(null);
   const [ratesLoading, setRatesLoading] = useState(false);
@@ -33,6 +36,7 @@ export function CheckoutForm({ settings, shipping, payment, customer, savedAddre
   const [resolvedAddress, setResolvedAddress] = useState("");
   const [coordinates, setCoordinates] = useState({ latitude: "", longitude: "" });
   const [selectedAddress, setSelectedAddress] = useState(savedAddresses[0]?.id || "");
+  const pickupOnly = settings.shipping_display_mode !== "all";
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const submittingRef = useRef(false);
 
@@ -42,12 +46,25 @@ export function CheckoutForm({ settings, shipping, payment, customer, savedAddre
     setCity(address.city || "");
     setRegion(address.region || "");
     setNationalAddress(address.national_address || "");
+    setBuildingNumber(address.building_number || "");
     setAddressText(address.address || "");
     setResolvedAddress(address.address || "");
     setCoordinates({ latitude: address.latitude ? String(address.latitude) : "", longitude: address.longitude ? String(address.longitude) : "" });
     setLocationReady(Boolean(address.latitude && address.longitude));
     setManualLocation(!address.latitude || !address.longitude);
   }, [savedAddresses]);
+
+  const checkoutStartedRef = useRef(false);
+  useEffect(() => {
+    if (checkoutStartedRef.current || items.length === 0) return;
+    checkoutStartedRef.current = true;
+    try {
+      trackEvent({ event: "checkout_start", metadata: { subtotal } });
+    } catch {
+      /* ignore */
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [items.length]);
 
   const estWeightKg = useMemo(() => {
     const grams = items.reduce((s, i) => s + (i as any).weight_grams || 500, 0);
@@ -85,7 +102,16 @@ export function CheckoutForm({ settings, shipping, payment, customer, savedAddre
     carrierId: s.id, carrierCode: s.code, ref: s.id, name: s.name, cost: s.cost,
     estimatedDays: s.estimated_days, freeAbove: s.free_above, live: false, logo: s.logo_url || undefined,
   }));
-  const selectedShip = options.find((o) => o.ref === shippingId);
+
+  const isPickupOption = (o: CheckoutShippingOption) => {
+    const v = (o.pickupDropoff || "").toLowerCase();
+    return v.includes("pickup") || v.includes("branch") || v.includes("office") || v.includes("free");
+  };
+
+  const pickupOptions = options.filter((o) => isPickupOption(o));
+  const filteredOptions = pickupOnly ? pickupOptions : options;
+  // auto-select a pickup option if the current one gets filtered out
+  const selectedShip = (pickupOnly ? pickupOptions : options).find((o) => o.ref === shippingId) || filteredOptions[0];
   const shipCost = selectedShip && selectedShip.freeAbove && subtotal >= selectedShip.freeAbove ? 0 : selectedShip?.cost || 0;
   const discount = applied?.amount || 0;
   const total = subtotal + shipCost - discount;
@@ -101,38 +127,55 @@ export function CheckoutForm({ settings, shipping, payment, customer, savedAddre
     setError("");
   };
 
+  const applyGeocode = (latitude: string, longitude: string) => {
+    setCoordinates({ latitude, longitude });
+    // Show shipping options immediately based on the default store city, so the
+    // companies appear right when a spot is picked — without waiting for an
+    // external address lookup (which may be unavailable locally).
+    if (!city) setCity(defaultCity || "");
+    return reverseGeocodeNationalAction(latitude, longitude).then((result) => {
+      if ("error" in result) {
+        setManualLocation(true);
+        setError("تم تحديد الموقع لكن تعذر قراءة العنوان، يمكنك إدخاله يدوياً");
+        setLocationLoading(false);
+        return;
+      }
+      setLocationReady(true);
+      setManualLocation(false);
+      setCity(result.city || city || defaultCity || "");
+      setRegion(result.region || "");
+      setNationalAddress(result.national_address || "");
+      setBuildingNumber((result as { building_number?: string }).building_number || "");
+      setResolvedAddress(result.address || "");
+      setAddressText(result.address || "");
+      setError("");
+      setLocationLoading(false);
+    });
+  };
+
   const useCurrentLocation = () => {
     if (!navigator.geolocation) { setManualLocation(true); setError("المتصفح لا يدعم تحديد الموقع، يمكنك إدخال العنوان يدوياً"); return; }
     setLocationLoading(true);
     navigator.geolocation.getCurrentPosition((position) => {
       const latitude = position.coords.latitude.toFixed(7);
       const longitude = position.coords.longitude.toFixed(7);
-      setCoordinates({ latitude, longitude });
-      reverseGeocodeAction(latitude, longitude).then((result) => {
-        if ("error" in result) {
-          setManualLocation(true);
-          setError("تم تحديد الموقع لكن تعذر قراءة العنوان، يمكنك إدخاله يدوياً");
-        } else {
-          setLocationReady(true);
-          setManualLocation(false);
-           setCity(result.city);
-           setResolvedAddress(result.address);
-           setAddressText(result.address);
-          setError("");
-        }
-        setLocationLoading(false);
-      });
+      void applyGeocode(latitude, longitude);
     }, () => { setManualLocation(true); setError("لم يتم تفعيل الموقع، يمكنك إدخال العنوان يدوياً"); setLocationLoading(false); }, { enableHighAccuracy: true, timeout: 12000 });
+  };
+
+  const handleMapPick = ({ lat, lng }: { lat: number; lng: number }) => {
+    applyGeocode(lat.toFixed(7), lng.toFixed(7));
   };
 
   const chooseAddress = (id: string) => {
     setSelectedAddress(id);
-    if (!id) { setManualLocation(false); setLocationReady(false); setCoordinates({ latitude: "", longitude: "" }); setResolvedAddress(""); setAddressText(""); setCity(""); setRegion(""); setNationalAddress(""); return; }
+    if (!id) { setManualLocation(false); setLocationReady(false); setCoordinates({ latitude: "", longitude: "" }); setResolvedAddress(""); setAddressText(""); setCity(""); setRegion(""); setNationalAddress(""); setBuildingNumber(""); return; }
     const address = savedAddresses.find((item) => item.id === id);
     if (!address) return;
     setCity(address.city || "");
     setRegion(address.region || "");
     setNationalAddress(address.national_address || "");
+    setBuildingNumber(address.building_number || "");
     setAddressText(address.address || "");
     setResolvedAddress(address.address || "");
     setCoordinates({ latitude: address.latitude ? String(address.latitude) : "", longitude: address.longitude ? String(address.longitude) : "" });
@@ -143,6 +186,11 @@ export function CheckoutForm({ settings, shipping, payment, customer, savedAddre
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (submittingRef.current) return;
+    const b = buildingNumber.trim();
+    if (b && !/^\d{4}$/.test(b)) {
+      setError("رقم المبنى يجب أن يكون 4 أرقام فقط");
+      return;
+    }
     submittingRef.current = true;
     setLoading(true);
     setError("");
@@ -159,6 +207,11 @@ export function CheckoutForm({ settings, shipping, payment, customer, savedAddre
       if (res.error) {
         setError(res.error);
         return;
+      }
+      try {
+        trackEvent({ event: "purchase", metadata: { value: total, order_number: res.orderNumber } });
+      } catch {
+        /* ignore */
       }
       clearCart();
       const phone = String(formData.get("phone") || "");
@@ -180,17 +233,32 @@ export function CheckoutForm({ settings, shipping, payment, customer, savedAddre
             <input name="phone" required type="tel" placeholder="رقم الجوال *" defaultValue={customer?.phone || ""} className="col-span-2 input-lux" dir="ltr" />
             <input name="email" type="email" placeholder="البريد الإلكتروني (اختياري)" className="col-span-2 input-lux" dir="ltr" />
             {customer && savedAddresses.length > 0 && <div className="col-span-2 rounded-2xl border border-gold/30 bg-amber-50/40 p-3"><label className="mb-2 block text-sm font-bold text-stone-700">اختاري عنواناً محفوظاً</label><select value={selectedAddress} onChange={(e) => chooseAddress(e.target.value)} className="input-lux"><option value="">استخدام موقع جديد</option>{savedAddresses.map((address) => <option key={address.id} value={address.id}>{address.label || "عنوان محفوظ"} — {[address.city, address.address].filter(Boolean).join("، ")}</option>)}</select></div>}
+            <input name="city" placeholder="المدينة" value={city} onChange={(e) => setCity(e.target.value)} className="input-lux" />
+            <input name="region" placeholder="المنطقة" value={region} onChange={(e) => setRegion(e.target.value)} className="input-lux" />
             {manualLocation ? (
               <>
-                <input name="city" placeholder="المدينة" value={city} onChange={(e) => setCity(e.target.value)} className="input-lux" />
-                <input name="region" placeholder="المنطقة" value={region} onChange={(e) => setRegion(e.target.value)} className="input-lux" />
-                <input name="address" required placeholder="العنوان *" value={addressText} onChange={(e) => setAddressText(e.target.value)} className="col-span-2 input-lux" />
-                <input name="national_address" placeholder="العنوان الوطني (اختياري)" value={nationalAddress} onChange={(e) => setNationalAddress(e.target.value)} className="col-span-2 input-lux" dir="ltr" />
+                <input
+                  name="building_number"
+                  placeholder="رقم المبنى (4 أرقام)" 
+                  value={buildingNumber}
+                  onChange={(e) => setBuildingNumber(e.target.value.replace(/\D/g, "").slice(0, 4))}
+                  inputMode="numeric"
+                  dir="ltr"
+                  className="input-lux"
+                />
+                <input
+                  name="national_address"
+                  placeholder="العنوان الوطني (اختياري)"
+                  value={nationalAddress}
+                  onChange={(e) => setNationalAddress(e.target.value)}
+                  className="input-lux"
+                  dir="ltr"
+                />
+                <input name="address" required placeholder="العنوان (الشارع، الحي) *" value={addressText} onChange={(e) => setAddressText(e.target.value)} className="col-span-2 input-lux" />
               </>
             ) : (
               <>
-                <input type="hidden" name="city" value={city} />
-                <input type="hidden" name="region" value={region} />
+                <input type="hidden" name="building_number" value={buildingNumber} />
                 <input type="hidden" name="address" value={addressText || resolvedAddress} />
                 <input type="hidden" name="national_address" value={nationalAddress} />
               </>
@@ -203,21 +271,38 @@ export function CheckoutForm({ settings, shipping, payment, customer, savedAddre
               {locationLoading ? "جار تحديد موقعك..." : locationReady ? "تم تحديد الموقع — اضغطي للتغيير" : "تحديد عنواني من موقعي الحالي"}
             </button>
             {manualLocation && <button type="button" onClick={useCurrentLocation} className="col-span-2 text-xs font-bold text-gold underline">محاولة تحديد الموقع مرة أخرى</button>}
-            {locationReady && <p className="col-span-2 rounded-xl bg-emerald-50 p-3 text-xs font-semibold text-emerald-700">تم تعبئة العنوان تلقائياً: {resolvedAddress}</p>}
+            <div className="col-span-2">
+              <LocationMap
+                lat={coordinates.latitude ? Number(coordinates.latitude) : 24.7136}
+                lng={coordinates.longitude ? Number(coordinates.longitude) : 46.6753}
+                onPick={handleMapPick}
+              />
+            </div>
+            {locationReady && (
+              <div className="col-span-2 rounded-2xl border border-emerald-200 bg-emerald-50/60 p-4">
+                <p className="mb-2 flex items-center gap-1.5 text-xs font-bold text-emerald-700"><CheckCircle2 className="h-4 w-4" /> تم تحديد العنوان</p>
+                <p className="text-sm font-semibold text-stone-800">{resolvedAddress}</p>
+                {buildingNumber && <p className="mt-1 text-base font-bold text-ink">رقم المبنى: <span dir="ltr" className="font-mono text-gold-dark">{buildingNumber}</span></p>}
+                {nationalAddress && <p className="mt-1 text-xs text-stone-500" dir="ltr">{nationalAddress}</p>}
+              </div>
+            )}
             <textarea name="notes" rows={2} placeholder="ملاحظات الطلب (اختياري)" className="col-span-2 input-lux resize-y" />
           </div>
         </section>
 
         {/* طريقة الشحن */}
         <section className="rounded-2xl border border-sand bg-white p-5 md:p-6">
-          <h2 className="flex items-center gap-2 font-bold text-ink mb-4"><Truck className="w-5 h-5 text-gold" /> طريقة الشحن</h2>
+          <h2 className="flex items-center gap-2 font-bold text-ink mb-1"><Truck className="w-5 h-5 text-gold" /> طريقة الشحن</h2>
+
           {!city.trim() ? (
             <p className="text-sm text-stone-400 bg-cream/60 rounded-xl p-3">أدخلي المدينة أعلاه لعرض خيارات الشحن والأسعار</p>
           ) : ratesLoading ? (
             <p className="flex items-center gap-2 text-sm text-stone-500"><Loader2 className="w-4 h-4 animate-spin" /> جارٍ جلب الأسعار الحية...</p>
+          ) : filteredOptions.length === 0 ? (
+            <p className="text-sm text-stone-400 bg-cream/60 rounded-xl p-3">لا تتوفر خيارات شحن لهذه المدينة حالياً — يمكنك استكمال الطلب وسنتواصل معك لترتيب الشحن.</p>
           ) : (
             <div className="space-y-2">
-              {options.map((s) => {
+              {filteredOptions.map((s) => {
                 const free = s.freeAbove && subtotal >= s.freeAbove;
                 return (
                   <label key={s.ref} className={cn("flex items-center justify-between rounded-xl border p-4 cursor-pointer transition", shippingId === s.ref ? "border-gold bg-cream/50" : "border-sand hover:border-gold/40")}>

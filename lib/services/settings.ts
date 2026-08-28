@@ -26,6 +26,7 @@ const defaults: Settings = {
   account_name: null,
   shipping_fee: 25,
   free_shipping_threshold: 300,
+  shipping_display_mode: "pickup",
   commercial_register: null,
   tax_number: null,
   footer_text: null,

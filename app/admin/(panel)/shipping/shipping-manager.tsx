@@ -2,8 +2,9 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Trash2, Check, Loader2, Truck } from "lucide-react";
+import { Plus, Trash2, Check, Loader2, Truck, Eye } from "lucide-react";
 import { saveCarrierAction, deleteCarrierAction } from "@/app/actions/carriers-admin";
+import { updateSettingsAction } from "@/app/actions/settings";
 import type { Carrier } from "@/types";
 
 type Row = {
@@ -50,12 +51,31 @@ const newRow = (n: number): Row => ({
   api_username: "", api_password: "", api_key: "", account_number: "", client_code: "", endpoint: "",
 });
 
-export function ShippingManager({ carriers }: { carriers: Carrier[] }) {
+const cnMode = (active: boolean, on: string, off: string) =>
+  "rounded-full px-4 py-2 text-sm font-bold transition disabled:opacity-50 " + (active ? on : off);
+
+export function ShippingManager({ carriers, shippingDisplayMode }: { carriers: Carrier[]; shippingDisplayMode: "all" | "pickup" }) {
   const router = useRouter();
   const [rows, setRows] = useState<Row[]>(carriers.map(toRow));
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [saved, setSaved] = useState("");
+  const [mode, setMode] = useState<"all" | "pickup">(shippingDisplayMode);
+  const [savingMode, setSavingMode] = useState(false);
+
+  const saveMode = async (value: "all" | "pickup") => {
+    setSavingMode(true);
+    setError("");
+    setSaved("");
+    const fd = new FormData();
+    fd.set("shipping_display_mode", value);
+    const res = await updateSettingsAction(fd);
+    setSavingMode(false);
+    if (res.error) { setError(res.error); return; }
+    setMode(value);
+    setSaved("تم الحفظ ✓");
+    router.refresh();
+  };
 
   const addRow = () => setRows((prev) => [...prev, newRow(prev.length + 1)]);
 
@@ -113,6 +133,30 @@ export function ShippingManager({ carriers }: { carriers: Carrier[] }) {
         <button onClick={addRow} className="flex items-center gap-2 rounded-xl bg-gold px-4 py-2.5 text-sm font-bold text-white hover:bg-gold-light transition">
           <Plus className="w-4 h-4" /> إضافة شركة
         </button>
+      </div>
+
+      <div className="rounded-2xl border border-amber-100 bg-white p-5">
+        <h2 className="flex items-center gap-2 font-bold text-stone-900 mb-1"><Eye className="w-5 h-5 text-gold" /> ما يظهر للعميل في الإتمام</h2>
+        <p className="text-sm text-stone-500 mb-4">العميل لا يختار هذا — أنتم تحددونه هنا، ويُطبق تلقائياً على صفحة إتمام الطلب.</p>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => saveMode("all")}
+            disabled={savingMode}
+            className={cnMode(mode === "all", "bg-gold text-white", "bg-stone-100 text-stone-600 hover:bg-stone-200")}
+          >
+            الكل
+          </button>
+          <button
+            type="button"
+            onClick={() => saveMode("pickup")}
+            disabled={savingMode}
+            className={cnMode(mode === "pickup", "bg-gold text-white", "bg-stone-100 text-stone-600 hover:bg-stone-200")}
+          >
+            الاستلام بواسطة شركة الشحن فقط
+          </button>
+          {savingMode && <Loader2 className="h-4 w-4 animate-spin self-center text-gold" />}
+        </div>
       </div>
 
       {error && <p className="text-sm text-red-600">{error}</p>}
