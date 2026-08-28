@@ -400,13 +400,13 @@ export async function repairStaleNotifications(limit = 100): Promise<number> {
 
       if (!titleChanged && !messageChanged) {
         if ((meta.repaired === true) !== true) {
-          await supabase.from("notifications").update({ metadata: { ...meta, repaired: true } }).eq("id", row.id);
+          await supabase.from("notifications").update({ metadata: { ...meta, repaired: true, repair_skip: true } }).eq("id", row.id);
         }
         continue;
       }
 
       const patch: Record<string, unknown> = {
-        metadata: { ...meta, repaired: true },
+        metadata: { ...meta, repaired: true, repair_skip: true },
         updated_at: new Date().toISOString(),
       };
       if (titleChanged) patch.title = newTitle;
