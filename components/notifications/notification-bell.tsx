@@ -116,21 +116,29 @@ export function NotificationBell({ scope = "admin" }: { scope?: "admin" | "custo
             {items.map((item) => {
               const sev = severityMeta(item.severity);
               return (
-                <button
-                  key={item.id}
-                  onClick={() => void markRead(item.id)}
-                  className="flex w-full items-start gap-3 border-b border-stone-50 px-4 py-3 text-right transition hover:bg-stone-50"
-                >
-                  <span className={`mt-0.5 h-2.5 w-2.5 shrink-0 rounded-full ${sev.dot}`} />
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-[13px] font-semibold text-stone-800">{item.title}</span>
-                    <span className="mt-0.5 block line-clamp-2 text-[11px] leading-relaxed text-stone-500 [overflow-wrap:anywhere]">{renderMessageWithLinks(item.message, "font-semibold text-amber-700 underline decoration-amber-300 underline-offset-2", false)}</span>
-                    <span className="mt-1 block text-[10px] text-stone-400" dir="ltr">
-                      {timeAgo(item.created_at)}
+                <div key={item.id} className="group flex w-full items-start gap-2 border-b border-stone-50 px-3 py-3 transition hover:bg-stone-50">
+                  <button onClick={() => void markRead(item.id)} className="flex min-w-0 flex-1 items-start gap-3 text-right">
+                    <span className={`mt-0.5 h-2.5 w-2.5 shrink-0 rounded-full ${sev.dot}`} />
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-[13px] font-semibold text-stone-800">{item.title}</span>
+                      <span className="mt-0.5 block line-clamp-2 text-[11px] leading-relaxed text-stone-500 [overflow-wrap:anywhere]">{renderMessageWithLinks(item.message, "font-semibold text-amber-700 underline decoration-amber-300 underline-offset-2", false)}</span>
+                      <span className="mt-1 block text-[10px] text-stone-400" dir="ltr">
+                        {timeAgo(item.created_at)}
+                      </span>
                     </span>
-                  </span>
+                  </button>
+                  {item.order_id && (
+                    <Link
+                      href={scope === "admin" ? `/admin/orders/${item.order_id}` : "/account#orders"}
+                      onClick={() => setOpen(false)}
+                      title="فتح الطلب"
+                      className="mt-1 shrink-0 rounded-lg border border-stone-200 p-1.5 text-stone-400 transition hover:bg-amber-50 hover:text-gold"
+                    >
+                      <ExternalLink className="h-3.5 w-3.5" />
+                    </Link>
+                  )}
                   {!item.is_read && <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-gold" />}
-                </button>
+                </div>
               );
             })}
           </div>

@@ -169,8 +169,8 @@ export function CustomerNotifications() {
                   </p>
                   <div className="mt-2 flex flex-wrap items-center gap-1.5 sm:hidden">
                     {item.order_id && (
-                      <Link href="/account#orders" className="flex items-center gap-1 whitespace-nowrap rounded-lg border border-sand px-2 py-1.5 text-[11px] font-semibold text-stone-600 transition hover:bg-cream">
-                        فتح <ExternalLink className="h-3 w-3" />
+                      <Link href="/account#orders" title="فتح الطلب" className="rounded-lg border border-sand p-1.5 text-stone-500 transition hover:bg-cream hover:text-gold">
+                        <ExternalLink className="h-3.5 w-3.5" />
                       </Link>
                     )}
                     {!item.is_read && (
@@ -185,8 +185,8 @@ export function CustomerNotifications() {
                 </div>
                 <div className="hidden shrink-0 flex-wrap items-center justify-end gap-1 sm:flex">
                   {item.order_id && (
-                    <Link href="/account#orders" className="flex items-center gap-1 whitespace-nowrap rounded-lg border border-sand px-2 py-1.5 text-[11px] font-semibold text-stone-600 transition hover:bg-cream">
-                      فتح <ExternalLink className="h-3 w-3" />
+                    <Link href="/account#orders" title="فتح الطلب" className="rounded-lg border border-sand p-1.5 text-stone-500 transition hover:bg-cream hover:text-gold">
+                      <ExternalLink className="h-3.5 w-3.5" />
                     </Link>
                   )}
                   {!item.is_read && (

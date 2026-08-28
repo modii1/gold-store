@@ -281,8 +281,8 @@ export function AdminNotificationsPage() {
                     </p>
                     <div className="mt-2 flex flex-wrap items-center gap-1.5 sm:hidden">
                       {item.order_id && (
-                        <Link href={`/admin/orders/${item.order_id}`} className="flex items-center gap-1 whitespace-nowrap rounded-lg border border-stone-200 px-2.5 py-1.5 text-[11px] font-semibold text-stone-600 transition hover:bg-stone-50">
-                          فتح الطلب <ExternalLink className="h-3 w-3" />
+                        <Link href={`/admin/orders/${item.order_id}`} title="فتح الطلب" className="rounded-lg border border-stone-200 p-1.5 text-stone-500 transition hover:bg-stone-50 hover:text-gold">
+                          <ExternalLink className="h-3.5 w-3.5" />
                         </Link>
                       )}
                       {item.shipment_id && (
@@ -307,8 +307,8 @@ export function AdminNotificationsPage() {
                   </div>
                   <div className="hidden shrink-0 flex-wrap items-center gap-1.5 sm:flex">
                     {item.order_id && (
-                      <Link href={`/admin/orders/${item.order_id}`} className="flex items-center gap-1 whitespace-nowrap rounded-lg border border-stone-200 px-2.5 py-1.5 text-[11px] font-semibold text-stone-600 transition hover:bg-stone-50">
-                        فتح الطلب <ExternalLink className="h-3 w-3" />
+                      <Link href={`/admin/orders/${item.order_id}`} title="فتح الطلب" className="rounded-lg border border-stone-200 p-1.5 text-stone-500 transition hover:bg-stone-50 hover:text-gold">
+                        <ExternalLink className="h-3.5 w-3.5" />
                       </Link>
                     )}
                     {item.shipment_id && (
