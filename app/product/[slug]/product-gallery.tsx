@@ -1,204 +1,374 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { PlayCircle, Image as ImageIcon, Maximize2, ZoomIn, ChevronLeft, ChevronRight, X } from "lucide-react";
+import { useState, useRef, useCallback, useEffect } from "react";
+import { Play, X, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, RotateCcw, Maximize2 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { Product } from "@/types";
+import type { MediaItem, Product } from "@/types";
 
-export function ProductGallery({ product }: { product: Product }) {
-  const items = [
-    ...(product.videos || []).map((v) => ({ ...v, type: "video" as const })),
-    ...(product.images || []).map((i) => ({ ...i, type: "image" as const })),
+type GalleryItem = MediaItem & { type: "image" | "video" };
+
+const MAX_STAGE_H = 640;
+const MAX_STAGE_W = 560;
+const PLACEHOLDER_RATIO = 4 / 5;
+const MIN_ZOOM = 1;
+const MAX_ZOOM = 4;
+const ZOOM_STEP = 0.5;
+
+type GalleryProps =
+  | { images: MediaItem[]; videos: MediaItem[]; productName: string }
+  | { product: Product };
+
+export function ProductGallery(props: GalleryProps) {
+  const images = "images" in props ? props.images : (props.product.images || []);
+  const videos = "videos" in props ? props.videos : (props.product.videos || []);
+  const productName = "productName" in props ? props.productName : props.product.name;
+
+  const items: GalleryItem[] = [
+    ...videos.map((v) => ({ ...v, type: "video" as const })),
+    ...images.map((i) => ({ ...i, type: "image" as const })),
   ];
-  const [active, setActive] = useState(0);
 
+  const [active, setActive] = useState(0);
+  const [fullscreen, setFullscreen] = useState(false);
+  const [natural, setNatural] = useState<{ w: number; h: number } | null>(null);
   const [override, setOverride] = useState<string | null>(null);
-  // Sync gallery image when color selected in BuyPanel (supports variant image_url)
+
+  const viewportRef = useRef<HTMLDivElement>(null);
+  const touchRef = useRef<{ startX: number; startY: number; time: number } | null>(null);
+
+  // Zoom state
+  const [zoom, setZoom] = useState(1);
+  const [origin, setOrigin] = useState({ x: 0.5, y: 0.5 }); // zoom focal point (0-1)
+  const [offset, setOffset] = useState({ x: 0, y: 0 }); // pan px
+  const dragRef = useRef<{ startX: number; startY: number; ox: number; oy: number } | null>(null);
+  const [dragging, setDragging] = useState(false);
+
+  const current = items[active];
+  // When a color is selected but its image is not part of the gallery items,
+  // show it as an override (always an image).
+  const displayItem: GalleryItem | null = override ? { url: override, type: "image" as const } : current;
+
+  const resetZoom = useCallback(() => {
+    setZoom(1);
+    setOrigin({ x: 0.5, y: 0.5 });
+    setOffset({ x: 0, y: 0 });
+  }, []);
+
+  const goTo = useCallback((index: number) => {
+    setActive(index);
+    setNatural(null);
+    setOverride(null);
+    resetZoom();
+  }, [resetZoom]);
+
+  const previous = useCallback(() => goTo((active - 1 + items.length) % items.length), [active, goTo, items.length]);
+  const next = useCallback(() => goTo((active + 1) % items.length), [active, goTo, items.length]);
+
+  // Sync gallery when a color/tolifa is selected in BuyPanel: switch to that variant's image
   useEffect(() => {
     const handler = (e: Event) => {
       const detail = (e as CustomEvent<{ index: number; image_url?: string }>).detail;
+      if (!detail) return;
       if (detail.image_url) {
         const idx = items.findIndex((it) => it.url === detail.image_url);
         if (idx >= 0) { setOverride(null); setActive(idx); }
         else setOverride(detail.image_url);
-        return;
-      }
-      const videoCount = (product.videos || []).length;
-      const imageCount = (product.images || []).length;
-      if (detail.index >= 0 && detail.index < imageCount) {
+      } else if (detail.index >= 0 && detail.index < items.length) {
         setOverride(null);
-        setActive(videoCount + detail.index);
+        setActive(detail.index);
       }
     };
     window.addEventListener("color-select" as any, handler);
     return () => window.removeEventListener("color-select" as any, handler);
-  }, [product.videos, product.images, items]);
-  const [fullscreen, setFullscreen] = useState(false);
-  const [zoomed, setZoomed] = useState(false);
-  const [touchStart, setTouchStart] = useState<number | null>(null);
-  useEffect(() => {
-    if (!fullscreen) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setFullscreen(false); };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [fullscreen]);
-  const current = items[active];
-  const displayItem = override ? { url: override, type: "image" as const } : current;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [items]);
 
-  const previous = () => { setOverride(null); setActive((value) => (value - 1 + items.length) % items.length); };
-  const next = () => { setOverride(null); setActive((value) => (value + 1) % items.length); };
+  useEffect(() => { if (active >= items.length) setActive(0); }, [items.length, active]);
+  useEffect(() => { setNatural(null); resetZoom(); }, [active, resetZoom]);
+
+  useEffect(() => {
+    if (fullscreen) {
+      document.body.style.overflow = "hidden";
+      return () => { document.body.style.overflow = ""; };
+    }
+  }, [fullscreen]);
+
+  useEffect(() => { resetZoom(); }, [fullscreen, resetZoom]);
+
+  const zoomBy = useCallback((dir: 1 | -1) => {
+    setZoom((z) => Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, z + dir * ZOOM_STEP)));
+  }, []);
+
+  const clampOffset = useCallback((x: number, y: number, z: number) => {
+    const el = viewportRef.current;
+    if (!el) return { x, y };
+    const maxX = (el.clientWidth * (z - 1)) / 2;
+    const maxY = (el.clientHeight * (z - 1)) / 2;
+    return { x: Math.max(-maxX, Math.min(maxX, x)), y: Math.max(-maxY, Math.min(maxY, y)) };
+  }, []);
+
+  // Zoom focus onto a given client point (double-click)
+  const zoomAtPoint = useCallback((clientX: number, clientY: number) => {
+    const el = viewportRef.current;
+    if (!el) return;
+    // Recenter focal origin to the clicked point for the new zoom level
+    setOrigin((prev) => {
+      const rect = el.getBoundingClientRect();
+      const px = (clientX - rect.left) / rect.width;
+      const py = (clientY - rect.top) / rect.height;
+      return { x: px, y: py };
+    });
+    setZoom((prev) => Math.min(MAX_ZOOM, prev * 2));
+    // Reset pan so focal point is centered at zoom-in
+    setOffset((o) => clampOffset(o.x, o.y, Math.min(MAX_ZOOM, zoom * 2)));
+  }, [clampOffset, zoom]);
+
+  const handleWheel = useCallback((e: React.WheelEvent) => {
+    if (displayItem?.type === "video") return;
+    e.preventDefault();
+    zoomBy(e.deltaY < 0 ? 1 : -1);
+  }, [displayItem?.type, zoomBy]);
 
   if (items.length === 0) {
     return (
-      <div className="rounded-2xl bg-cream border border-sand aspect-[4/5] flex items-center justify-center text-stone-300">
-        لا توجد وسائط
+      <div className="relative bg-stone-50 border border-stone-100 flex items-center justify-center aspect-[4/5]">
+        <p className="text-sm text-stone-300">لا توجد صور</p>
       </div>
     );
   }
 
-  const media = (autoPlay: boolean) =>
-    displayItem.type === "video" ? (
-      <video
-        key={displayItem.url}
-        src={displayItem.url}
-        controls
-        autoPlay={autoPlay}
-        muted
-        playsInline
-        preload="metadata"
-        className={cn("h-full w-full", autoPlay ? "object-contain p-4" : "object-cover")}
-      />
-    ) : (
+  const handleImageLoad = (e: React.SyntheticEvent<HTMLImageElement>) => {
+    const img = e.currentTarget;
+    if (img.naturalWidth > 0) setNatural({ w: img.naturalWidth, h: img.naturalHeight });
+  };
+
+  function stageStyle(): React.CSSProperties {
+    if (displayItem?.type === "video") {
+      return { aspectRatio: "16/9", maxHeight: MAX_STAGE_H, width: "100%" };
+    }
+    if (natural && natural.h > 0) {
+      const ratio = natural.w / natural.h;
+      let w = MAX_STAGE_W;
+      let h = w / ratio;
+      if (h > MAX_STAGE_H) { h = MAX_STAGE_H; w = h * ratio; }
+      return { aspectRatio: `${w} / ${h}`, maxWidth: "100%", marginLeft: "auto", marginRight: "auto" };
+    }
+    return { aspectRatio: `${PLACEHOLDER_RATIO}`, width: "100%" };
+  }
+
+  const renderMedia = (item: GalleryItem) => {
+    if (item.type === "video") {
+      return <video key={item.url} src={item.url} controls muted playsInline preload="metadata" className="w-full h-full object-contain" />;
+    }
+    return (
       // eslint-disable-next-line @next/next/no-img-element
-       <img src={displayItem.url} alt={product.name} className={cn("h-full w-full select-none", autoPlay ? "object-contain p-4 md:p-8" : "object-cover")} draggable={false} fetchPriority="high" />
+      <img
+        key={item.url}
+        src={item.url}
+        alt={item.caption || productName}
+        onLoad={handleImageLoad}
+        className="w-full h-full object-contain select-none pointer-events-none"
+        draggable={false}
+      />
     );
+  };
+
+  const thumbBtn = (item: GalleryItem, i: number) => (
+    <button
+      key={i}
+      onClick={() => goTo(i)}
+      className={cn(
+        "relative shrink-0 overflow-hidden rounded-lg border-2 transition",
+        "w-16 h-20 md:w-20 md:h-24",
+        active === i ? "border-gold" : "border-transparent opacity-60 hover:opacity-100"
+      )}
+    >
+      {item.type === "video" ? (
+        <div className="w-full h-full bg-stone-900 flex items-center justify-center"><Play className="w-4 h-4 text-gold" /></div>
+      ) : (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={item.url} alt="" loading={i === 0 ? "eager" : "lazy"} className="w-full h-full object-cover" />
+      )}
+    </button>
+  );
+
+  const navArrows = () => (
+    items.length > 1 && (
+      <div className="pointer-events-none absolute inset-0 flex items-center justify-between px-2">
+        <button onClick={(e) => { e.stopPropagation(); previous(); }}
+          className="pointer-events-auto w-10 h-10 flex items-center justify-center rounded-full bg-white/90 text-stone-500 hover:text-gold border border-stone-200 transition shadow-sm" aria-label="السابق">
+          <ChevronRight className="w-5 h-5" />
+        </button>
+        <button onClick={(e) => { e.stopPropagation(); next(); }}
+          className="pointer-events-auto w-10 h-10 flex items-center justify-center rounded-full bg-white/90 text-stone-500 hover:text-gold border border-stone-200 transition shadow-sm" aria-label="التالي">
+          <ChevronLeft className="w-5 h-5" />
+        </button>
+      </div>
+    )
+  );
+
+  const isVideo = displayItem?.type === "video";
 
   return (
-    <div className="space-y-4">
-      <div
-        className={cn(
-          "relative overflow-hidden rounded-2xl bg-cream border border-sand shadow-sm aspect-[4/5]",
-          fullscreen && "fixed inset-0 z-[120] rounded-none bg-cream flex items-center justify-center"
+    <>
+      <div className="flex gap-3">
+        {items.length > 1 && (
+          <div className="hidden lg:flex flex-col gap-2 overflow-y-auto scrollbar-hide max-h-[640px]">
+            {items.map((item, i) => thumbBtn(item, i))}
+          </div>
         )}
-      >
-        <div
-          className="h-full w-full cursor-zoom-in"
-          onClick={() => !fullscreen && setFullscreen(true)}
-          onTouchStart={(event) => setTouchStart(event.touches[0]?.clientX ?? null)}
-          onTouchEnd={(event) => {
-            if (touchStart === null) return;
-            const distance = (event.changedTouches[0]?.clientX ?? touchStart) - touchStart;
-            if (Math.abs(distance) > 45) (distance > 0 ? previous : next)();
-            setTouchStart(null);
-          }}
-        >
-          {media(fullscreen)}
-        </div>
 
-        {!fullscreen && (
-          <>
-            {items.length > 1 && (
-              <>
-                <button onClick={previous} className="absolute right-3 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-white/85 text-ink shadow backdrop-blur transition hover:text-gold" aria-label="الصورة السابقة">
-                  <ChevronRight className="h-5 w-5" />
-                </button>
-                <button onClick={next} className="absolute left-3 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-white/85 text-ink shadow backdrop-blur transition hover:text-gold" aria-label="الصورة التالية">
-                  <ChevronLeft className="h-5 w-5" />
-                </button>
-              </>
-            )}
-            <button
-              onClick={() => setZoomed((z) => !z)}
-              className="absolute bottom-4 start-4 flex h-10 w-10 items-center justify-center rounded-full bg-white/85 backdrop-blur text-ink shadow border border-sand hover:text-gold transition"
-              aria-label="تكبير"
-            >
-              <ZoomIn className="w-5 h-5" />
-            </button>
-            <button
-              onClick={() => setFullscreen(true)}
-              className="absolute bottom-4 end-4 flex h-10 w-10 items-center justify-center rounded-full bg-white/85 backdrop-blur text-ink shadow border border-sand hover:text-gold transition"
-              aria-label="ملء الشاشة"
-            >
-              <Maximize2 className="w-5 h-5" />
-            </button>
-            {zoomed && displayItem.type === "image" && (
-              <div className="pointer-events-none absolute inset-0 overflow-hidden">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={displayItem.url} alt="" className="absolute inset-0 h-full w-full object-contain scale-[2] cursor-zoom-out" />
+        <div className="flex-1 min-w-0">
+          <div
+            className="relative rounded-2xl bg-cream border border-sand overflow-hidden group"
+            style={stageStyle()}
+            onTouchStart={(e) => {
+              const t = e.touches[0];
+              touchRef.current = { startX: t.clientX, startY: t.clientY, time: Date.now() };
+            }}
+            onTouchEnd={(e) => {
+              if (!touchRef.current) return;
+              const t = e.changedTouches[0];
+              const dx = t.clientX - touchRef.current.startX;
+              const dy = t.clientY - touchRef.current.startY;
+              const dt = Date.now() - touchRef.current.time;
+              touchRef.current = null;
+              if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.5 && dt < 500) {
+                dx > 0 ? previous() : next();
+              }
+            }}
+          >
+            {displayItem && renderMedia(displayItem)}
+            {displayItem?.type === "video" && (
+              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                <div className="w-14 h-14 rounded-full bg-black/30 flex items-center justify-center">
+                  <Play className="w-6 h-6 text-white fill-white ml-0.5" />
+                </div>
               </div>
             )}
-          </>
-        )}
-        {fullscreen && (
-          <>
-            <button
-              onClick={() => setFullscreen(false)}
-              className="absolute top-4 start-4 flex h-10 w-10 items-center justify-center rounded-full bg-ink text-white shadow-lg hover:bg-gold transition z-10"
-              aria-label="إغلاق"
-            >
-              <X className="w-5 h-5" />
-            </button>
-            {items.length > 1 && (
-              <>
-                <button onClick={previous} className="absolute right-4 top-1/2 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-ink shadow-lg hover:text-gold transition z-10" aria-label="السابق">
-                  <ChevronRight className="h-6 w-6" />
-                </button>
-                <button onClick={next} className="absolute left-4 top-1/2 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-ink shadow-lg hover:text-gold transition z-10" aria-label="التالي">
-                  <ChevronLeft className="h-6 w-6" />
-                </button>
-                <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex gap-1.5 bg-black/50 backdrop-blur rounded-full px-3 py-1.5">
-                  {items.map((_, i) => (
-                    <span key={i} className={cn("h-1.5 rounded-full transition-all", i === active && !override ? "w-5 bg-white" : override ? "w-1.5 bg-white/60" : "w-1.5 bg-white/60")} />
-                  ))}
-                  {override && <span className="h-1.5 w-5 rounded-full bg-gold" />}
-                </div>
-              </>
+            {navArrows()}
+            {!isVideo && (
+              <button onClick={() => setFullscreen(true)} className="absolute bottom-2.5 left-2.5 w-9 h-9 rounded-full bg-white/90 border border-stone-200 flex items-center justify-center text-stone-400 hover:text-gold transition shadow-sm" aria-label="عرض كامل">
+                <Maximize2 className="w-4 h-4" />
+              </button>
             )}
-          </>
-        )}
+          </div>
+
+          {items.length > 1 && (
+            <div className="mt-3 flex gap-2 overflow-x-auto scrollbar-hide lg:hidden">
+              {items.map((item, i) => thumbBtn(item, i))}
+            </div>
+          )}
+        </div>
       </div>
 
-      {items.length > 1 && (
-        <div className="space-y-3">
-          <div className="flex justify-center gap-1.5" aria-label="مؤشر الصور">
-            {items.map((item, i) => (
-              <button key={`dot-${i}`} onClick={() => setActive(i)} className={cn("h-1.5 rounded-full transition-all", active === i ? "w-6 bg-gold" : "w-1.5 bg-sand")} aria-label={`الصورة ${i + 1}`} />
-            ))}
+      {/* Fullscreen with zoom & pan */}
+      {fullscreen && displayItem && (
+        <div className="fixed inset-0 z-[120] bg-black flex flex-col">
+          {/* Top bar */}
+          <div className="flex items-center justify-between p-3 md:p-4">
+            <span className="text-white/60 text-sm">{active + 1} / {items.length}</span>
+            <div className="flex items-center gap-2">
+              {!isVideo && (
+                <>
+                  <button onClick={() => zoomBy(-1)} disabled={zoom <= 1}
+                    className="w-9 h-9 md:w-10 md:h-10 rounded-full bg-white/10 flex items-center justify-center text-white hover:bg-white/25 transition disabled:opacity-30" aria-label="تصغير">
+                    <ZoomOut className="w-5 h-5" />
+                  </button>
+                  <span className="text-white/70 text-xs w-10 text-center tabular-nums">{Math.round(zoom * 100)}%</span>
+                  <button onClick={() => zoomBy(1)} disabled={zoom >= MAX_ZOOM}
+                    className="w-9 h-9 md:w-10 md:h-10 rounded-full bg-white/10 flex items-center justify-center text-white hover:bg-white/25 transition disabled:opacity-30" aria-label="تكبير">
+                    <ZoomIn className="w-5 h-5" />
+                  </button>
+                  <button onClick={resetZoom} disabled={zoom === 1}
+                    className="w-9 h-9 md:w-10 md:h-10 rounded-full bg-white/10 flex items-center justify-center text-white hover:bg-white/25 transition disabled:opacity-30" aria-label="إعادة الحجم الأصلي">
+                    <RotateCcw className="w-4 h-4" />
+                  </button>
+                </>
+              )}
+              <button onClick={() => setFullscreen(false)} className="w-9 h-9 md:w-10 md:h-10 rounded-full bg-white/10 flex items-center justify-center text-white hover:bg-white/25 transition" aria-label="إغلاق">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
           </div>
-          <div className="scrollbar-hide flex gap-3 overflow-x-auto pb-1">
-          {items.map((item, i) => {
-            const variant = (product as any).variants?.find((v: any) => v.image_url === item.url) as any;
-            return (
-            <button
-              key={i}
-              onClick={() => { setOverride(null); setActive(i); }}
-              className={cn(
-                "relative h-20 w-20 md:h-24 md:w-24 shrink-0 overflow-hidden rounded-xl border-2 bg-white transition",
-                active === i ? "border-gold" : "border-transparent opacity-60 hover:opacity-100"
-              )}
+
+          {/* Zoomable viewport */}
+          <div
+            ref={viewportRef}
+            className="flex-1 relative overflow-hidden select-none touch-none"
+            onWheel={handleWheel}
+            onDoubleClick={(e) => { e.stopPropagation(); if (!isVideo) { zoom === 1 ? zoomAtPoint(e.clientX, e.clientY) : resetZoom(); } }}
+            onPointerDown={(e) => {
+              if (isVideo || zoom === 1) return;
+              e.stopPropagation();
+              dragRef.current = { startX: e.clientX, startY: e.clientY, ox: offset.x, oy: offset.y };
+              setDragging(true);
+            }}
+            onPointerMove={(e) => {
+              if (!dragRef.current) return;
+              const dx = e.clientX - dragRef.current.startX;
+              const dy = e.clientY - dragRef.current.startY;
+              setOffset(clampOffset(dragRef.current.ox + dx, dragRef.current.oy + dy, zoom));
+            }}
+            onPointerUp={() => { dragRef.current = null; setDragging(false); }}
+            onPointerLeave={() => { dragRef.current = null; setDragging(false); }}
+            style={{ cursor: zoom > 1 ? (dragging ? "grabbing" : "grab") : "zoom-in" }}
+          >
+            <div
+              className="absolute inset-0 flex items-center justify-center will-change-transform"
+              style={{
+                transform: `translate(${offset.x}px, ${offset.y}px) scale(${zoom})`,
+                transformOrigin: `${origin.x * 100}% ${origin.y * 100}%`,
+                transition: dragging ? "none" : "transform 150ms ease-out",
+              }}
             >
-              {item.type === "video" ? (
-                <span className="flex h-full w-full items-center justify-center bg-ink text-ivory">
-                  <PlayCircle className="w-6 h-6 text-gold" />
-                </span>
-              ) : (
-                // eslint-disable-next-line @next/next/no-img-element
-                 <img src={item.url} alt="" loading={i === 0 ? "eager" : "lazy"} className="h-full w-full object-cover" />
-              )}
-              <span className="absolute bottom-0 inset-x-0 bg-black/40 flex items-center justify-center py-0.5">
-                {item.type === "video" ? <PlayCircle className="w-3 h-3 text-gold" /> : <ImageIcon className="w-3 h-3 text-white" />}
-              </span>
-              {variant?.color_hex && (
-                <span className="absolute top-1.5 start-1.5 h-4 w-4 rounded-full border-2 border-white shadow" style={{ background: variant.color_hex }} title={variant.color || ""} />
-              )}
-              {variant?.color && !variant?.color_hex && (
-                <span className="absolute top-1.5 start-1.5 rounded-full bg-black/60 px-1 py-0.5 text-[9px] font-bold text-white">{variant.color}</span>
-              )}
-            </button>
-          )})}
+              {renderMedia(displayItem)}
+            </div>
+
+            {zoom === 1 && (
+              <div className="absolute bottom-3 left-1/2 -translate-x-1/2 pointer-events-none text-[11px] text-white/70 bg-black/40 rounded-full px-3 py-1">
+                نقرة مزدوجة للتكبير • عجلة الماوس للتقريب
+              </div>
+            )}
+
+            {/* Floating close button — positioned in the upper area of the image so the
+                center zoom/pan area stays clear for the magnifier + drag */}
+            {!isVideo && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (zoom > 1) {
+                    resetZoom();
+                  } else {
+                    setFullscreen(false);
+                  }
+                }}
+                className="absolute left-1/2 top-[28%] -translate-x-1/2 -translate-y-1/2 flex h-11 w-11 items-center justify-center rounded-full shadow-xl transition hover:scale-105"
+                aria-label={zoom > 1 ? "رجوع للحجم الأصلي" : "إغلاق والعودة للمنتج"}
+                title={zoom > 1 ? "رجوع للحجم الأصلي" : "إغلاق والعودة للمنتج"}
+                style={{ background: zoom > 1 ? "rgba(255,255,255,0.95)" : "rgba(255,255,255,0.85)" }}
+                onPointerDown={(e) => e.stopPropagation()}
+                onPointerUp={(e) => e.stopPropagation()}
+                onPointerMove={(e) => e.stopPropagation()}
+                onPointerCancel={(e) => e.stopPropagation()}
+              >
+                {zoom > 1 ? (
+                  <svg className="w-5 h-5 text-stone-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" /><path d="M3 3v5h5" /></svg>
+                ) : (
+                  <X className="w-5 h-5 text-stone-700" />
+                )}
+              </button>
+            )}
+
+            {!isVideo && zoom === 1 && items.length > 1 && (
+              <div className="absolute inset-x-0 top-1/2 flex justify-between px-3 -translate-y-1/2">
+                <button onClick={previous} className="w-10 h-10 rounded-full bg-white/10 text-white hover:bg-white/25 transition" aria-label="السابق"><ChevronRight className="w-5 h-5 mx-auto mt-2.5" /></button>
+                <button onClick={next} className="w-10 h-10 rounded-full bg-white/10 text-white hover:bg-white/25 transition" aria-label="التالي"><ChevronLeft className="w-5 h-5 mx-auto mt-2.5" /></button>
+              </div>
+            )}
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 }

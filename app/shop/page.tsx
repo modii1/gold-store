@@ -8,7 +8,7 @@ export default async function ShopPage({ searchParams }: { searchParams: Promise
   const sp = await searchParams;
   const val = (k: string) => (Array.isArray(sp[k]) ? sp[k]![0] : sp[k]);
 
-  const [settings, categories, products, karat, material, brand] = await Promise.all([
+  const [settings, categories, products, karat, material, brand, color, size] = await Promise.all([
     getSettings(),
     getCategoriesList(),
     getProducts({
@@ -16,6 +16,8 @@ export default async function ShopPage({ searchParams }: { searchParams: Promise
       brand: sp.brand as string | string[] | undefined,
       karat: sp.karat as string | string[] | undefined,
       material: sp.material as string | string[] | undefined,
+      color: sp.color as string | string[] | undefined,
+      size: sp.size as string | string[] | undefined,
       minPrice: val("min") ? parseFloat(val("min")!) : undefined,
       maxPrice: val("max") ? parseFloat(val("max")!) : undefined,
       inStock: val("in_stock") === "1",
@@ -28,6 +30,8 @@ export default async function ShopPage({ searchParams }: { searchParams: Promise
     getFacetValues("karat"),
     getFacetValues("material"),
     getFacetValues("brand"),
+    getFacetValues("color"),
+    getFacetValues("size"),
   ]);
 
   return (
@@ -35,7 +39,7 @@ export default async function ShopPage({ searchParams }: { searchParams: Promise
       <StoreHeader settings={settings} categories={categories} />
       <main className="flex-1">
         <ShopContent
-          init={{ products: products.products, total: products.total, categories, facets: { karat, material, brand }, perPage: 24 }}
+          init={{ products: products.products, total: products.total, categories, facets: { karat, material, brand, color, size }, perPage: 24 }}
         />
       </main>
       <StoreFooter settings={settings} />

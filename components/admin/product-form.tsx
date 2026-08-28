@@ -83,14 +83,20 @@ export function ProductForm({ product }: { product?: Product }) {
 
     const formData = new FormData(e.currentTarget);
     formData.set("specs", JSON.stringify(specs));
-    // Gallery source: variants if any variants exist (including empty after delete), else legacy images
+    // Gallery source: merge variant images + general images together (dedup), so
+    // the storefront gallery shows variants AND general uploads like the admin panel.
+    const variantImages = variants.filter((v) => v.image_url).map((v) => ({ url: v.image_url }));
+    const seen = new Set<string>();
+    const merged = [...variantImages, ...images].filter((m) => {
+      if (seen.has(m.url)) return false;
+      seen.add(m.url);
+      return true;
+    });
     let effectiveImages: MediaItem[];
-    if (variants.length > 0) {
-      effectiveImages = variants.filter((v) => v.image_url).map((v) => ({ url: v.image_url }));
-    } else if (hadVariants) {
-      effectiveImages = []; // user deleted all variants — clear gallery too
+    if (hadVariants && variants.length === 0) {
+      effectiveImages = merged;
     } else {
-      effectiveImages = images;
+      effectiveImages = merged;
     }
     formData.set("images", JSON.stringify(effectiveImages));
     formData.set("videos", JSON.stringify(videos));
@@ -308,6 +314,37 @@ export function ProductForm({ product }: { product?: Product }) {
       </div>
 
       <div className="space-y-6">
+        <div className="rounded-2xl border border-amber-100 bg-white p-6">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="font-bold text-stone-800 flex items-center gap-2">
+              <ImageIcon className="w-5 h-5 text-gold" /> الصور العامة
+            </h2>
+            <button type="button" onClick={() => imageInput.current?.click()} disabled={uploading}
+              className="flex items-center gap-1.5 rounded-lg bg-amber-50 px-3 py-1.5 text-xs font-bold text-gold hover:bg-amber-100 transition disabled:opacity-50">
+              <Upload className="w-3.5 h-3.5" /> رفع صور
+            </button>
+            <input ref={imageInput} type="file" accept="image/*" multiple hidden
+              onChange={(e) => e.target.files && uploadFiles(e.target.files, "images")} />
+          </div>
+          <p className="text-[11px] text-stone-400 mb-3">صور عامة تُعرض في المعرض بجانب صور التوليفات. تُستخدم أيضاً عندما لا توجد توليفات.</p>
+
+          {images.length === 0 ? (
+            <p className="text-sm text-stone-400 text-center py-6">لا توجد صور عامة — ارفع صور المنتج</p>
+          ) : (
+            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2">
+              {images.map((img, i) => (
+                <div key={i} className="relative aspect-square overflow-hidden rounded-xl border border-sand group">
+                  <img src={img.url} alt="" className="h-full w-full object-cover" />
+                  <button type="button" onClick={() => setImages(images.filter((_, idx) => idx !== i))}
+                    className="absolute top-1 start-1 flex h-7 w-7 items-center justify-center rounded-full bg-rose-500 text-white shadow opacity-0 group-hover:opacity-100 transition">
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
         <div className="rounded-2xl border border-gold/20 bg-white p-6">
           <h2 className="font-bold text-stone-800 flex items-center gap-2"><ImageIcon className="w-5 h-5 text-gold" /> صور التوليفات</h2>
           <p className="mt-2 text-xs text-stone-500 leading-relaxed">الصور الآن تُرفع <b>لكل توليفة على حدة</b> (كل صورة لها لونها). لا حاجة لرفع صور عامة — معرض المنتج يُبنى تلقائيًا من صور التوليفات.</p>

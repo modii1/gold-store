@@ -21,10 +21,11 @@ export function ProductCard({ product }: { product: Product }) {
   const outOfStock = product.stock <= 0;
 
   const variantList = (product as any).variants as any[] | undefined;
-  const colors: { name: string; hex: string }[] = variantList?.length
-    ? Array.from(new Map(variantList.filter((v: any) => v.color).map((v: any) => [v.color.trim(), { name: v.color.trim(), hex: v.color_hex || ({ "ذهبي": "#D4AF37", "فضي": "#C0C0C0", "روز قولد": "#B76E79", "روز": "#B76E79" } as any)[v.color.trim()] || "#D4AF37" }])).values())
+  const inStockVariants = variantList ? variantList.filter((v: any) => (Number(v.stock) || 0) > 0) : undefined;
+  const colors: { name: string; hex: string }[] = inStockVariants?.length
+    ? Array.from(new Map(inStockVariants.filter((v: any) => v.color).map((v: any) => [v.color.trim(), { name: v.color.trim(), hex: v.color_hex || ({ "ذهبي": "#D4AF37", "فضي": "#C0C0C0", "روز قولد": "#B76E79", "روز": "#B76E79" } as any)[v.color.trim()] || "#D4AF37" }])).values())
     : (product.color ? product.color.split(/[،,]/).map((c) => c.trim()).filter(Boolean).map((c) => ({ name: c, hex: ({ "ذهبي": "#D4AF37", "فضي": "#C0C0C0", "روز قولد": "#B76E79" } as any)[c] || "#D4AF37" })) : []);
-  const hasMultipleColors = variantList ? variantList.length > 1 : colors.length > 1;
+  const hasMultipleColors = inStockVariants ? inStockVariants.length > 1 : colors.length > 1;
 
   const handleQuickAdd = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -34,7 +35,7 @@ export function ProductCard({ product }: { product: Product }) {
       window.location.href = `/product/${product.slug}`;
       return;
     }
-    const single = variantList?.length === 1 ? variantList[0] : null;
+    const single = inStockVariants?.length === 1 ? inStockVariants[0] : null;
     addToCart({
       product_id: product.id,
       variant_id: single?.id || null,

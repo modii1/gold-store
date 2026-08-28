@@ -19,7 +19,7 @@ export type ShopInit = {
   products: Product[];
   total: number;
   categories: Category[];
-  facets: { karat: string[]; material: string[]; brand: string[] };
+  facets: { karat: string[]; material: string[]; brand: string[]; color: string[]; size: string[] };
   perPage: number;
 };
 
@@ -103,6 +103,8 @@ export function ShopContent({ init, fixedCategory, basePath = "/shop" }: { init:
       <FacetBlock title="العيار" values={init.facets.karat} param="karat" basePath={basePath} />
       <FacetBlock title="المادة" values={init.facets.material} param="material" basePath={basePath} />
       <FacetBlock title="العلامة التجارية" values={init.facets.brand} param="brand" basePath={basePath} />
+      <FacetBlock title="اللون" values={init.facets.color} param="color" basePath={basePath} />
+      <FacetBlock title="المقاس" values={init.facets.size} param="size" basePath={basePath} />
       <div>
         <p className="text-sm font-bold text-ink mb-2">التوفر</p>
         <Check label="متوفر حالياً" param="in_stock" value="1" basePath={basePath} />
