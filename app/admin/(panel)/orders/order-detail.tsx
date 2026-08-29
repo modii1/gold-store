@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import {
   ArrowRight, Truck, PackageCheck, Banknote, CheckCircle2, Clock, XCircle,
   ExternalLink, Loader2, StickyNote, Trash2, Printer, MapPin, Phone, Mail,
-  CreditCard, Calendar, Hash, Box, MessageSquare
+  CreditCard, Calendar, Hash, Box, MessageSquare, Send
 } from "lucide-react";
 import { updateOrderStatusAction, createShipmentAction, addOrderNoteAction, deleteOrderNoteAction } from "@/app/actions/orders-admin";
 import { Currency } from "@/components/storefront/currency";
@@ -142,6 +142,13 @@ export function OrderDetail({ order, statusLog, notes: initialNotes, shipments }
 
   const w = workflow();
 
+  // طلب عالق: في حالة شحن لكن صف شحنته لا يحمل رقم OTO (دخل حالة الشحن قبل تثبيت
+  // الإرسال الآلي) — يُعرض زر لإعادة إرساله إلى OTO يدوياً.
+  const stuckOto =
+    !!order.delivery_option_id &&
+    ["shipped", "picked_up", "in_transit", "out_for_delivery"].includes(order.status) &&
+    !shipments.some((s: any) => s.oto_order_id);
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -172,6 +179,13 @@ export function OrderDetail({ order, statusLog, notes: initialNotes, shipments }
               className="flex items-center gap-1.5 rounded-xl bg-emerald-600 px-5 py-2.5 text-sm font-bold text-white hover:bg-emerald-700 transition disabled:opacity-50">
               {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : w.icon && <w.icon className="w-4 h-4" />}
               {w.label}
+            </button>
+          )}
+          {stuckOto && (
+            <button onClick={handleShip} disabled={busy}
+              className="flex items-center gap-1.5 rounded-xl border-2 border-gold px-5 py-2.5 text-sm font-bold text-gold hover:bg-amber-50 transition disabled:opacity-50">
+              {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+              إرسال إلى OTO
             </button>
           )}
         </div>

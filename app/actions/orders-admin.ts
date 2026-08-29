@@ -35,7 +35,8 @@ export async function updateOrderStatusAction(formData: FormData) {
   // بخيار توصيل OTO ولم يُرسل إليه سابقاً، يُرسل آلياً إلى OTO مع إشعار للعميل
   // (shipment.created)، ولو فشل نُنشئ صف شحنة محلياً حتى لا يضيع الطلب.
   const shippingStatuses = ["shipped", "picked_up", "in_transit", "out_for_delivery", "delivered"];
-  if (oldStatus !== status && shippingStatuses.includes(status)) {
+  const isShippingStatus = shippingStatuses.includes(status);
+  if (isShippingStatus) {
     // التحقق من عدم الإرسال المكرر: لا نرسل إلا إذا لم تكن هناك شحنة مرتبطة بـ OTO من قبل.
     const { data: existingShipRow } = await supabase.from("shipments")
       .select("id, oto_order_id")
@@ -44,8 +45,12 @@ export async function updateOrderStatusAction(formData: FormData) {
       .maybeSingle();
 
     // «تم التسليم» لا يُنشئ شحنة OTO جديدة (الشحنة وُجدت لتصل أصلاً).
+    // يُسمح بإعادة الضغط على نفس حالة الشحن للطلبات العالقة: الطلبات التي دخلت
+    // حالة الشحن قبل تفعيل الإرسال الآلي تحمل صف شحنة محلياً بلا oto_order_id،
+    // فالضغط مرتين مرة أخرى يُرسلها إلى OTO (بالشرط المانع للازدواجية).
     const canAutoOto = status !== "delivered" && !!current?.delivery_option_id && !existingShipRow?.oto_order_id;
-    if (canAutoOto) {
+    const retryStuckShipping = !!current?.delivery_option_id && existingShipRow && !existingShipRow.oto_order_id;
+    if (canAutoOto || retryStuckShipping) {
       try {
         const shipFd = new FormData();
         shipFd.set("id", id);
