@@ -31,19 +31,31 @@ export async function updateOrderStatusAction(formData: FormData) {
 
   await logOrderStatusChange(id, oldStatus, status, "admin");
 
-  // عند تفعيل حالة «جاري الشحن» (أو أي حالة شحن): يُرسل الطلب فوراً على OTO/الشركة
-  // وينشأ صف شحنة تلقائياً حتى يظهر في قسم «الشحنات». لو فشل OTO، نُنشئ صفاً محلياً
-  // احتياطياً حتى لا يضيع الطلب من قسم الشحنات وحالة الطلب لا تتأثر.
+  // عند تفعيل أي حالة شحن: الطلب يدخل قسم «الشحنات» فوراً. إن كان مرتبطاً
+  // بخيار توصيل OTO ولم يُرسل إليه سابقاً، يُرسل آلياً إلى OTO مع إشعار للعميل
+  // (shipment.created)، ولو فشل نُنشئ صف شحنة محلياً حتى لا يضيع الطلب.
   const shippingStatuses = ["shipped", "picked_up", "in_transit", "out_for_delivery", "delivered"];
   if (oldStatus !== status && shippingStatuses.includes(status)) {
-    if (status === "shipped" && current?.delivery_option_id) {
+    // التحقق من عدم الإرسال المكرر: لا نرسل إلا إذا لم تكن هناك شحنة مرتبطة بـ OTO من قبل.
+    const { data: existingShipRow } = await supabase.from("shipments")
+      .select("id, oto_order_id")
+      .eq("order_id", id)
+      .limit(1)
+      .maybeSingle();
+
+    // «تم التسليم» لا يُنشئ شحنة OTO جديدة (الشحنة وُجدت لتصل أصلاً).
+    const canAutoOto = status !== "delivered" && !!current?.delivery_option_id && !existingShipRow?.oto_order_id;
+    if (canAutoOto) {
       try {
         const shipFd = new FormData();
         shipFd.set("id", id);
         const shipRes = await createShipmentAction(shipFd);
         if (!shipRes.error) {
+          // createShipmentAction يضبط حالة الطلب على shipped داخلياً — نعيد حالة المدير
+          await supabase.from("orders").update({ status }).eq("id", id);
           revalidatePath("/admin/orders");
           revalidatePath(`/admin/orders/${id}`);
+          revalidatePath("/admin/shipments");
           revalidatePath("/admin/dashboard");
           return { success: true, message: shipRes.message || "تم إرسال الطلب للشحن" };
         }
@@ -65,8 +77,7 @@ export async function updateOrderStatusAction(formData: FormData) {
 
     // صف شحنة محلي إن لم يوجد مسبقاً (يَظهر في قسم الشحنات حتى لو فشل OTO)
     try {
-      const { data: existingShip } = await supabase.from("shipments").select("id").eq("order_id", id).limit(1).maybeSingle();
-      if (!existingShip) {
+      if (!existingShipRow) {
         const shipStatus = status === "delivered" ? "delivered" : status === "in_transit" || status === "out_for_delivery" ? "in_transit" : "processing";
         const isCod = (current?.payment_method || "").toLowerCase().includes("cod") || (current?.payment_method || "").toLowerCase().includes("عند الاستلام");
         await supabase.from("shipments").insert({
