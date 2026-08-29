@@ -21,7 +21,7 @@ export async function updateOrderStatusAction(formData: FormData) {
 
   const { data: current } = await supabase
     .from("orders")
-    .select("id, status, order_number, customer_identifier, customer_name, shipping_method, delivery_option_name, delivery_option_id, total, payment_method")
+    .select("id, status, order_number, customer_identifier, customer_name, shipping_method, delivery_option_id, total, payment_method")
     .eq("id", id)
     .maybeSingle();
   const oldStatus = current?.status || null;
@@ -87,8 +87,8 @@ export async function updateOrderStatusAction(formData: FormData) {
         const isCod = (current?.payment_method || "").toLowerCase().includes("cod") || (current?.payment_method || "").toLowerCase().includes("عند الاستلام");
         await supabase.from("shipments").insert({
           order_id: id,
-          delivery_company: current?.delivery_option_name || current?.shipping_method || null,
-          delivery_option_name: current?.delivery_option_name || current?.shipping_method || null,
+          delivery_company: current?.shipping_method || null,
+          delivery_option_name: current?.shipping_method || null,
           status: shipStatus,
           cod_amount: isCod ? Number(current?.total) || null : null,
         });

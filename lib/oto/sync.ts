@@ -162,7 +162,7 @@ export async function syncOtoShipments(limit = 100): Promise<{ total: number; up
     if (orderIds.length) {
       const { data: orderRows } = await supabase
         .from("orders")
-        .select("id, order_number, customer_name, shipping_method, delivery_option_name, customer_identifier")
+        .select("id, order_number, customer_name, shipping_method, customer_identifier")
         .in("id", orderIds);
       (orderRows || []).forEach((o) => orders.set(o.id, o as OrderInfo & { customer_identifier?: string | null }));
     }
@@ -199,10 +199,9 @@ export async function syncOtoShipments(limit = 100): Promise<{ total: number; up
         const company =
           info.deliveryCompany ||
           row.delivery_company ||
-          order?.delivery_option_name ||
           order?.shipping_method ||
           null;
-        const optionName = info.deliveryOptionName || row.delivery_option_name || order?.delivery_option_name || order?.shipping_method || null;
+        const optionName = info.deliveryOptionName || row.delivery_option_name || order?.shipping_method || null;
 
         const changed =
           info.trackingNumber !== row.tracking_number ||
