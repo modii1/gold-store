@@ -133,6 +133,74 @@ docker compose logs -f     # انتظر ظهور رمز QR
 - لتحديث السيرفر لاحقاً: سحب آخر `index.js` ثم `sudo docker compose up -d --build`.
 - `docker compose logs -f` يعرض أيضاً `qr.txt` بالداخل — لكن الأسهل مسحه من اللوحة عن طريق «عرض رمز QR».
 
+## النشر على Google Cloud e2-micro (مجاني مدى الحياة)
+
+بديل عن Oracle، بنفس الوعد تقريباً: جهاز صغير **دائم التشغيل ومجاني للأبد** — مؤكد رسمياً
+(1 جهاز `e2-micro` في إحدى المناطق `us-west1`/`us-central1`/`us-east1` + قرص 30GB + خروج 1GB/شهر).
+
+### 1) الحساب
+- اشترك في `cloud.google.com` ← **Start free** (تجربة 90 يوماً بـ $300 + الوصول للفئة المجانية).
+  سيتطلب بطاقة للتحقق **بتثبيت مؤقت 0–1$ يُحرَّر، لا يُخصم**.
+- **مهمة جداً**: قبل انتهاء الـ 90 يوم اضغط **Activate** (الترقية إلى حساب فوترة عادي)
+  في واجهة الترحيب وإلا تُغلق الموارد وتُحذف. البقاء داخل الفئة المجانية = **بلا أي فاتورة**.
+
+### 2) إنشاء الجهاز (من Cloud Shell المجاني في الكونسول — بلا تثبيت أي شيء)
+```bash
+gcloud config set compute/zone us-central1-a
+
+gcloud compute instances create whatsapp-bridge \
+  --machine-type=e2-micro \
+  --image-family=ubuntu-2404-lts-amd64 \
+  --image-project=ubuntu-os-cloud \
+  --boot-disk-size=30GB \
+  --boot-disk-type=pd-standard
+
+# فتح بورت لوحة الحالة
+gcloud compute firewall-rules create whatsapp-bridge-8788 \
+  --allow=tcp:8788 --source-ranges=0.0.0.0/0 \
+  --description="WhatsApp bridge status panel"
+```
+
+### 3) الدخول وتثبيت Docker
+```bash
+gcloud compute ssh whatsapp-bridge   # من نفس Cloud Shell
+
+curl -fsSL https://get.docker.com | sudo sh
+sudo usermod -aG docker $USER
+newgrp docker   # أو سجّل خروج/دخول
+```
+
+### 4) سحب ملفات المشروع وتشغيله
+```bash
+sudo apt-get update && sudo apt-get install -y git
+git clone https://github.com/modii1/gold-store.git
+cd gold-store/qr-server
+cp .env.example .env
+nano .env        # ضع قيمك الحقيقية
+docker compose up -d --build
+docker compose logs -f        # انتظر رمز QR
+```
+
+### 5) ربط اللوحة بالجهاز
+احصل على الـ IP العام:
+```bash
+gcloud compute instances describe whatsapp-bridge \
+  --format='get(networkInterfaces[0].accessConfigs[0].natIP)'
+```
+ثم من لوحة التحكم: **الإشعارات ← القنوات ← واتساب**:
+- **رابط سيرفر الواتساب (QR)** = `http://<IP>:8788`
+- **مفتاح السيرفر** = نفس `BRIDGE_API_KEY` في `.env`
+- اضغط **عرض رمز QR** ← امسح الرمز من واتساب.
+
+### ملاحظات مهمة
+- **IP العام مؤقت (ephemeral)** وغير خاضع للفوترة إطلاقاً. لو تغيّر بعد إعادة تشغيل الجهاز،
+  حدّث `bridge_url` من اللوحة بالقيمة الجديدة.
+- لحماية لوحة الحالة من الإنترنت: أبقِ `BRIDGE_API_KEY` مضبوطاً — فعندها يتطلب `/qr`
+  مفتاحاً. (الخيار الأشد أماناً: حصر `--source-ranges` على IP حلقة الاتصال المنزلية/الثابت.)
+- القرص 30GB يكفي؛ لا تصعد لقرص أكبر وإلا تجاوزت الفئة المجانية.
+- ملفات النشر (`Dockerfile`/`docker-compose.yml`) هي نفسها في أوراكل — نقل الجلسة بينهما
+  بنسخ مجلد `auth-info` (تعمل من مكان واحد فقط).
+
 ## ملاحظات تشغيلية
 - لا تعمل هذه الطريقة على Cloudflare Workers أو Vercel (السيرفر يحتاج اتصالاً مستمراً)؛ لذلك شغّله على جهازك أو VPS مجاني مدى الحياة (انظر أعلاه).
 - يمكنك نقل السيرفر بين أي جهاز/VPS بنفس المجلد و`auth-info` (نسخة الجلسة تعمل من مكان واحد فقط).
