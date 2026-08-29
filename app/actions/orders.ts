@@ -99,6 +99,7 @@ export async function createOrderAction(formData: FormData) {
   const notes = (formData.get("notes") as string).trim() || null;
   const shippingId = formData.get("shipping_method") as string;
   const paymentName = (formData.get("payment_method") as string) || null;
+  const transferReceiptUrl = (formData.get("transfer_receipt_url") as string)?.trim() || null;
   const couponCode = (formData.get("coupon_code") as string)?.trim() || null;
 
   const items = JSON.parse((formData.get("items") as string) || "[]");
@@ -211,6 +212,7 @@ export async function createOrderAction(formData: FormData) {
       shipping_method: shippingName,
       delivery_option_id: shippingOptionId,
       payment_method: paymentName,
+      transfer_receipt_url: transferReceiptUrl,
       notes,
       status: "pending",
       order_number: orderNumber,

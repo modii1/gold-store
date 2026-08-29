@@ -31,6 +31,8 @@ export async function updateSettingsAction(formData: FormData) {
   }
   data.updated_at = new Date().toISOString();
 
+  if (data.shipping_display_mode == null) delete data.shipping_display_mode;
+
   const supabase = createAdminClient();
   const { error } = await supabase.from("settings").update(data).eq("id", 1);
   if (error) return { error: error.message };

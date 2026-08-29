@@ -80,8 +80,8 @@ export function DashboardContent() {
         { key: "uniqueProductViews", label: "مشاهدة فريدة", value: kpis.uniqueProductViews, icon: <UserCheck className="h-4 w-4" />, compare: null },
         { key: "addToCarts", label: "إضافات للسلة", value: kpis.addToCarts, icon: <ShoppingCart className="h-4 w-4" />, compare: null },
         { key: "orders", label: "الطلبات", value: kpis.orders, icon: <Package className="h-4 w-4" />, compare: data.comparison.orders },
-        { key: "sales", label: "المبيعات", value: null as unknown as number, icon: <Banknote className="h-4 w-4" />, compare: data.comparison.sales, currency: true },
-        { key: "aov", label: "متوسط قيمة الطلب", value: null as unknown as number, icon: <Receipt className="h-4 w-4" />, compare: data.comparison.aov, currency: true },
+        { key: "sales", label: "المبيعات", value: kpis.sales, icon: <Banknote className="h-4 w-4" />, compare: data.comparison.sales, currency: true },
+        { key: "aov", label: "متوسط قيمة الطلب", value: kpis.aov, icon: <Receipt className="h-4 w-4" />, compare: data.comparison.aov, currency: true },
         { key: "conversion", label: "معدل التحويل", value: kpis.conversion, icon: <TrendingUp className="h-4 w-4" />, compare: data.comparison.conversion, suffix: "%" },
       ]
     : [];
@@ -269,7 +269,7 @@ function KpiCard({ card }: { card: MetricCard }) {
         <span className={cn("flex h-7 w-7 items-center justify-center rounded-lg", meta.bg, meta.color)}>{card.icon}</span>
       </div>
       <p className={cn("mt-2 truncate text-xl font-bold xl:text-2xl", meta.color)} dir="ltr">
-        {card.currency ? <Currency value={card.value as number} /> : card.suffix ? `${formatCurrency(card.value as number)}${card.suffix}` : formatCurrency(card.value as number)}
+        {card.currency ? <Currency value={card.value as number} /> : card.suffix ? `${card.value}${card.suffix}` : formatCurrency(card.value as number)}
       </p>
       {card.compare !== null && card.compare !== undefined && (
         <div className="mt-1 flex items-center gap-1 text-[10px]">

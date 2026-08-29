@@ -29,7 +29,6 @@ export async function createDeliveries(notificationId: string, channels: Channel
       continue;
     }
 
-    const configured = await Promise.resolve(adapter.isConfigured());
     const { data, error } = await supabase
       .from("notification_deliveries")
       .insert({
@@ -48,6 +47,13 @@ export async function createDeliveries(notificationId: string, channels: Channel
       await logNotificationEvent({ notificationId, event: "delivery.create_failed", channel, level: "error", message: error?.message || "failed to create delivery" });
       continue;
     }
+
+    // WhatsApp deliveries are owned by the external QR bridge (qr-server),
+    // which polls these rows from Supabase. Never attempt/settle them here so
+    // the cloud worker doesn't fight the bridge.
+    if (channel === "whatsapp") continue;
+
+    const configured = await Promise.resolve(adapter.isConfigured());
 
     if (!configured) {
       await supabase.from("notification_deliveries").update({ status: "skipped", error_message: "القناة غير مفعلة", updated_at: new Date().toISOString() }).eq("id", (data as { id: number }).id);
@@ -157,6 +163,7 @@ export async function processPendingDeliveries(limit = 50): Promise<number> {
     .from("notification_deliveries")
     .select("id")
     .in("status", ["pending", "failed"])
+    .neq("channel", "whatsapp") // whatsapp تُعالج من سيرفر QR الخارجي فقط
     .lte("next_attempt_at", new Date().toISOString())
     .order("next_attempt_at", { ascending: true })
     .limit(limit);

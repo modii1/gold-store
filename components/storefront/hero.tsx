@@ -34,7 +34,7 @@ export function Hero({ settings }: { settings: Settings }) {
 
       <div className="relative mx-auto max-w-7xl px-4 md:px-6 pt-40 md:pt-56 pb-24 md:pb-32 text-center text-ivory">
         <p className="text-gold-light text-sm md:text-base font-semibold tracking-[0.35em] uppercase mb-4">
-          {settings.site_name || "مجوهرات فاخرة"}
+          {settings.site_name || "إكسسوارات مطلية"}
         </p>
         <h1 className="text-3xl md:text-6xl font-bold leading-tight text-ivory drop-shadow">
           {settings.hero_title}

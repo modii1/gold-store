@@ -11,7 +11,7 @@ export function AuthShell({ title, subtitle, children, footer }: { title: string
         <div className="relative">
           <Link href="/" className="inline-flex items-center gap-2 text-ivory">
             <Gem className="h-6 w-6 text-gold-light" />
-            <span className="text-xl font-bold tracking-wide">لمعة</span>
+            <span className="text-xl font-bold tracking-wide">متجر لمعة للاكسسوارات المطلية</span>
           </Link>
         </div>
 
@@ -21,7 +21,7 @@ export function AuthShell({ title, subtitle, children, footer }: { title: string
             تفاصيل تليق<br />بذوقكِ الراقي
           </h2>
           <p className="mt-4 max-w-md text-ivory/70 font-light leading-relaxed">
-            قطع مختارة بعناية من الإكسسوارات المطلية بالذهب — انضمي إلى عالمنا لتتتبعي طلباتك وتجربي تسوقاً سلساً.
+            قطع مختارة بعناية من الإكسسوارات المطلية — انضمي إلى عالمنا لتتتبعي طلباتك وتجربي تسوقاً سلساً.
           </p>
           <div className="mt-10 space-y-4">
             {[
@@ -39,14 +39,14 @@ export function AuthShell({ title, subtitle, children, footer }: { title: string
           </div>
         </div>
 
-        <p className="relative text-xs text-ivory/40">© {new Date().getFullYear()} لمعة — جميع الحقوق محفوظة</p>
+        <p className="relative text-xs text-ivory/40">© {new Date().getFullYear()} متجر لمعة للاكسسوارات المطلية — جميع الحقوق محفوظة</p>
       </aside>
 
       {/* Form panel */}
       <main className="relative flex items-center justify-center bg-ivory px-4 py-12 lg:px-8">
         <div className="w-full max-w-md slide-up">
           <Link href="/" className="mb-8 inline-flex items-center gap-2 text-sm font-semibold text-stone-500 hover:text-gold transition lg:hidden">
-            <ArrowRight className="h-4 w-4" /> لمعة
+            <ArrowRight className="h-4 w-4" /> متجر لمعة للاكسسوارات المطلية
           </Link>
 
           <h1 className="text-2xl md:text-3xl font-bold text-ink">{title}</h1>

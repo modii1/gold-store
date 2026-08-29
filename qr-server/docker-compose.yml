@@ -1,0 +1,19 @@
+services:
+  whatsapp-bridge:
+    build: .
+    container_name: whatsapp-bridge
+    restart: unless-stopped
+    ports:
+      - "8788:8788"
+    environment:
+      SUPABASE_URL: "${SUPABASE_URL:?ضع SUPABASE_URL في ملف .env}"
+      SUPABASE_SERVICE_ROLE_KEY: "${SUPABASE_SERVICE_ROLE_KEY:?ضع SUPABASE_SERVICE_ROLE_KEY في ملف .env}"
+      ADMIN_NUMBER: "${ADMIN_NUMBER:-}"
+      BRIDGE_API_KEY: "${BRIDGE_API_KEY:-}"
+      HTTP_PORT: "8788"
+      POLL_SECONDS: "${POLL_SECONDS:-10}"
+    volumes:
+      - wa-session:/app/auth-info
+
+volumes:
+  wa-session:

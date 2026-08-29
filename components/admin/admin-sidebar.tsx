@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Package, ShoppingCart, Settings, Tag, FolderOpen, LogOut, Users, Truck, Zap, PackageSearch, RotateCcw, Bell, Settings2 } from "lucide-react";
+import { LayoutDashboard, Package, ShoppingCart, Settings, Tag, FolderOpen, LogOut, Users, Truck, Zap, PackageSearch, RotateCcw, Bell, Settings2, FileText } from "lucide-react";
 import { adminLogoutAction } from "@/app/actions/logout";
 
 const links = [
@@ -18,6 +18,7 @@ const links = [
   { href: "/admin/orders", label: "الطلبات", icon: ShoppingCart },
   { href: "/admin/customers", label: "العملاء", icon: Users },
   { href: "/admin/returns", label: "المرتجعات", icon: RotateCcw },
+  { href: "/admin/pages", label: "صفحات الموقع", icon: FileText },
   { href: "/admin/settings", label: "الإعدادات", icon: Settings },
 ];
 
@@ -32,7 +33,7 @@ export function AdminSidebar() {
         </div>
         <div>
           <p className="text-sm font-bold text-stone-900">لوحة التحكم</p>
-          <p className="text-xs text-stone-400">متجر الذهب</p>
+          <p className="text-xs text-stone-400">متجر لمعة للاكسسوارات</p>
         </div>
       </div>
 

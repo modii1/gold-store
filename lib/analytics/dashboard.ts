@@ -285,7 +285,7 @@ export async function getDashboard(range: "today" | "7d" | "30d" = "7d"): Promis
 }
 
 function compare(current: number, previous: number): number | null {
-  if (previous === 0) return current === 0 ? 0 : null;
+  if (previous <= 0) return null;
   return Math.round(((current - previous) / previous) * 1000) / 10;
 }
 

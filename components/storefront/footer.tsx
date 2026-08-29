@@ -21,7 +21,7 @@ export function StoreFooter({ settings }: { settings: Settings }) {
             <BrandLogo settings={settings} size="lg" />
              <p className="mt-3 text-stone-400 leading-relaxed" style={{ fontSize: `${settings.header_footer_font_size || 13}px` }}>
               {settings.footer_text ||
-                "متجر متخصص في المجوهرات والإكسسوارات النسائية الفاخرة. قطع مختارة بعناية تجمع بين الأصالة والأناقة."}
+                "متجر متخصص في الإكسسوارات المطلية النسائية الفاخرة. قطع مختارة بعناية تجمع بين الأصالة والأناقة."}
             </p>
             {socials.length > 0 && (
               <div className="mt-5 flex items-center gap-2">
@@ -86,7 +86,7 @@ export function StoreFooter({ settings }: { settings: Settings }) {
         <div className="mt-10 border-t border-white/10 pt-5">
           <div className="flex flex-col md:flex-row items-center justify-between gap-3 text-xs text-stone-500">
             <p className="flex flex-wrap items-center gap-x-4 gap-y-1 justify-center">
-              <span>© {new Date().getFullYear()} {settings.site_name || "لمعة للاكسسوارات المطلية"} — جميع الحقوق محفوظة</span>
+              <span>© {new Date().getFullYear()} {settings.site_name || "متجر لمعة للاكسسوارات المطلية"} — جميع الحقوق محفوظة</span>
               <Link href="/admin" className="inline-flex items-center gap-1 text-stone-600 hover:text-gold-light transition" title="لوحة التحكم" aria-label="لوحة التحكم">
                 <Lock className="h-3 w-3" /> لوحة التحكم
               </Link>
@@ -96,7 +96,7 @@ export function StoreFooter({ settings }: { settings: Settings }) {
               {settings.tax_number && <span>الرقم الضريبي: {settings.tax_number}</span>}
             </p>
             <p className="flex items-center gap-1">
-              صُنع بـ <Heart className="w-3 h-3 text-gold fill-gold" /> للمجوهرات الفاخرة
+              صُنع بـ <Heart className="w-3 h-3 text-gold fill-gold" /> للإكسسوارات المطلية الفاخرة
             </p>
           </div>
         </div>

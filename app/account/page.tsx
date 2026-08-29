@@ -16,7 +16,7 @@ import { createReturnRequestAction, deleteAddressAction } from "@/app/actions/cu
 import { CustomerOrdersSection } from "@/components/customer-orders-section";
 import { NotificationBell } from "@/components/notifications/notification-bell";
 
-export const metadata: Metadata = { title: "لوحة حسابي | لمعة" };
+export const metadata: Metadata = { title: "لوحة حسابي | متجر لمعة للاكسسوارات المطلية" };
 
 async function requestReturnForm(formData: FormData) {
   "use server";

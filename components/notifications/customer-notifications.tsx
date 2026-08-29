@@ -27,6 +27,8 @@ const CHANNELS = [
   { key: "push", label: "إشعارات المتصفح" },
 ] as const;
 
+type ChannelKey = (typeof CHANNELS)[number]["key"];
+
 const PREF_CATEGORIES: { key: string; label: string; desc: string }[] = [
   { key: "orders", label: "إشعارات الطلبات", desc: "تأكيد الطلب، الإلغاء، تأكيد الدفع" },
   { key: "shipping", label: "تحديثات الشحن", desc: "جاري الشحن، في الطريق، التسليم" },
@@ -41,6 +43,7 @@ export function CustomerNotifications() {
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [prefs, setPrefs] = useState<Prefs | null>(null);
+  const [availableChannels, setAvailableChannels] = useState<ChannelKey[]>([]);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
 
@@ -66,6 +69,7 @@ export function CustomerNotifications() {
       const res = await fetch("/api/notifications/preferences", { cache: "no-store" });
       const json = await res.json();
       setPrefs(json.preferences ?? null);
+      setAvailableChannels(json.channels ?? []);
     } catch {
       // ignore
     }
@@ -222,55 +226,66 @@ export function CustomerNotifications() {
         </div>
 
         {!prefs && <div className="flex justify-center py-8"><Loader2 className="h-5 w-5 animate-spin text-stone-300" /></div>}
-        {prefs && (
-          <div className="mt-4">
-            <div className="hidden grid-cols-[1fr_repeat(3,1fr)] gap-2 border-b border-sand pb-2 text-center text-[11px] font-bold text-stone-500 md:grid">
-              <span className="text-start">التصنيف</span>
-              {CHANNELS.map((c) => <span key={c.key}>{c.label}</span>)}
-            </div>
-            {PREF_CATEGORIES.map((cat) => (
-              <div key={cat.key} className="border-b border-sand py-3 last:border-b-0">
-                <div className="md:hidden">
-                  <p className="text-sm font-bold text-ink">{cat.label}</p>
-                  <p className="text-[11px] text-stone-500">{cat.desc}</p>
-                  <div className="mt-2 space-y-1.5">
-                    {CHANNELS.map((c) => (
-                      <label key={c.key} className="flex items-center justify-between rounded-xl bg-cream px-3 py-2.5 text-xs font-semibold text-stone-700">
-                        <span>{c.label}</span>
-                        <input
-                          type="checkbox"
-                          checked={Boolean(prefs[cat.key]?.[c.key])}
-                          onChange={(e) =>
-                            setPrefs((p) => (p ? { ...p, [cat.key]: { ...p[cat.key], [c.key]: e.target.checked } } : p))
-                          }
-                          className="h-4 w-4 accent-gold"
-                        />
-                      </label>
-                    ))}
-                  </div>
+        {prefs &&
+          (() => {
+            const shown = CHANNELS.filter((c) => availableChannels.includes(c.key));
+            if (shown.length === 0) {
+              return (
+                <p className="mt-4 rounded-2xl bg-cream px-4 py-3 text-xs text-stone-500">
+                  قنوات الإشعارات الخارجية (بريد، SMS، إشعارات المتصفح) معطّلة حالياً من إدارة المتجر.
+                </p>
+              );
+            }
+            return (
+              <div className="mt-4">
+                <div className="hidden grid-cols-[1fr_repeat(3,1fr)] gap-2 border-b border-sand pb-2 text-center text-[11px] font-bold text-stone-500 md:grid">
+                  <span className="text-start">التصنيف</span>
+                  {shown.map((c) => <span key={c.key}>{c.label}</span>)}
                 </div>
-                <div className="hidden items-center gap-2 md:grid md:grid-cols-[1fr_repeat(3,1fr)]">
-                  <div>
-                    <p className="text-sm font-bold text-ink">{cat.label}</p>
-                    <p className="text-[11px] text-stone-500">{cat.desc}</p>
+                {PREF_CATEGORIES.map((cat) => (
+                  <div key={cat.key} className="border-b border-sand py-3 last:border-b-0">
+                    <div className="md:hidden">
+                      <p className="text-sm font-bold text-ink">{cat.label}</p>
+                      <p className="text-[11px] text-stone-500">{cat.desc}</p>
+                      <div className="mt-2 space-y-1.5">
+                        {shown.map((c) => (
+                          <label key={c.key} className="flex items-center justify-between rounded-xl bg-cream px-3 py-2.5 text-xs font-semibold text-stone-700">
+                            <span>{c.label}</span>
+                            <input
+                              type="checkbox"
+                              checked={Boolean(prefs[cat.key]?.[c.key])}
+                              onChange={(e) =>
+                                setPrefs((p) => (p ? { ...p, [cat.key]: { ...p[cat.key], [c.key]: e.target.checked } } : p))
+                              }
+                              className="h-4 w-4 accent-gold"
+                            />
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="hidden items-center gap-2 md:grid md:grid-cols-[1fr_repeat(3,1fr)]">
+                      <div>
+                        <p className="text-sm font-bold text-ink">{cat.label}</p>
+                        <p className="text-[11px] text-stone-500">{cat.desc}</p>
+                      </div>
+                      {shown.map((c) => (
+                        <label key={c.key} className="flex items-center justify-center">
+                          <input
+                            type="checkbox"
+                            checked={Boolean(prefs[cat.key]?.[c.key])}
+                            onChange={(e) =>
+                              setPrefs((p) => (p ? { ...p, [cat.key]: { ...p[cat.key], [c.key]: e.target.checked } } : p))
+                            }
+                            className="h-4 w-4 accent-gold"
+                          />
+                        </label>
+                      ))}
+                    </div>
                   </div>
-                  {CHANNELS.map((c) => (
-                    <label key={c.key} className="flex items-center justify-center">
-                      <input
-                        type="checkbox"
-                        checked={Boolean(prefs[cat.key]?.[c.key])}
-                        onChange={(e) =>
-                          setPrefs((p) => (p ? { ...p, [cat.key]: { ...p[cat.key], [c.key]: e.target.checked } } : p))
-                        }
-                        className="h-4 w-4 accent-gold"
-                      />
-                    </label>
-                  ))}
-                </div>
+                ))}
               </div>
-            ))}
-          </div>
-        )}
+            );
+          })()}
       </div>
     </div>
   );

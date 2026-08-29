@@ -58,7 +58,7 @@ export function DesignSettings({
       </div>
       <div className="overflow-hidden border border-stone-200 p-5" style={previewStyle}>
         <p className="text-xs font-bold" style={{ color: "var(--preview-primary)" }}>معاينة مباشرة</p>
-        <h3 className="mt-2 font-bold" style={{ fontSize: `${1.5 * preview.headingScale}rem`, color: "var(--preview-accent)" }}>لمعة للاكسسوارات المطلية</h3>
+        <h3 className="mt-2 font-bold" style={{ fontSize: `${1.5 * preview.headingScale}rem`, color: "var(--preview-accent)" }}>متجر لمعة للاكسسوارات المطلية</h3>
         <p className="mt-1 text-sm opacity-70">هذا مثال يوضح الخط والألوان والمقاسات قبل حفظ الإعدادات.</p>
         <p className="mt-3 border-t border-black/10 pt-2" style={{ fontSize: `${preview.headerFooterFontSize}px` }}>معاينة نص الهيدر والفوتر</p>
         <button type="button" className="mt-4 px-5 py-2 text-sm font-bold text-white" style={{ backgroundColor: "var(--preview-accent)", borderRadius: `${preview.cardRadius}px` }}>زر تجريبي</button>

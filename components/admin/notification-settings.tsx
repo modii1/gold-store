@@ -1,8 +1,8 @@
 "use client";
 
-import { useActionState, useState } from "react";
-import { Loader2, Save, Power, RefreshCcw, CheckCircle2, XCircle } from "lucide-react";
-import { updateTemplateAction, updateRuleAction, toggleTemplateAction, toggleRuleAction, updateChannelAction } from "@/app/actions/notifications-admin";
+import { useActionState, useCallback, useEffect, useState } from "react";
+import { Loader2, Save, Power, RefreshCcw, CheckCircle2, XCircle, Pause, Play, Wifi, WifiOff, ScanLine, ExternalLink } from "lucide-react";
+import { updateTemplateAction, updateRuleAction, toggleTemplateAction, toggleRuleAction, updateChannelAction, setNotificationsPausedAction } from "@/app/actions/notifications-admin";
 import { SUPPORTED_VARIABLES } from "@/lib/notifications/templates";
 import { CHANNEL_CONFIG_FIELDS } from "@/lib/notifications/channel-config";
 
@@ -223,6 +223,138 @@ function RuleEditor({ rule }: { rule: Rule }) {
   );
 }
 
+function WhatsAppBridgePanel({ config }: { config?: Record<string, string> | null }) {
+  const [status, setStatus] = useState<{
+    connected: boolean;
+    qr_state: string;
+    phone: string | null;
+    last_seen: string | null;
+    bridge_url: string;
+    enabled: boolean;
+  } | null>(null);
+  const [busy, setBusy] = useState<"ping" | "qr" | null>(null);
+  const [ping, setPing] = useState<string | null>(null);
+  const [qrImg, setQrImg] = useState<string | null>(null);
+  const [qrMsg, setQrMsg] = useState<string | null>(null);
+
+  const url = ((status?.bridge_url || config?.bridge_url) || "").replace(/\/+$/, "");
+  const key = config?.bridge_api_key || "";
+
+  const load = useCallback(async () => {
+    try {
+      const res = await fetch("/api/admin/notifications/whatsapp-status", { cache: "no-store" });
+      if (res.ok) setStatus(await res.json());
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  useEffect(() => {
+    void load();
+    const t = setInterval(load, 8000);
+    return () => clearInterval(t);
+  }, [load]);
+
+  const auth = (): Record<string, string> => (key ? { Authorization: `Bearer ${key}` } : {});
+
+  const pingBridge = async () => {
+    if (!url) return setPing("أدخل رابط سيرفر الواتساب (QR) واحفظ أولاً.");
+    setBusy("ping");
+    setPing(null);
+    try {
+      const res = await fetch(`${url}/health`, { headers: auth(), cache: "no-store" });
+      if (!res.ok) setPing(`السيرفر أجاب برمز ${res.status} — تأكد من صحة المفتاح (إن ضُبط).`);
+      else {
+        const j = await res.json();
+        setPing(j.connected ? "متصل بالواتساب — جاهز لإرسال الإشعارات." : "السيرفر يعمل لكن غير متصل بواتساب — لا يزال ينتظر مسح QR.");
+      }
+    } catch {
+      setPing("لا يمكن الوصول إلى السيرفر — تأكد أنه يعمل وأن الرابط (مع البورت) صحيح.");
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const showQr = async () => {
+    if (!url) return setQrMsg("أدخل رابط سيرفر الواتساب (QR) واحفظ أولاً.");
+    setBusy("qr");
+    setQrMsg(null);
+    setQrImg(null);
+    try {
+      const res = await fetch(`${url}/qr`, { headers: auth(), cache: "no-store" });
+      if (!res.ok) {
+        setQrMsg(res.status === 401 ? "المفتاح مرفوض — تأكد من «مفتاح سيرفر الواتساب»." : `السيرفر أجاب برمز ${res.status}.`);
+      } else {
+        const j = await res.json();
+        if (j.connected) setQrMsg("السيرفر متصل بالفعل بالواتساب، لا حاجة لرمز QR.");
+        else if (j.qr_png) setQrImg(j.qr_png);
+        else if (j.qr) setQrMsg("الرمز متاح في الطرفية أو عبر فتح صفحة السيرفر وتحميل الرمز.");
+        else setQrMsg("لا يوجد رمز QR حالياً — أعد تشغيل السيرفر أو احذف مجلد auth-info.");
+      }
+    } catch {
+      setQrMsg("لا يمكن الوصول إلى السيرفر لعرض الرمز.");
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const connected = status?.connected || false;
+  const qrState = status?.qr_state || "idle";
+
+  return (
+    <div className="mt-4 rounded-2xl border border-sand bg-white p-4">
+      <p className="flex items-center gap-1.5 text-xs font-bold text-ink">
+        <Wifi className="h-3.5 w-3.5 text-gold" /> حالة سيرفر الواتساب (QR)
+      </p>
+
+      <div className="mt-2 flex items-center gap-2 text-xs">
+        <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 font-bold ${connected ? "bg-emerald-50 text-emerald-700" : "bg-rose-50 text-rose-600"}`}>
+          {connected ? <Wifi className="h-3 w-3" /> : <WifiOff className="h-3 w-3" />}
+          {connected ? "متصل بالواتساب" : "غير متصل"}
+        </span>
+        {!connected && qrState === "waiting_qr" && status?.enabled && (
+          <span className="rounded-full bg-amber-50 px-2.5 py-1 font-bold text-amber-700">بانتظار مسح رمز QR</span>
+        )}
+        {status?.phone && (
+          <span className="rounded-full bg-cream px-2.5 py-1 font-semibold text-stone-600" dir="ltr">+{status.phone}</span>
+        )}
+      </div>
+
+      {status?.last_seen && (
+        <p className="mt-1.5 text-[11px] text-stone-400">
+          آخر اتصال: <span dir="ltr">{status.last_seen.replace("T", " ").slice(0, 19)}</span>
+        </p>
+      )}
+
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <button type="button" onClick={pingBridge} disabled={busy !== null} className="flex items-center gap-1.5 rounded-full border border-sand px-3 py-1.5 text-[11px] font-bold text-stone-700 transition hover:bg-cream disabled:opacity-50">
+          {busy === "ping" ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCcw className="h-3 w-3" />} فحص الاتصال
+        </button>
+        <button type="button" onClick={showQr} disabled={busy !== null} className="flex items-center gap-1.5 rounded-full bg-ink px-3 py-1.5 text-[11px] font-bold text-ivory transition hover:opacity-90 disabled:opacity-50">
+          {busy === "qr" ? <Loader2 className="h-3 w-3 animate-spin" /> : <ScanLine className="h-3 w-3" />} عرض رمز QR
+        </button>
+        {url && (
+          <a href={url} target="_blank" rel="noreferrer" className="flex items-center gap-1.5 rounded-full border border-sand px-3 py-1.5 text-[11px] font-bold text-stone-700 transition hover:bg-cream">
+            <ExternalLink className="h-3 w-3" /> صفحة السيرفر
+          </a>
+        )}
+      </div>
+
+      {ping && <p className="mt-2 text-[11px] font-semibold text-stone-600">{ping}</p>}
+      {qrMsg && <p className="mt-2 text-[11px] font-semibold text-amber-700">{qrMsg}</p>}
+      {qrImg && (
+        <img
+          src={qrImg}
+          alt="رمز QR"
+          className="mt-3 h-44 w-44 rounded-xl border border-sand bg-white p-2"
+          style={{ imageRendering: "pixelated" }}
+        />
+      )}
+      {ping && ping.startsWith("متصل بالواتساب") && <p className="mt-1.5 text-[10px] text-stone-400">الرقم الذي يظهر أعلاه يستقبل إشعارات الإدارة.</p>}
+    </div>
+  );
+}
+
 function ChannelEditor({ channel }: { channel: Channel }) {
   const [state, formAction, pending] = useActionState(
     async (_prev: unknown, formData: FormData) => updateChannelAction(formData),
@@ -278,6 +410,8 @@ function ChannelEditor({ channel }: { channel: Channel }) {
         </div>
       )}
 
+      {channel.code === "whatsapp" && <WhatsAppBridgePanel config={channel.config} />}
+
       {!isInApp && (
         <div className="mt-3 flex items-center gap-2">
           <button type="submit" disabled={pending} className="flex items-center gap-1.5 rounded-full bg-gold px-4 py-2 text-xs font-bold text-white transition hover:bg-gold-dark disabled:opacity-50">
@@ -290,7 +424,48 @@ function ChannelEditor({ channel }: { channel: Channel }) {
   );
 }
 
-export function NotificationSettings({ templates, rules, channels }: { templates: Template[]; rules: Rule[]; channels: Channel[] }) {
+function PauseToggle({ paused }: { paused: boolean }) {
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+
+  const toggle = async () => {
+    setBusy(true);
+    setMsg(null);
+    try {
+      const r = await setNotificationsPausedAction(!paused);
+      if (r?.success) window.location.reload();
+      else setMsg((r as { error?: string } | null)?.error || "تعذر الحفظ");
+    } catch {
+      setMsg("تعذر الحفظ");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="space-y-2">
+      <button
+        onClick={toggle}
+        disabled={busy}
+        className={`flex items-center gap-2 rounded-full px-4 py-2 text-xs font-bold transition disabled:opacity-50 ${
+          paused ? "bg-amber-100 text-amber-800 hover:bg-amber-200" : "bg-ink text-ivory hover:opacity-90"
+        }`}
+      >
+        {busy ? (
+          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+        ) : paused ? (
+          <Play className="h-3.5 w-3.5" />
+        ) : (
+          <Pause className="h-3.5 w-3.5" />
+        )}
+        {paused ? "استئناف القنوات" : "إيقاف مؤقت"}
+      </button>
+      {msg && <p className="text-[11px] font-bold text-rose-600">{msg}</p>}
+    </div>
+  );
+}
+
+export function NotificationSettings({ templates, rules, channels, paused }: { templates: Template[]; rules: Rule[]; channels: Channel[]; paused: boolean }) {
   const [tab, setTab] = useState<"templates" | "rules" | "channels">("templates");
 
   const byCategory: Record<string, Template[]> = {};
@@ -305,22 +480,31 @@ export function NotificationSettings({ templates, rules, channels }: { templates
           <h1 className="text-2xl font-bold text-ink">إعدادات الإشعارات</h1>
           <p className="mt-1 text-sm text-stone-500">إدارة القوالب والقواعد والقنوات</p>
         </div>
-        <div className="flex gap-1 rounded-full border border-sand bg-white p-1">
-          {[
-            { key: "templates", label: `القوالب (${templates.length})` },
-            { key: "rules", label: `القواعد (${rules.length})` },
-            { key: "channels", label: "القنوات" },
-          ].map((t) => (
-            <button
-              key={t.key}
-              onClick={() => setTab(t.key as typeof tab)}
-              className={`whitespace-nowrap rounded-full px-4 py-2 text-xs font-bold transition ${tab === t.key ? "bg-ink text-ivory" : "text-stone-600 hover:bg-cream"}`}
-            >
-              {t.label}
-            </button>
-          ))}
+        <div className="flex items-center gap-3">
+          <PauseToggle paused={paused} />
+          <div className="flex gap-1 rounded-full border border-sand bg-white p-1">
+            {[
+              { key: "templates", label: `القوالب (${templates.length})` },
+              { key: "rules", label: `القواعد (${rules.length})` },
+              { key: "channels", label: "القنوات" },
+            ].map((t) => (
+              <button
+                key={t.key}
+                onClick={() => setTab(t.key as typeof tab)}
+                className={`whitespace-nowrap rounded-full px-4 py-2 text-xs font-bold transition ${tab === t.key ? "bg-ink text-ivory" : "text-stone-600 hover:bg-cream"}`}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
+
+      {paused && (
+        <div className="rounded-3xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs font-semibold text-amber-800">
+          <span className="font-bold">الإيقاف المؤقت مفعّل —</span> جميع القنوات (بريد، SMS، واتساب، Push، داخل التطبيق) لا تُرسل أي إشعار حالياً. فعّل «استئناف القنوات» لاستعادة العمل.
+        </div>
+      )}
 
       {tab === "templates" && (
         <div className="space-y-4">

@@ -1,0 +1,9 @@
+{
+  "supabaseUrl": "https://urofqjjfushrurnykgec.supabase.co",
+  "supabaseServiceRoleKey": "sb_secret_ضع_المفتاح_هنا",
+  "adminNumber": "9665xxxxxxxx",
+  "bridgeApiKey": "ضع_مفتاحا_سريا_هنا",
+  "httpPort": 8788,
+  "pollSeconds": 10,
+  "sessionDir": "./auth-info"
+}

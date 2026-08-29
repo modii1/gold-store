@@ -14,21 +14,24 @@ export default async function AdminNotificationSettingsPage() {
 
   const supabase = createAdminClient();
 
-  const [templatesRes, rulesRes, channelsRes] = await Promise.all([
+  const [templatesRes, rulesRes, channelsRes, settingsRes] = await Promise.all([
     supabase.from("notification_templates").select("*").order("category", { ascending: true }).order("event_type", { ascending: true }),
     supabase.from("notification_rules").select("*").order("event_type", { ascending: true }),
     supabase.from("notification_channels").select("*").order("code", { ascending: true }),
+    supabase.from("settings").select("notifications_paused").eq("id", 1).maybeSingle(),
   ]);
 
   const templates = templatesRes.data || [];
   const rules = rulesRes.data || [];
   const channels = channelsRes.data || [];
+  const paused = Boolean(settingsRes.data && (settingsRes.data as { notifications_paused: boolean }).notifications_paused);
 
   return (
     <NotificationSettings
       templates={templates}
       rules={rules}
       channels={channels}
+      paused={paused}
     />
   );
 }

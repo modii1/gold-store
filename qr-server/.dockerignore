@@ -1,0 +1,9 @@
+node_modules
+auth-info
+qr.txt
+config.json
+config.local.json
+.env
+*.log
+README.md
+npm-debug.log*

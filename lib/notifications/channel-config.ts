@@ -31,10 +31,9 @@ export const CHANNEL_CONFIG_FIELDS: Record<string, ChannelConfigField[]> = {
     { key: "from_number", label: "رقم المرسل", placeholder: "+9665xxxxxxx" },
   ],
   whatsapp: [
-    { key: "provider", label: "المزود", placeholder: "meta / twilio / oto" },
-    { key: "api_key", label: "مفتاح API / Access Token", type: "password", hint: "مطلوب لتشغيل واتساب" },
-    { key: "phone_number_id", label: "معرّف رقم الواتساب", placeholder: "100000000000" },
-    { key: "from_number", label: "رقم المرسل", placeholder: "+9665xxxxxxx" },
+    { key: "bridge_url", label: "رابط سيرفر الواتساب (QR)", placeholder: "http://192.168.1.5:8788", hint: "عنوان الجهاز الذي يعمل عليه سيرفر QR (مع البورت)" },
+    { key: "bridge_api_key", label: "مفتاح سيرفر الواتساب", type: "password", hint: "نفس المفتاح المضبوط في config.json على السيرفر" },
+    { key: "admin_number", label: "رقم واتساب الإدارة", placeholder: "+9665xxxxxxx", hint: "تُرسل إشعارات المدير إلى هذا الرقم" },
   ],
   push: [
     { key: "vapid_public_key", label: "VAPID Public Key", type: "password" },

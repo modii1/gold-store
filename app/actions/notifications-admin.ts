@@ -157,14 +157,20 @@ export async function updateChannelAction(formData: FormData) {
     return fail("قناة غير معروفة");
   }
 
-  const config: Record<string, string> = {};
-  for (const field of ["provider", "api_key", "sender", "from_number", "phone_number_id", "from", "vapid_public_key", "vapid_private_key", "vapid_subject"]) {
-    const value = String(formData.get(field) || "").trim();
-    if (value) config[field] = value;
-  }
-
   const supabase = createAdminClient();
-  const { data: existing } = await supabase.from("notification_channels").select("code").eq("code", code);
+  const { data: existing } = await supabase.from("notification_channels").select("code, config").eq("code", code);
+
+  // Keep bridge-written status keys (connected/phone/last_seen/qr_state) intact.
+  const prevConfig = (existing?.[0]?.config as Record<string, string> | null) || {};
+  const editable: Record<string, string> = {};
+  for (const field of ["provider", "api_key", "sender", "from_number", "phone_number_id", "from", "vapid_public_key", "vapid_private_key", "vapid_subject", "bridge_url", "bridge_api_key", "admin_number"]) {
+    const value = String(formData.get(field) || "").trim();
+    if (value) editable[field] = value;
+  }
+  const config: Record<string, string> = {
+    ...prevConfig,
+    ...editable,
+  };
 
   if (existing && existing.length > 0) {
     const { error } = await supabase
@@ -187,6 +193,24 @@ export async function updateChannelAction(formData: FormData) {
   }
 
   revalidatePath("/admin/settings/notifications");
+  return ok();
+}
+
+/** Master switch: temporarily pause ALL notification channels. */
+export async function setNotificationsPausedAction(paused: boolean) {
+  try {
+    await requireAdminOrThrow();
+  } catch {
+    return fail("غير مصرح");
+  }
+  const supabase = createAdminClient();
+  const { error } = await supabase
+    .from("settings")
+    .update({ notifications_paused: paused })
+    .eq("id", 1);
+  if (error) return fail(error.message);
+  revalidatePath("/admin/settings/notifications");
+  revalidatePath("/admin/settings");
   return ok();
 }
 

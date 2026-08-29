@@ -5,7 +5,7 @@ import { AuthShell } from "@/components/storefront/auth-shell";
 import { LoginForm } from "./login-form";
 import { getCustomerSession } from "@/lib/auth";
 
-export const metadata: Metadata = { title: "تسجيل الدخول | لمعة" };
+export const metadata: Metadata = { title: "تسجيل الدخول | متجر لمعة للاكسسوارات المطلية" };
 
 export default async function LoginPage() {
   if (await getCustomerSession()) redirect("/account");

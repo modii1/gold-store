@@ -247,6 +247,7 @@ export type Settings = {
   header_footer_font_size?: number;
   currency_mark_url?: string | null;
   show_currency_mark?: boolean;
+  notifications_paused?: boolean;
 };
 
 export type Page = {

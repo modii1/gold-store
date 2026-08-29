@@ -40,6 +40,13 @@ type ChannelRow = { code: ChannelCode; enabled: boolean };
 
 async function loadEnabledChannels(): Promise<ChannelCode[]> {
   const supabase = createAdminClient();
+
+  // مفتاح رئيسي: إيقاف مؤقت شامل لكل القنوات (من إعدادات الإشعارات).
+  try {
+    const { data: settings } = await supabase.from("settings").select("notifications_paused").eq("id", 1).maybeSingle();
+    if (settings && (settings as { notifications_paused?: boolean }).notifications_paused) return [];
+  } catch {}
+
   const { data } = await supabase.from("notification_channels").select("code, enabled");
   if (!data) return ["in_app"];
   return (data as ChannelRow[]).filter((c) => c.enabled).map((c) => c.code);

@@ -152,14 +152,6 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
               </div>
             )}
 
-            {settings.bank_name && (
-              <div className="rounded-2xl border border-sand bg-cream/60 p-5">
-                <p className="font-bold text-ink mb-2">الحساب البنكي</p>
-                <p className="text-sm text-stone-600">البنك: {settings.bank_name}</p>
-                <p className="text-sm text-stone-600">المستفيد: {settings.account_name || "-"}</p>
-                <p className="text-sm text-stone-600 mt-1" dir="ltr">{settings.iban || "-"}</p>
-              </div>
-            )}
           </div>
         </div>
       </main>

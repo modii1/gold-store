@@ -3,7 +3,7 @@ import type { Settings } from "@/types";
 
 const defaults: Settings = {
   id: 1,
-  site_name: "لمعة للاكسسوارات المطلية",
+  site_name: "متجر لمعة للاكسسوارات المطلية",
   store_logo: null,
   hero_image: null,
   hero_image_mobile: null,
@@ -41,6 +41,7 @@ const defaults: Settings = {
   header_footer_font_size: 13,
   currency_mark_url: "/currency-mark.svg",
   show_currency_mark: true,
+  notifications_paused: false,
 };
 
 export async function getSettings(): Promise<Settings> {

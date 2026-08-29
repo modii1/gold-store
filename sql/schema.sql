@@ -39,11 +39,11 @@ create table if not exists orders (
 -- ============================================================
 create table if not exists settings (
   id int primary key default 1,
-  site_name text default 'لمعة للاكسسوارات المطلية',
+  site_name text default 'متجر لمعة للاكسسوارات المطلية',
   store_logo text,
   hero_image text,
-  hero_title text default 'أكسسوارات ذهب فاخرة',
-  hero_subtitle text default 'تشكيلة مختارة بعناية من الذهب والاكسسوارات الفاخرة',
+  hero_title text default 'أكسسوارات مطلية فاخرة',
+  hero_subtitle text default 'تشكيلة مختارة بعناية من الاكسسوارات المطلية الفاخرة',
   announcement text,
   whatsapp text,
   phone text,

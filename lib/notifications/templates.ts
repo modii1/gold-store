@@ -392,7 +392,7 @@ export const CUSTOMER_TEMPLATE_OVERRIDES: Record<string, { title: string; body: 
   },
   "shipment.delivered": {
     title: "تم تسليم طلبك بنجاح",
-    body: "مرحبًا {{customer_name}}، تم تسليم طلبك رقم #{{order_number}} بنجاح. نتمنى أن تكون تجربتك مع لمعة مميزة.",
+    body: "مرحبًا {{customer_name}}، تم تسليم طلبك رقم #{{order_number}} بنجاح. نتمنى أن تكون تجربتك مع متجر لمعة للاكسسوارات المطلية مميزة.",
   },
   "shipment.delivery_failed": {
     title: "تعذر تسليم الطلب",

@@ -106,7 +106,7 @@ function Invoice({ order, settings }: { order: Order; settings: Settings }) {
             <img src={settings.store_logo} alt="" className="h-12 w-12 rounded-xl object-contain" />
           )}
           <div>
-            <p className="text-lg font-extrabold text-stone-900">{settings.site_name || "لمعة"}</p>
+            <p className="text-lg font-extrabold text-stone-900">{settings.site_name || "متجر لمعة للاكسسوارات المطلية"}</p>
             <p className="text-xs text-stone-500">فاتورة ضريبية مبسطة</p>
           </div>
         </div>

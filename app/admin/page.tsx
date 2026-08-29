@@ -5,7 +5,7 @@ import { getAdminSession } from "@/lib/auth";
 import { AdminLoginForm } from "./admin-login-form";
 import { LayoutDashboard, Package, ShoppingCart, Settings } from "lucide-react";
 
-export const metadata: Metadata = { title: "لوحة الإدارة | لمعة" };
+export const metadata: Metadata = { title: "لوحة الإدارة | متجر لمعة للاكسسوارات المطلية" };
 
 const features = [
   { icon: Package, text: "إدارة المنتجات والصور والفيديوهات" },
@@ -30,7 +30,7 @@ export default async function AdminLoginPage() {
           </span>
           <div>
             <p className="text-sm font-bold text-ivory">لوحة الإدارة</p>
-            <p className="text-xs text-ivory/50">لمعة للاكسسوارات المطلية</p>
+            <p className="text-xs text-ivory/50">متجر لمعة للاكسسوارات المطلية</p>
           </div>
         </div>
 
@@ -51,7 +51,7 @@ export default async function AdminLoginPage() {
           </div>
         </div>
 
-        <p className="relative text-xs text-ivory/40">© {new Date().getFullYear()} لمعة — جميع الحقوق محفوظة</p>
+        <p className="relative text-xs text-ivory/40">© {new Date().getFullYear()} متجر لمعة للاكسسوارات المطلية — جميع الحقوق محفوظة</p>
       </aside>
 
       {/* Login form panel */}

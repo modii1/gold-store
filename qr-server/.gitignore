@@ -1,0 +1,5 @@
+node_modules/
+auth-info/
+config.json
+qr.txt
+.env

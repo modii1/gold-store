@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, Tag, ShoppingBag, ShieldCheck, Truck, Landmark, MapPin, CheckCircle2 } from "lucide-react";
+import { Loader2, Tag, ShoppingBag, ShieldCheck, Truck, Landmark, MapPin, CheckCircle2, Upload, FileCheck2 } from "lucide-react";
+import { WhatsappIcon } from "@/components/ui/social-icons";
 import { useCart } from "@/components/storefront/providers";
 import { trackEvent } from "@/lib/analytics/client";
 import { createOrderAction, validateCouponAction } from "@/app/actions/orders";
@@ -10,6 +11,7 @@ import { getCheckoutRatesAction, reverseGeocodeNationalAction, type CheckoutShip
 import { LocationMap } from "@/components/checkout/location-map";
 import { Currency } from "@/components/storefront/currency";
 import { cn } from "@/lib/utils";
+import { createClient } from "@/lib/supabase/client";
 import type { Settings, Carrier, PaymentMethod } from "@/types";
 
 type SavedAddress = { id: string; label: string | null; city: string | null; region: string | null; address: string | null; national_address: string | null; building_number: string | null; latitude: number | null; longitude: number | null; maps_url: string | null; is_default: boolean };
@@ -37,6 +39,8 @@ export function CheckoutForm({ settings, shipping, payment, customer, savedAddre
   const [coordinates, setCoordinates] = useState({ latitude: "", longitude: "" });
   const [selectedAddress, setSelectedAddress] = useState(savedAddresses[0]?.id || "");
   const pickupOnly = settings.shipping_display_mode !== "all";
+  const [receiptUrl, setReceiptUrl] = useState("");
+  const [receiptUploading, setReceiptUploading] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const submittingRef = useRef(false);
 
@@ -183,6 +187,25 @@ export function CheckoutForm({ settings, shipping, payment, customer, savedAddre
     setManualLocation(!address.latitude || !address.longitude);
   };
 
+  const uploadReceipt = async (file: File) => {
+    if (!file) return;
+    setReceiptUploading(true);
+    setError("");
+    try {
+      const supabase = createClient();
+      const ext = file.name.split(".").pop() || "bin";
+      const path = `receipts/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+      const { error: upErr } = await supabase.storage.from("receipts").upload(path, file);
+      if (upErr) throw new Error(upErr.message);
+      const { data: pub } = supabase.storage.from("receipts").getPublicUrl(path);
+      setReceiptUrl(pub.publicUrl);
+    } catch (e) {
+      setError((e as Error).message || "فشل رفع الإيصال — حاول مجدداً");
+    } finally {
+      setReceiptUploading(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (submittingRef.current) return;
@@ -266,6 +289,7 @@ export function CheckoutForm({ settings, shipping, payment, customer, savedAddre
             <input type="hidden" name="latitude" value={coordinates.latitude} />
             <input type="hidden" name="longitude" value={coordinates.longitude} />
             <input type="hidden" name="maps_url" value={coordinates.latitude && coordinates.longitude ? `https://maps.google.com/?q=${coordinates.latitude},${coordinates.longitude}` : ""} />
+            <input type="hidden" name="transfer_receipt_url" value={receiptUrl} />
             <button type="button" onClick={useCurrentLocation} className={cn("col-span-2 flex items-center justify-center gap-2 rounded-xl border px-4 py-3 text-sm font-bold transition", locationReady ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-gold/40 bg-amber-50 text-gold-dark hover:bg-amber-100")}>
               {locationLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : locationReady ? <CheckCircle2 className="h-4 w-4" /> : <MapPin className="h-4 w-4" />}
               {locationLoading ? "جار تحديد موقعك..." : locationReady ? "تم تحديد الموقع — اضغطي للتغيير" : "تحديد عنواني من موقعي الحالي"}
@@ -346,6 +370,58 @@ export function CheckoutForm({ settings, shipping, payment, customer, savedAddre
           </div>
           {settings.payment_instructions && (
             <p className="mt-4 text-xs text-stone-500 leading-relaxed bg-cream/60 rounded-xl p-3 whitespace-pre-line">{settings.payment_instructions}</p>
+          )}
+          {paymentName.includes("تحويل") && (
+            <>
+              {settings.bank_name && (
+                <div className="mt-5 rounded-xl border border-sand bg-cream/60 p-4">
+                  <p className="font-bold text-ink mb-2">الحساب البنكي</p>
+                  <p className="text-sm text-stone-600">البنك: {settings.bank_name}</p>
+                  <p className="text-sm text-stone-600">المستفيد: {settings.account_name || "-"}</p>
+                  <p className="text-sm text-stone-600 mt-1" dir="ltr">{settings.iban || "-"}</p>
+                </div>
+              )}
+            <div className="mt-5 rounded-xl border border-sand bg-cream/40 p-4">
+              <p className="flex items-center gap-2 text-sm font-bold text-ink mb-1">
+                {receiptUrl ? <FileCheck2 className="w-4 h-4 text-emerald-600" /> : <Upload className="w-4 h-4 text-gold" />}
+                إثبات التحويل <span className="text-xs font-normal text-stone-400">(اختياري)</span>
+              </p>
+              <p className="text-xs text-stone-500 mb-3">بعد التحويل، ارفع صورة الإيصال هنا أو أرسله عبر واتساب.</p>
+              {settings.whatsapp && (
+                <a
+                  href={`https://wa.me/${settings.whatsapp}?text=${encodeURIComponent("مرحباً، أرفق إثبات التحويل الخاص بطلبي:")}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mb-3 flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 text-sm font-bold text-white transition hover:bg-emerald-700"
+                >
+                  <WhatsappIcon className="w-4 h-4" /> إرسال عبر واتساب
+                </a>
+              )}
+              {receiptUrl ? (
+                <div className="flex items-center justify-between gap-2 rounded-lg bg-white border border-emerald-200 p-3">
+                  <a href={receiptUrl} target="_blank" rel="noopener noreferrer" className="text-xs font-bold text-emerald-700 underline truncate">{receiptUrl.split("/").pop()}</a>
+                  <button type="button" onClick={() => setReceiptUrl("")} className="text-xs text-stone-400 hover:text-red-600 shrink-0">إزالة</button>
+                </div>
+              ) : (
+                <label className="block cursor-pointer">
+                  <input
+                    type="file"
+                    accept="image/*,.pdf"
+                    className="hidden"
+                    disabled={receiptUploading}
+                    onChange={(e) => {
+                      const f = e.target.files?.[0];
+                      if (f) uploadReceipt(f);
+                    }}
+                  />
+                  <span className={cn("flex items-center justify-center gap-2 rounded-xl border border-dashed border-gold/50 bg-white px-4 py-3 text-sm font-bold text-gold transition", receiptUploading ? "opacity-60" : "hover:bg-gold/5")}>
+                    {receiptUploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                    {receiptUploading ? "جارٍ الرفع..." : "ارفع الإيصال (اختياري)"}
+                  </span>
+                </label>
+              )}
+            </div>
+            </>
           )}
         </section>
       </div>
