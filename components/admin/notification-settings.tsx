@@ -232,10 +232,11 @@ function WhatsAppBridgePanel({ config }: { config?: Record<string, string> | nul
     bridge_url: string;
     enabled: boolean;
   } | null>(null);
-  const [busy, setBusy] = useState<"ping" | "qr" | "reset" | null>(null);
+  const [busy, setBusy] = useState<"ping" | "reset" | null>(null);
   const [ping, setPing] = useState<string | null>(null);
   const [qrImg, setQrImg] = useState<string | null>(null);
   const [qrMsg, setQrMsg] = useState<string | null>(null);
+  const [showQr, setShowQr] = useState(false);
 
   const url = ((status?.bridge_url || config?.bridge_url) || "").replace(/\/+$/, "");
 
@@ -279,37 +280,47 @@ function WhatsAppBridgePanel({ config }: { config?: Record<string, string> | nul
     }
   };
 
-  const showQr = async () => {
-    if (!url) return setQrMsg("أدخل رابط سيرفر الواتساب (QR) واحفظ أولاً.");
-    setBusy("qr");
-    setQrMsg(null);
-    setQrImg(null);
-    try {
-      const res = await fetch("/api/admin/notifications/whatsapp-bridge?path=qr", { cache: "no-store" });
-      if (!res.ok) {
-        let proxyMsg: string | null = null;
-        try {
-          proxyMsg = (await res.json())?.error || null;
-        } catch {
-          // ignore body parse errors
-        }
-        setQrMsg(proxyMsg || (res.status === 401 ? "المفتاح مرفوض — تأكد من «مفتاح سيرفر الواتساب»." : `السيرفر أجاب برمز ${res.status}.`));
-      } else {
-        const j = await res.json();
-        if (j.connected) setQrMsg("السيرفر متصل بالفعل بالواتساب، لا حاجة لرمز QR.");
-        else if (j.qr_png) setQrImg(j.qr_png);
-        else if (j.qr) setQrMsg("الرمز متاح في الطرفية أو عبر فتح صفحة السيرفر وتحميل الرمز.");
-        else setQrMsg("لا يوجد رمز QR حالياً — أعد تشغيل السيرفر أو احذف مجلد auth-info.");
-      }
-    } catch {
-      setQrMsg("لا يمكن الوصول إلى السيرفر لعرض الرمز.");
-    } finally {
-      setBusy(null);
-    }
-  };
-
   const connected = status?.connected || false;
   const qrState = status?.qr_state || "idle";
+
+  const showQrLive = !!(showQr && url && !connected);
+  useEffect(() => {
+    if (!showQrLive) return;
+    let alive = true;
+    setQrImg(null);
+    setQrMsg(null);
+    const tick = async () => {
+      if (!alive || busy !== null) return;
+      try {
+        const res = await fetch("/api/admin/notifications/whatsapp-bridge?path=qr", { cache: "no-store" });
+        if (!alive) return;
+        if (res.ok) {
+          const j = await res.json();
+          if (j.connected) {
+            setQrImg(null);
+            setQrMsg(null);
+          } else if (j.qr_png) {
+            setQrImg(j.qr_png);
+            setQrMsg(null);
+          } else if (j.qr) {
+            setQrImg(null);
+            setQrMsg("الرمز متاح في الطرفية أو عبر فتح صفحة السيرفر وتحميل الرمز.");
+          } else {
+            setQrImg(null);
+            setQrMsg("لا يوجد رمز QR حالياً — انتظر قليلاً، يتولد تلقائياً.");
+          }
+        }
+      } catch {
+        // أعد المحاولة في الدورة التالية
+      }
+    };
+    void tick();
+    const t = setInterval(tick, 6000);
+    return () => {
+      alive = false;
+      clearInterval(t);
+    };
+  }, [showQrLive, url, busy]);
 
   const resetBridge = async () => {
     if (!url) return setQrMsg("أدخل رابط سيرفر الواتساب (QR) واحفظ أولاً.");
@@ -328,10 +339,10 @@ function WhatsAppBridgePanel({ config }: { config?: Record<string, string> | nul
         }
         setQrMsg(proxyMsg || `السيرفر أجاب برمز ${res.status}.`);
       } else {
-        setQrMsg("تم تفكيك الجلسة القديمة — جارٍ توليد رمز QR جديد...");
+        setQrMsg("تم تسجيل خروج الرقم القديم — جارٍ توليد رمز QR جديد...");
         await new Promise((r) => setTimeout(r, 4500));
+        setShowQr(true);
         void load();
-        await showQr();
       }
     } catch {
       setQrMsg("لا يمكن الوصول إلى السيرفر لإعادة الربط.");
@@ -369,8 +380,8 @@ function WhatsAppBridgePanel({ config }: { config?: Record<string, string> | nul
         <button type="button" onClick={pingBridge} disabled={busy !== null} className="flex items-center gap-1.5 rounded-full border border-sand px-3 py-1.5 text-[11px] font-bold text-stone-700 transition hover:bg-cream disabled:opacity-50">
           {busy === "ping" ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCcw className="h-3 w-3" />} فحص الاتصال
         </button>
-        <button type="button" onClick={showQr} disabled={busy !== null} className="flex items-center gap-1.5 rounded-full bg-ink px-3 py-1.5 text-[11px] font-bold text-ivory transition hover:opacity-90 disabled:opacity-50">
-          {busy === "qr" ? <Loader2 className="h-3 w-3 animate-spin" /> : <ScanLine className="h-3 w-3" />} عرض رمز QR
+        <button type="button" onClick={() => setShowQr((s) => !s)} disabled={busy !== null || (connected && !showQr)} className="flex items-center gap-1.5 rounded-full bg-ink px-3 py-1.5 text-[11px] font-bold text-ivory transition hover:opacity-90 disabled:opacity-50">
+          {showQr ? <XCircle className="h-3 w-3" /> : <ScanLine className="h-3 w-3" />} {showQr ? "إخفاء رمز QR" : "عرض رمز QR"}
         </button>
         <button type="button" onClick={resetBridge} disabled={busy !== null || !url} className="flex items-center gap-1.5 rounded-full border border-rose-200 px-3 py-1.5 text-[11px] font-bold text-rose-600 transition hover:bg-rose-50 disabled:opacity-50">
           {busy === "reset" ? <Loader2 className="h-3 w-3 animate-spin" /> : <Link2 className="h-3 w-3" />} إعادة ربط واتساب
@@ -383,16 +394,28 @@ function WhatsAppBridgePanel({ config }: { config?: Record<string, string> | nul
       </div>
 
       {ping && <p className="mt-2 text-[11px] font-semibold text-stone-600">{ping}</p>}
-      {qrMsg && <p className="mt-2 text-[11px] font-semibold text-amber-700">{qrMsg}</p>}
-      {qrImg && (
-        <img
-          src={qrImg}
-          alt="رمز QR"
-          className="mt-3 h-44 w-44 rounded-xl border border-sand bg-white p-2"
-          style={{ imageRendering: "pixelated" }}
-        />
-      )}
       {ping && ping.startsWith("متصل بالواتساب") && <p className="mt-1.5 text-[10px] text-stone-400">الرقم الذي يظهر أعلاه يستقبل إشعارات الإدارة.</p>}
+      {showQr && (
+        <div className="mt-3 rounded-xl border border-dashed border-sand bg-cream/40 p-4 text-center">
+          {connected ? (
+            <p className="flex items-center justify-center gap-1.5 text-xs font-bold text-emerald-700">
+              <Wifi className="h-3.5 w-3.5" /> السيرفر متصل بالواتساب — لا حاجة لرمز QR.
+            </p>
+          ) : (
+            <>
+              <div className="mx-auto flex h-44 w-44 items-center justify-center overflow-hidden rounded-xl border border-sand bg-white p-2">
+                {qrImg ? (
+                  <img src={qrImg} alt="رمز QR" className="h-full w-full" style={{ imageRendering: "pixelated" }} />
+                ) : (
+                  <Loader2 className="h-6 w-6 animate-spin text-stone-300" />
+                )}
+              </div>
+              <p className="mt-2 text-[11px] font-semibold text-amber-700">{qrMsg || "يتم تحديث الرمز تلقائياً كل ثوانٍ — امسحه فوراً."}</p>
+              <p className="mt-1 text-[10px] text-stone-400">الخطوات: واتساب ← الإعدادات ← الأجهزة المرتبطة ← ربط جهاز</p>
+            </>
+          )}
+        </div>
+      )}
     </div>
   );
 }

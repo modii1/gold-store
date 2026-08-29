@@ -485,11 +485,20 @@ function startHttp() {
         resetScheduled = true;
         connected = false;
         myPhone = null;
-        if (sock) {
+        const old = sock;
+        sock = null;
+        if (old) {
           try {
-            sock.end();
+            // طلب تسجيل خروج فعلي من خوادم واتساب لكشف الرقم المُقترن
+            const p = old.logout();
+            if (p && typeof p.catch === "function") p.catch(() => {});
           } catch {}
-          sock = null;
+          // احتياط: أغلق الجلسة بعد 3 ثوانٍ إن لم تغلقها عملية الخروج من تلقاء نفسها
+          setTimeout(() => {
+            try {
+              old.end();
+            } catch {}
+          }, 3000);
         }
         try {
           fs.rmSync(config.sessionDir, { recursive: true, force: true });
@@ -501,8 +510,8 @@ function startHttp() {
         setTimeout(() => {
           resetScheduled = false;
           void startWa();
-        }, 2000);
-        sendJson(res, 200, { ok: true, message: "تم تفكيك الجلسة القديمة — رمز QR جديد يُولَّد الآن" });
+        }, 3500);
+        sendJson(res, 200, { ok: true, message: "تم تسجيل خروج الرقم القديم — رمز QR جديد يُولَّد الآن" });
         return;
       }
 
