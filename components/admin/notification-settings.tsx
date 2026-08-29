@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState, useCallback, useEffect, useState } from "react";
-import { Loader2, Save, Power, RefreshCcw, CheckCircle2, XCircle, Pause, Play, Wifi, WifiOff, ScanLine, ExternalLink } from "lucide-react";
+import { Loader2, Save, Power, RefreshCcw, CheckCircle2, XCircle, Pause, Play, Wifi, WifiOff, ScanLine, ExternalLink, Link2 } from "lucide-react";
 import { updateTemplateAction, updateRuleAction, toggleTemplateAction, toggleRuleAction, updateChannelAction, setNotificationsPausedAction } from "@/app/actions/notifications-admin";
 import { SUPPORTED_VARIABLES } from "@/lib/notifications/templates";
 import { CHANNEL_CONFIG_FIELDS } from "@/lib/notifications/channel-config";
@@ -232,7 +232,7 @@ function WhatsAppBridgePanel({ config }: { config?: Record<string, string> | nul
     bridge_url: string;
     enabled: boolean;
   } | null>(null);
-  const [busy, setBusy] = useState<"ping" | "qr" | null>(null);
+  const [busy, setBusy] = useState<"ping" | "qr" | "reset" | null>(null);
   const [ping, setPing] = useState<string | null>(null);
   const [qrImg, setQrImg] = useState<string | null>(null);
   const [qrMsg, setQrMsg] = useState<string | null>(null);
@@ -311,6 +311,35 @@ function WhatsAppBridgePanel({ config }: { config?: Record<string, string> | nul
   const connected = status?.connected || false;
   const qrState = status?.qr_state || "idle";
 
+  const resetBridge = async () => {
+    if (!url) return setQrMsg("أدخل رابط سيرفر الواتساب (QR) واحفظ أولاً.");
+    if (!window.confirm("تنبيه: سيتم تسجيل خروج الرقم الحالي من سيرفر واتساب وإعادة ربطه برمز جديد.\nلو غيّرت رقم الواتساب، حدّث حقل «الرقم المرسل إليه» أعلاه ثم امسح الرمز بالرقم الجديد.\nمتابعة؟")) return;
+    setBusy("reset");
+    setQrMsg(null);
+    setQrImg(null);
+    try {
+      const res = await fetch("/api/admin/notifications/whatsapp-bridge?path=reset", { method: "POST", cache: "no-store" });
+      if (!res.ok) {
+        let proxyMsg: string | null = null;
+        try {
+          proxyMsg = (await res.json())?.error || null;
+        } catch {
+          // ignore body parse errors
+        }
+        setQrMsg(proxyMsg || `السيرفر أجاب برمز ${res.status}.`);
+      } else {
+        setQrMsg("تم تفكيك الجلسة القديمة — جارٍ توليد رمز QR جديد...");
+        await new Promise((r) => setTimeout(r, 4500));
+        void load();
+        await showQr();
+      }
+    } catch {
+      setQrMsg("لا يمكن الوصول إلى السيرفر لإعادة الربط.");
+    } finally {
+      setBusy(null);
+    }
+  };
+
   return (
     <div className="mt-4 rounded-2xl border border-sand bg-white p-4">
       <p className="flex items-center gap-1.5 text-xs font-bold text-ink">
@@ -342,6 +371,9 @@ function WhatsAppBridgePanel({ config }: { config?: Record<string, string> | nul
         </button>
         <button type="button" onClick={showQr} disabled={busy !== null} className="flex items-center gap-1.5 rounded-full bg-ink px-3 py-1.5 text-[11px] font-bold text-ivory transition hover:opacity-90 disabled:opacity-50">
           {busy === "qr" ? <Loader2 className="h-3 w-3 animate-spin" /> : <ScanLine className="h-3 w-3" />} عرض رمز QR
+        </button>
+        <button type="button" onClick={resetBridge} disabled={busy !== null || !url} className="flex items-center gap-1.5 rounded-full border border-rose-200 px-3 py-1.5 text-[11px] font-bold text-rose-600 transition hover:bg-rose-50 disabled:opacity-50">
+          {busy === "reset" ? <Loader2 className="h-3 w-3 animate-spin" /> : <Link2 className="h-3 w-3" />} إعادة ربط واتساب
         </button>
         {url && (
           <a href={url} target="_blank" rel="noreferrer" className="flex items-center gap-1.5 rounded-full border border-sand px-3 py-1.5 text-[11px] font-bold text-stone-700 transition hover:bg-cream">

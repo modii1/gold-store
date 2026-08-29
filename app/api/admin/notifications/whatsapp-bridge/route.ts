@@ -4,15 +4,17 @@ import { createAdminClient } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
 
-const ALLOWED = new Set(["health", "qr"]);
+const GET_ALLOWED = new Set(["health", "qr"]);
+const POST_ALLOWED = new Set(["reset"]);
 
-export async function GET(req: NextRequest) {
+async function proxy(req: NextRequest, method: "GET" | "POST") {
   if (!(await getAdminSession())) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
   const path = (req.nextUrl.searchParams.get("path") || "").replace(/^\/+/, "");
-  if (!ALLOWED.has(path)) {
+  const allowed = method === "POST" ? POST_ALLOWED : GET_ALLOWED;
+  if (!allowed.has(path)) {
     return NextResponse.json({ error: "bad path" }, { status: 400 });
   }
 
@@ -33,7 +35,7 @@ export async function GET(req: NextRequest) {
   if (config.bridge_api_key) headers["Authorization"] = `Bearer ${config.bridge_api_key}`;
 
   try {
-    const res = await fetch(`${base}/${path}`, { headers, cache: "no-store" });
+    const res = await fetch(`${base}/${path}`, { method, headers, cache: "no-store" });
     const body = await res.text();
     const contentType = res.headers.get("content-type") || "application/json";
     return new NextResponse(body, {
@@ -46,4 +48,12 @@ export async function GET(req: NextRequest) {
       { status: 502 }
     );
   }
+}
+
+export async function GET(req: NextRequest) {
+  return proxy(req, "GET");
+}
+
+export async function POST(req: NextRequest) {
+  return proxy(req, "POST");
 }

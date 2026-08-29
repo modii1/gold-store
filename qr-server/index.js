@@ -153,6 +153,7 @@ let sock = null;
 let connected = false;
 let starting = false;
 let myPhone = null;
+let resetScheduled = false;
 
 async function startWa() {
   if (starting) return;
@@ -209,6 +210,8 @@ async function startWa() {
         void reportStatus({ connected: "false", qr_state: code === DisconnectReason.loggedOut ? "logged_out" : "reconnecting", phone: myPhone, last_seen: nowIso() });
         if (code === DisconnectReason.loggedOut) {
           log("تم تسجيل الخروج — احذف مجلد auth-info ثم أعد التشغيل لمسح QR جديد.");
+        } else if (resetScheduled) {
+          log("إعادة تعيين الجلسة يدوياً — سيبدأ رمز QR جديد خلال لحظات.");
         } else {
           log("إعادة الاتصال خلال 5 ثوانٍ...");
           await sleep(5000);
@@ -366,7 +369,7 @@ async function pollOnce() {
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, OPTIONS",
+  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
   "Access-Control-Allow-Headers": "Authorization, Content-Type",
 };
 
@@ -475,6 +478,31 @@ function startHttp() {
               : `<p style="color:#b45309;font-size:13px">امسح رمز QR الظاهر في الطرفية (أو افتح /qr) برقم واتساب للاتصال.</p>`) +
             `</div></body></html>`
         );
+        return;
+      }
+
+      if (urlPath === "/reset" && req.method === "POST") {
+        resetScheduled = true;
+        connected = false;
+        myPhone = null;
+        if (sock) {
+          try {
+            sock.end();
+          } catch {}
+          sock = null;
+        }
+        try {
+          fs.rmSync(config.sessionDir, { recursive: true, force: true });
+        } catch {}
+        try {
+          fs.rmSync(QR_FILE, { force: true });
+        } catch {}
+        void reportStatus({ connected: "false", qr_state: "waiting_qr", phone: null, last_seen: nowIso() });
+        setTimeout(() => {
+          resetScheduled = false;
+          void startWa();
+        }, 2000);
+        sendJson(res, 200, { ok: true, message: "تم تفكيك الجلسة القديمة — رمز QR جديد يُولَّد الآن" });
         return;
       }
 
