@@ -58,6 +58,9 @@ export function filterChannelsForCustomer(
     if (c === "email") return p.email || (!essential && false);
     if (c === "sms") return p.sms;
     if (c === "push") return p.push;
+    // واتساب: القنوات الأساسية (أوامر/دفع/شحن/مرتجعات) فقط تُرسل للعميل —
+    // التسويق لا يُرسل واتساب أبداً لتجنب الإزعاج وخطر الحظر.
+    if (c === "whatsapp") return essential;
     return false;
   });
 }

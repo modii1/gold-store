@@ -65,6 +65,14 @@ function log(...args) {
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+/* حماية من حظر واتساب: إبطاء مقصود بين الرسائل + سقف لكل دورة +
+   مسافة دنيا حسب الرقم لتجنّب الطوفان والسلوك الشبيه بالروبوت. */
+const SEND_MIN_GAP_MS = 4000;   // مهلة بين رسالة وأخرى
+const MAX_SENDS_PER_POLL = 5;   // حد أقصى لرسائل الدورة الواحدة (جولة كل 10 ثو انٍ)
+const MIN_GAP_PER_PHONE_MS = 30_000; // 30 ثانية بين رسالتين لنفس الرقم
+let lastSendAt = 0;
+const lastSendByPhone = new Map(); // phone -> timestamp
+
 /* ------------------------------------------------------------------ */
 /* Supabase (REST عبر fetch المدمج في Node — بلا حزم إضافية)            */
 /* ------------------------------------------------------------------ */
@@ -345,10 +353,23 @@ async function pollOnce() {
   try {
     await refreshWaSettings();
     const pending = await fetchPendingDeliveries();
-    for (const d of pending) {
+    const batch = (Array.isArray(pending) ? pending : []).slice(0, MAX_SENDS_PER_POLL);
+    for (const d of batch) {
       // قفل تفاؤلي: علامة sending تمنع أي معالج آخر من أخذ نفس الصف
       const claimed = await claimDelivery(d.id);
       if (!claimed || !claimed.length) continue;
+      // مهلة آمنة بين الرسائل (حماية من شبكة الرسائل المفاجئة)
+      const gapWait = SEND_MIN_GAP_MS - (Date.now() - lastSendAt);
+      if (gapWait > 0) await sleep(gapWait);
+      lastSendAt = Date.now();
+      const phoneKey = claimed[0].notifications?.customer_id || claimed[0].order_id || "none";
+      const lastForPhone = lastSendByPhone.get(phoneKey) || 0;
+      const phoneWait = MIN_GAP_PER_PHONE_MS - (Date.now() - lastForPhone);
+      if (phoneWait > 0) {
+        log(`[poll] تأجيل الإرسال إلى ${phoneKey} — حماية من تكرار (${Math.round(phoneWait / 1000)}ث)`);
+        await sleep(phoneWait);
+      }
+      lastSendByPhone.set(phoneKey, Date.now());
       await processDelivery({
         id: claimed[0].id,
         attempt: claimed[0].attempt,
