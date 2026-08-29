@@ -489,6 +489,17 @@ function startHttp() {
   setInterval(() => {
     if (connected) void reportStatus({ connected: "true", qr_state: "connected", phone: myPhone, last_seen: nowIso() });
   }, 30_000);
+
+  // نبضة ذاتية لكل SELF_PING_URL إن ضُبط — تُبقي السيرفر نشطاً على المنصات
+  // التي تُسبت الخدمة عند الخمول (مثل Hugging Face Spaces المجاني).
+  const selfPingUrl = process.env.SELF_PING_URL;
+  if (selfPingUrl) {
+    const selfPingSeconds = Math.max(60, Number(process.env.SELF_PING_INTERVAL || 300));
+    log(`نبضة ذاتية كل ${selfPingSeconds} ثانية إلى ${selfPingUrl} (لمنع النوم)`);
+    setInterval(() => {
+      fetch(selfPingUrl, { headers: { "User-Agent": "luma-whatsapp-bridge" } }).catch(() => {});
+    }, selfPingSeconds * 1000);
+  }
   void pollOnce();
 
   process.on("SIGINT", () => {

@@ -144,6 +144,61 @@ docker compose logs -f     # انتظر ظهور رمز QR
 - **مهمة جداً**: قبل انتهاء الـ 90 يوم اضغط **Activate** (الترقية إلى حساب فوترة عادي)
   في واجهة الترحيب وإلا تُغلق الموارد وتُحذف. البقاء داخل الفئة المجانية = **بلا أي فاتورة**.
 
+### ⚡ الطريقة الأسهل — سكربت واحد (يفعل كل شيء)
+بعد إنشاء الحساب: افتح `console.cloud.google.com` ← اضغط أيقونة «`>`_» أعلى الشاشة =
+**Cloud Shell** (صندوق طرفية مجاني مدمج، لا تثبت شيئاً). عدّل **القيم الثلاث** في أول
+السكربت (بين علامتي التنصيص) ثم ألصق الكتلة كلها واضغط Enter — تنبّه للبطلان لا شئ قبلها:
+
+```bash
+# ════════════ سكربت التثبيت الآلي: عدّل القيم الثلاث ثم الصق الكل ════════════
+SUPABASE_SERVICE_ROLE_KEY="sb_secret_ضع_المفتاح_هنا"   # من ملف .env.local على جهازك
+ADMIN_NUMBER="9665xxxxxxxx"                            # رقمك على واتساب
+BRIDGE_API_KEY="ضع_اي_مفتاح_سري_عشوائي"                # احتفظ به — ستحتاجه للوحة
+
+gcloud config set compute/zone us-central1-a >/dev/null 2>&1
+
+# 1) جهاز + فتح البورت
+gcloud compute instances create whatsapp-bridge --machine-type=e2-micro \
+  --image-family=ubuntu-2404-lts-amd64 --image-project=ubuntu-os-cloud \
+  --boot-disk-size=30GB --boot-disk-type=pd-standard || echo "⚠️ الجهاز موجود مسبقاً"
+gcloud compute firewall-rules create whatsapp-bridge-8788 \
+  --allow=tcp:8788 --source-ranges=0.0.0.0/0 2>/dev/null || echo "⚠️ البورت موجود"
+
+IP=$(gcloud compute instances describe whatsapp-bridge --format='get(networkInterfaces[0].accessConfigs[0].natIP)')
+
+# 2) تثبيت Docker وسحب المشروع على الجهاز
+gcloud --quiet compute ssh whatsapp-bridge --command "
+  sudo apt-get update -qq
+  curl -fsSL https://get.docker.com | sudo sh -s --
+  sudo apt-get install -y -qq docker-compose-plugin git
+  sudo usermod -aG docker \$USER
+  git clone -q https://github.com/modii1/gold-store.git /tmp/gold-store 2>/dev/null || git -C /tmp/gold-store pull -q
+"
+
+# 3) ملف المتغيرات (يُنشأ هنا ثم يُرفع — بلا تداخل اقتباسات)
+cat > .env <<EOT
+SUPABASE_URL=https://urofqjjfushrurnykgec.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=$SUPABASE_SERVICE_ROLE_KEY
+ADMIN_NUMBER=$ADMIN_NUMBER
+BRIDGE_API_KEY=$BRIDGE_API_KEY
+HTTP_PORT=8788
+POLL_SECONDS=10
+EOT
+gcloud --quiet compute scp .env whatsapp-bridge:/tmp/gold-store/qr-server/.env
+
+# 4) تشغيل الجسر
+gcloud --quiet compute ssh whatsapp-bridge --command "cd /tmp/gold-store/qr-server && sudo docker compose up -d --build"
+
+echo "✅ كل شيء جاهز!"
+echo "رابط الجسر للوحة:  http://$IP:8788"
+echo "مفتاح السيرفر:      $BRIDGE_API_KEY"
+echo "معاينة سريعة:       http://$IP:8788/health"
+```
+
+> تُنشأ ملفات المشروع من GitHub، فلا حاجة لنسخ شيء من جهازك.
+> على تحذير: هذه النسخة «السكربت الواحد» تعمل داخل Cloud Shell؛ إن فضّلت خطوات يدوية
+> مفصّلة فهي في الأقسام التالية (2–5) بنفس النتيجة.
+
 ### 2) إنشاء الجهاز (من Cloud Shell المجاني في الكونسول — بلا تثبيت أي شيء)
 ```bash
 gcloud config set compute/zone us-central1-a
@@ -200,6 +255,55 @@ gcloud compute instances describe whatsapp-bridge \
 - القرص 30GB يكفي؛ لا تصعد لقرص أكبر وإلا تجاوزت الفئة المجانية.
 - ملفات النشر (`Dockerfile`/`docker-compose.yml`) هي نفسها في أوراكل — نقل الجلسة بينهما
   بنسخ مجلد `auth-info` (تعمل من مكان واحد فقط).
+
+## النشر بلا فاتورة — Hugging Face Spaces (مجاني للأبد)
+
+إن لم تكن تريد إدخال بطاقة نهائياً: **Hugging Face Spaces** تستضيف تطبيق Docker
+**مجاناً مدى الحياة وبلا بطاقة** على سيرفراتها. مثالي للجسر — مع حلّ فلتة النوم:
+
+### 1) إنشاء الـ Space
+- سجّل في `huggingface.co` (ابدأ دون بطاقة) ← **New Space**:
+  - الاسم: مثل `luma-whatsapp-bridge`
+  - **SDK**: اختر **Docker** ← «Blank/Dockerfile»
+  - **Hardware**: `CPU basic` ← **Free**
+  - **النظافة**: `Public` (أو Private — كلها جيدة).
+- اضغط **Create Space**.
+
+### 2) رفع الملفات (من تبويب Files في الـ Space ← Add file ← Upload)
+ارفع **6 ملفات فقط** (لا `node_modules` ولا `config.json`):
+هي محتويات `qr-server/` عدا ما هو ممنوع، مع `hf-space/Dockerfile` باسم `Dockerfile`:
+
+| الملف | المصدر |
+| --- | --- |
+| `Dockerfile` | `hf-space/Dockerfile` (يستمع على بورت 7860) |
+| `index.js` | `qr-server/index.js` |
+| `package.json` | `qr-server/package.json` |
+| `package-lock.json` | `qr-server/package-lock.json` |
+| `.dockerignore` | `qr-server/.dockerignore` |
+| `config.example.json` | اختياري |
+
+الرفع يشغّل البناء تلقائياً. عند الانتهاء ستحصل على عنوان مثل:
+`https://zerof443-luma-whatsapp-bridge.hf.space`
+
+### 3) المتغيرات السرية (Settings ← Variables and secrets)
+```
+SUPABASE_SERVICE_ROLE_KEY = sb_secret_...
+ADMIN_NUMBER              = 9665xxxxxxxx
+BRIDGE_API_KEY            = <مفتاح سري>
+HTTP_PORT                 = 7860
+SELF_PING_URL             = https://<spacename>.hf.space/health
+```
+
+### 4) ربط المتجر
+- لوحة التحكم ← **الإشعارات ← القنوات ← واتساب**:
+  - **رابط سيرفر الواتساب (QR)** = `https://<spacename>.hf.space` (HTTPS!)
+  - **مفتاح السيرفر** = نفس `BRIDGE_API_KEY`
+- افتح **عرض رمز QR** ← امسحه من واتساب.
+
+### هامتان:
+- **النوم**: الفئة المجانية «تنام» بعد 48 ساعة بلا نشاط. نبضة `SELF_PING_URL` الذاتية
+  (كل 5 دقائق) تولّد نشاطاً شبكياً يمنع النوم؛ ويبقى واتساب متصلاً.
+- الجلسة تُحفظ في `auth-info` داخل الـ Space — لا تحذف الـ Space.
 
 ## ملاحظات تشغيلية
 - لا تعمل هذه الطريقة على Cloudflare Workers أو Vercel (السيرفر يحتاج اتصالاً مستمراً)؛ لذلك شغّله على جهازك أو VPS مجاني مدى الحياة (انظر أعلاه).
