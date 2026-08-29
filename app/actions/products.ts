@@ -66,30 +66,76 @@ export async function saveProductAction(formData: FormData) {
   // Variants (Amazon style) — JSON array from form
   const variantsRaw = formData.get("variants") as string | null;
   if (variantsRaw && productId) {
+    interface VariantInput {
+      color?: string;
+      color_hex?: string;
+      size?: string;
+      sku?: string;
+      price?: string | number;
+      sale_price?: string | number;
+      stock?: string | number;
+      image_url?: string;
+    }
+    let variants: VariantInput[] = [];
     try {
-      const variants = JSON.parse(variantsRaw) as any[];
-      await supabase.from("product_variants").delete().eq("product_id", productId);
-      const rows = variants.filter((v) => v.color?.trim() || v.size?.trim()).map((v, i) => ({
-        product_id: productId,
-        color: (v.color || "").trim() || null,
-        color_hex: (v.color_hex || "").trim() || null,
-        size: (v.size || "").trim() || null,
-        sku: (v.sku || "").trim() || null,
-        price: v.price ? parseFloat(v.price) : null,
-        sale_price: v.sale_price ? parseFloat(v.sale_price) : null,
-        stock: parseInt(v.stock) || 0,
-        image_url: v.image_url || null,
-        sort_order: i,
-        is_active: true,
-      }));
-      if (rows.length) {
-        const { error: vErr } = await supabase.from("product_variants").insert(rows);
-        if (vErr) return { error: vErr.message };
+      variants = JSON.parse(variantsRaw) as VariantInput[];
+    } catch {
+      return { error: "بيانات التوليفات غير صالحة" };
+    }
+
+    // الطريقة الأساسية: دالة DB ذرية (حذف+إدراج في معاملة واحدة) — لا خسارة عند الفشل.
+    try {
+      const { error: rpcErr } = await supabase.rpc("save_product_variants", {
+        p_product_id: productId,
+        p_variants: JSON.stringify(variants),
+      });
+      if (!rpcErr) {
+        revalidatePath("/");
+        revalidatePath("/admin/products");
+        revalidatePath("/product");
+        return { success: true };
       }
-      // keep products.color in sync for faceting (first color)
-      const firstColor = rows[0]?.color || null;
-      if (firstColor) await supabase.from("products").update({ color: firstColor }).eq("id", productId);
-    } catch {}
+      // لو الدالة غير منشأة بعد (الترحيل لم يُشغَّل): إبلاغ واضح بدل كتم الخطأ.
+      if (!String(rpcErr.code || "").match(/PGRST202/i)) {
+        return { error: `تعذر حفظ التوليفات: ${rpcErr.message}` };
+      }
+    } catch (e) {
+      if (!String((e as Error)?.message || "").match(/PGRST202/i)) {
+        return { error: `تعذر حفظ التوليفات: ${(e as Error)?.message || String(e)}` };
+      }
+    }
+
+    // مسار احتياطي (يُستخدم فقط إذا لم تُنشأ الدالة بعد): يُحذف ثم يُدرج —
+    // مع التحقق من صلاحية الأرقام قبل أي حذف، ونفس سلوك النسخة الأصلية.
+    const rows = variants
+      .filter((v) => v.color?.trim() || v.size?.trim() || v.image_url?.trim())
+      .map((v, i) => {
+        const price = v.price !== "" && v.price != null ? parseFloat(String(v.price)) : null;
+        const sale_price = v.sale_price !== "" && v.sale_price != null ? parseFloat(String(v.sale_price)) : null;
+        const stock = parseInt(String(v.stock), 10) || 0;
+        if ((price != null && Number.isNaN(price)) || (sale_price != null && Number.isNaN(sale_price)) || Number.isNaN(stock)) {
+          throw new Error("أرقام التوليفة غير صالحة (سعر/مخزون)");
+        }
+        return {
+          product_id: productId,
+          color: (v.color || "").trim() || null,
+          color_hex: (v.color_hex || "").trim() || null,
+          size: (v.size || "").trim() || null,
+          sku: (v.sku || "").trim() || null,
+          price,
+          sale_price,
+          stock,
+          image_url: v.image_url || null,
+          sort_order: i,
+          is_active: true,
+        };
+      });
+    const { error: delErr } = await supabase.from("product_variants").delete().eq("product_id", productId);
+    if (delErr) return { error: `تعذر حذف التوليفات القديمة: ${delErr.message}` };
+    if (rows.length) {
+      const { error: vErr } = await supabase.from("product_variants").insert(rows);
+      if (vErr) return { error: `تعذر حفظ التوليفات: ${vErr.message}` };
+    }
   }
 
   revalidatePath("/");

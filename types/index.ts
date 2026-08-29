@@ -1,6 +1,7 @@
 export type MediaItem = {
   url: string;
   caption?: string;
+  position?: number;
 };
 
 export type ProductVariant = {

@@ -143,12 +143,12 @@ export async function getProduct(slug: string): Promise<Product | null> {
       const admin = createAdminClient();
       const { data: variants } = await admin.from("product_variants").select("*").eq("product_id", product.id).eq("is_active", true).order("sort_order");
       if (variants?.length) (product as any).variants = variants;
-      // Merge variant images + general images so the storefront gallery matches
-      // the admin panel (variants AND general uploads shown together, deduped).
-      const general = product.images || [];
-      const variantImages = (variants || []).filter((v: any) => v.image_url).map((v: any) => ({ url: v.image_url, caption: v.color || "" }));
+      // الصور تُحفظ مرتبة من لوحة التحكم (الأول = الغلاف) — نحافظ على الترتيب لمنع إعادة ترتيب توليفات قبل العامة.
+      const ordered = (product.images || []).slice().sort((a: any, b: any) => (a.position ?? 0) - (b.position ?? 0));
+      // إلحاق صور التوليفات التي قد تُفقد من المعرض (منتجات قديمة) مع الحفاظ على ترتيبها.
+      const extra = (variants || []).filter((v: any) => v.image_url).map((v: any) => ({ url: v.image_url, caption: v.color || "" }));
       const seen = new Set<string>();
-      (product as any).images = [...variantImages, ...general].filter((m: any) => {
+      (product as any).images = [...ordered, ...extra].filter((m: any) => {
         if (seen.has(m.url)) return false;
         seen.add(m.url);
         return true;

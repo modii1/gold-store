@@ -2,7 +2,7 @@
 
 import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, Upload, X, Image as ImageIcon, PlayCircle, CheckCircle2 } from "lucide-react";
+import { Loader2, Upload, X, Image as ImageIcon, PlayCircle, CheckCircle2, Star, ChevronUp, ChevronDown } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { saveProductAction } from "@/app/actions/products";
 import type { Product, MediaItem } from "@/types";
@@ -18,6 +18,7 @@ export function ProductForm({ product }: { product?: Product }) {
   const [images, setImages] = useState<MediaItem[]>(product?.images || []);
   const [videos, setVideos] = useState<MediaItem[]>(product?.videos || []);
   const [uploading, setUploading] = useState(false);
+  const [galleryOrder, setGalleryOrder] = useState<string[]>([]);
   const [variants, setVariants] = useState<VariantRow[]>(() => {
     const v = (product as any)?.variants as any[] | undefined;
     if (v?.length) return v.map((x) => ({ color: x.color || "", color_hex: x.color_hex || "#D4AF37", size: x.size || "", sku: x.sku || "", price: x.price != null ? String(x.price) : "", sale_price: x.sale_price != null ? String(x.sale_price) : "", stock: String(x.stock ?? 0), image_url: x.image_url || "" }));
@@ -75,7 +76,38 @@ export function ProductForm({ product }: { product?: Product }) {
     setUploading(false);
   };
 
-  const hadVariants = !!((product as any)?.variants?.length);
+  // المعرض الموحّد: صور التوليفات + الصور العامة معاً (بدون تكرار)، مرتب حسب ترتيب المستخدم.
+  const variantImages: MediaItem[] = variants.filter((v) => v.image_url).map((v) => ({ url: v.image_url as string, caption: v.color || "" }));
+  const mergedBase: MediaItem[] = [...variantImages, ...images].filter((m, i, arr) => arr.findIndex((x) => x.url === m.url) === i);
+  const knownOrder = galleryOrder.filter((u) => mergedBase.some((m) => m.url === u));
+  const unknownOrder = mergedBase.map((m) => m.url).filter((u) => !galleryOrder.includes(u));
+  const galleryUrls = [...knownOrder, ...unknownOrder];
+  const gallery: MediaItem[] = galleryUrls
+    .map((u) => mergedBase.find((m) => m.url === u))
+    .filter((m): m is MediaItem => !!m)
+    .map((m, i) => ({ ...m, position: i }));
+
+  const moveImage = (url: string, dir: "up" | "down") => {
+    const idx = galleryUrls.indexOf(url);
+    const swapIdx = dir === "up" ? idx - 1 : idx + 1;
+    if (idx < 0 || swapIdx < 0 || swapIdx >= galleryUrls.length) return;
+    const next = galleryUrls.slice();
+    [next[idx], next[swapIdx]] = [next[swapIdx], next[idx]];
+    setGalleryOrder(next);
+  };
+
+  const setCover = (url: string) => {
+    setGalleryOrder([url, ...galleryUrls.filter((u) => u !== url)]);
+  };
+
+  const removeFromGallery = (url: string) => {
+    setGalleryOrder((p) => p.filter((u) => u !== url));
+    if (variants.some((v) => v.image_url === url)) {
+      setVariants((prev) => prev.map((v) => (v.image_url === url ? { ...v, image_url: "" } : v)));
+    }
+    setImages((prev) => prev.filter((im) => im.url !== url));
+  };
+
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setLoading(true);
@@ -83,22 +115,8 @@ export function ProductForm({ product }: { product?: Product }) {
 
     const formData = new FormData(e.currentTarget);
     formData.set("specs", JSON.stringify(specs));
-    // Gallery source: merge variant images + general images together (dedup), so
-    // the storefront gallery shows variants AND general uploads like the admin panel.
-    const variantImages = variants.filter((v) => v.image_url).map((v) => ({ url: v.image_url }));
-    const seen = new Set<string>();
-    const merged = [...variantImages, ...images].filter((m) => {
-      if (seen.has(m.url)) return false;
-      seen.add(m.url);
-      return true;
-    });
-    let effectiveImages: MediaItem[];
-    if (hadVariants && variants.length === 0) {
-      effectiveImages = merged;
-    } else {
-      effectiveImages = merged;
-    }
-    formData.set("images", JSON.stringify(effectiveImages));
+    // المعرض = التوليفات + العامة مرتباً حسب ترتيب المستخدم (الأول = غلاف المنتج).
+    formData.set("images", JSON.stringify(gallery.map((m) => ({ url: m.url, caption: m.caption, position: m.position }))));
     formData.set("videos", JSON.stringify(videos));
     formData.set("variants", JSON.stringify(variants));
     if (product) formData.set("id", product.id);
@@ -317,50 +335,59 @@ export function ProductForm({ product }: { product?: Product }) {
         <div className="rounded-2xl border border-amber-100 bg-white p-6">
           <div className="flex items-center justify-between mb-3">
             <h2 className="font-bold text-stone-800 flex items-center gap-2">
-              <ImageIcon className="w-5 h-5 text-gold" /> الصور العامة
+              <ImageIcon className="w-5 h-5 text-gold" /> معرض صور المنتج
             </h2>
             <button type="button" onClick={() => imageInput.current?.click()} disabled={uploading}
               className="flex items-center gap-1.5 rounded-lg bg-amber-50 px-3 py-1.5 text-xs font-bold text-gold hover:bg-amber-100 transition disabled:opacity-50">
-              <Upload className="w-3.5 h-3.5" /> رفع صور
+              <Upload className="w-3.5 h-3.5" /> رفع صور عامة
             </button>
             <input ref={imageInput} type="file" accept="image/*" multiple hidden
               onChange={(e) => e.target.files && uploadFiles(e.target.files, "images")} />
           </div>
-          <p className="text-[11px] text-stone-400 mb-3">صور عامة تُعرض في المعرض بجانب صور التوليفات. تُستخدم أيضاً عندما لا توجد توليفات.</p>
+          <p className="text-[11px] text-stone-400 mb-3">
+            المعرض يضم صور التوليفات + الصور العامة. أول صورة هي <b>غلاف المنتج</b> — استخدم ★ لتثبيت أي صورة كغلاف، و▲▼ لإعادة الترتيب.
+          </p>
 
-          {images.length === 0 ? (
-            <p className="text-sm text-stone-400 text-center py-6">لا توجد صور عامة — ارفع صور المنتج</p>
+          {gallery.length === 0 ? (
+            <p className="text-sm text-stone-400 text-center py-6">لا توجد صور بعد — ارفع صوراً أو أضف توليفة مع صورتها</p>
           ) : (
             <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2">
-              {images.map((img, i) => (
-                <div key={i} className="relative aspect-square overflow-hidden rounded-xl border border-sand group">
-                  <img src={img.url} alt="" className="h-full w-full object-cover" />
-                  <button type="button" onClick={() => setImages(images.filter((_, idx) => idx !== i))}
-                    className="absolute top-1 start-1 flex h-7 w-7 items-center justify-center rounded-full bg-rose-500 text-white shadow opacity-0 group-hover:opacity-100 transition">
-                    <X className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              ))}
+              {gallery.map((img) => {
+                const isCover = img.position === 0;
+                const isVariantImg = variants.some((v) => v.image_url === img.url);
+                return (
+                  <div key={img.url} className={`relative aspect-square overflow-hidden rounded-xl border group ${isCover ? "border-gold ring-2 ring-gold/40" : "border-sand"}`}>
+                    <img src={img.url} alt={img.caption || ""} className="h-full w-full object-cover" />
+                    {isCover && (
+                      <span className="absolute top-1 inset-x-1 mx-auto w-fit rounded-full bg-gold px-2 py-0.5 text-[10px] font-bold text-white shadow flex items-center gap-1">
+                        <Star className="w-3 h-3 fill-white" /> الغلاف
+                      </span>
+                    )}
+                    <button type="button" onClick={() => removeFromGallery(img.url)}
+                      className="absolute top-1 start-1 flex h-7 w-7 items-center justify-center rounded-full bg-rose-500 text-white shadow opacity-0 group-hover:opacity-100 transition">
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                    <div className="absolute bottom-1 inset-x-1 flex items-center justify-center gap-1 opacity-0 group-hover:opacity-100 transition">
+                      <button type="button" title="اجعلها غلاف" onClick={() => setCover(img.url)}
+                        className="flex h-7 w-7 items-center justify-center rounded-lg bg-black/60 text-amber-300 hover:bg-gold hover:text-white transition">
+                        <Star className={`w-3.5 h-3.5 ${isCover ? "fill-amber-300" : ""}`} />
+                      </button>
+                      <button type="button" title="تحريك للأعلى" disabled={img.position === 0} onClick={() => moveImage(img.url, "up")}
+                        className="flex h-7 w-7 items-center justify-center rounded-lg bg-black/60 text-white hover:bg-gold disabled:opacity-30 transition">
+                        <ChevronUp className="w-3.5 h-3.5" />
+                      </button>
+                      <button type="button" title="تحريك للأسفل" disabled={img.position === gallery.length - 1} onClick={() => moveImage(img.url, "down")}
+                        className="flex h-7 w-7 items-center justify-center rounded-lg bg-black/60 text-white hover:bg-gold disabled:opacity-30 transition">
+                        <ChevronDown className="w-3.5 h-3.5" />
+                      </button>
+                      {isVariantImg && (
+                        <span className="rounded-full bg-gold/90 px-2 py-0.5 text-[9px] font-bold text-white whitespace-nowrap">توليفة</span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
-          )}
-        </div>
-
-        <div className="rounded-2xl border border-gold/20 bg-white p-6">
-          <h2 className="font-bold text-stone-800 flex items-center gap-2"><ImageIcon className="w-5 h-5 text-gold" /> صور التوليفات</h2>
-          <p className="mt-2 text-xs text-stone-500 leading-relaxed">الصور الآن تُرفع <b>لكل توليفة على حدة</b> (كل صورة لها لونها). لا حاجة لرفع صور عامة — معرض المنتج يُبنى تلقائيًا من صور التوليفات.</p>
-          {variants.length > 0 && variants.some((v) => v.image_url) ? (
-            <div className="mt-4 grid grid-cols-4 sm:grid-cols-6 gap-2">
-              {variants.filter((v) => v.image_url).map((v, i) => (
-                <div key={i} className="relative aspect-square overflow-hidden rounded-xl border border-sand">
-                  <img src={v.image_url} alt={v.color || ""} className="h-full w-full object-cover" />
-                  <span className="absolute bottom-1 start-1 rounded-full bg-black/60 px-1.5 py-0.5 text-[10px] font-bold text-white flex items-center gap-1">
-                    <span className="h-3 w-3 rounded-full border border-white" style={{ background: v.color_hex }} /> {v.color || "—"} {v.size ? `· ${v.size}` : ""}
-                  </span>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="mt-4 text-xs text-stone-400 text-center py-4 border border-dashed border-sand rounded-xl">لم ترفع صور توليفات بعد — أضف توليفة وارفع صورتها</p>
           )}
         </div>
 
