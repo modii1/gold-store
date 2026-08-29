@@ -45,6 +45,8 @@ function itemsSummary(o: Order) {
   return head;
 }
 
+const SHIPPING_STATUSES = ["shipped", "picked_up", "in_transit", "out_for_delivery", "delivered"];
+
 function StatusMenu({ o, busy, onStatus }: { o: Order; busy: boolean; onStatus: (o: Order, target: string, label: string) => void }) {
   const [open, setOpen] = useState(false);
   return (
@@ -66,7 +68,11 @@ function StatusMenu({ o, busy, onStatus }: { o: Order; busy: boolean; onStatus: 
                 key={s.value}
                 onClick={() => {
                   setOpen(false);
-                  if (s.value !== o.status) onStatus(o, s.value, s.label);
+                  // يُسمح بإعادة الضغط على نفس حالة الشحن الحالية: طلب عالق دخل حالة
+                  // الشحن قبل تفعيل الإرسال الآلي يعيد الضغط على «جاري الشحن» ليرسله
+                  // إلى OTO وينشئ شحنته (الازدواجية محمية في الروتين).
+                  const sameStatus = s.value === o.status;
+                  if (!sameStatus || (sameStatus && SHIPPING_STATUSES.includes(s.value))) onStatus(o, s.value, s.label);
                 }}
                 className="flex w-full items-center gap-2 px-3 py-2 text-xs font-bold text-stone-600 hover:bg-stone-50"
               >
