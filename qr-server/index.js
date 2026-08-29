@@ -181,7 +181,6 @@ async function startWa() {
       version,
       auth: state,
       logger: pino({ level: "warn" }),
-      printQRInTerminal: true,
       browser: ["LumaStore", "Chrome", "1.0"],
     });
 
