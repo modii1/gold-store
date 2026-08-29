@@ -165,7 +165,7 @@ async function handleOrderStatus(supabase: ReturnType<typeof createAdminClient>,
   }
 
   const { data: shipments } = await supabase.from("shipments")
-    .select("id, tracking_url, tracking_number")
+    .select("id, order_id, tracking_url, tracking_number")
     .or(matchFilter)
     .limit(1);
 
@@ -173,6 +173,22 @@ async function handleOrderStatus(supabase: ReturnType<typeof createAdminClient>,
   const prevTrackingUrl = shipments && shipments.length ? shipments[0].tracking_url : null;
   const tracking = body.trackingNumber || body.dcTrackingNumber || null;
   const trackingUrl = body.trackingUrl || body.brandedTrackingURL || null;
+
+  // Fallback: when the webhook arrives with only otoId (no orderId), derive the
+  // internal order identifiers from the matched shipment so customer WhatsApp
+  // notifications still carry order_id (the QR bridge resolves the phone via
+  // notifications.order_id -> orders.customer_phone).
+  if (!internalOrderId && shipments && shipments.length && shipments[0].order_id) {
+    const { data: orderById } = await supabase.from("orders")
+      .select("id, customer_identifier, order_number")
+      .eq("id", shipments[0].order_id)
+      .maybeSingle();
+    if (orderById) {
+      internalOrderId = orderById.id;
+      customerIdentifier = orderById.customer_identifier || null;
+      internalOrderNumber = orderById.order_number;
+    }
+  }
 
   if (shipments && shipments.length) {
     await supabase.from("shipments").update({

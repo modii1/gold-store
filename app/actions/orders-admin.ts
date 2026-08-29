@@ -21,7 +21,7 @@ export async function updateOrderStatusAction(formData: FormData) {
 
   const { data: current } = await supabase
     .from("orders")
-    .select("id, status, order_number, customer_identifier, customer_name, shipping_method, delivery_option_name, total, payment_method")
+    .select("id, status, order_number, customer_identifier, customer_name, shipping_method, delivery_option_name, delivery_option_id, total, payment_method")
     .eq("id", id)
     .maybeSingle();
   const oldStatus = current?.status || null;
@@ -31,10 +31,39 @@ export async function updateOrderStatusAction(formData: FormData) {
 
   await logOrderStatusChange(id, oldStatus, status, "admin");
 
-  // أي حالة شحن (جاري الشحن فما بعده) تُنشئ تلقائياً صفاً في جدول الشحنات
-  // إن لم يوجد صف مسبقاً، بحيث يظهر الطلب في قسم «الشحنات» في اللوحة.
+  // عند تفعيل حالة «جاري الشحن» (أو أي حالة شحن): يُرسل الطلب فوراً على OTO/الشركة
+  // وينشأ صف شحنة تلقائياً حتى يظهر في قسم «الشحنات». لو فشل OTO، نُنشئ صفاً محلياً
+  // احتياطياً حتى لا يضيع الطلب من قسم الشحنات وحالة الطلب لا تتأثر.
   const shippingStatuses = ["shipped", "picked_up", "in_transit", "out_for_delivery", "delivered"];
   if (oldStatus !== status && shippingStatuses.includes(status)) {
+    if (status === "shipped" && current?.delivery_option_id) {
+      try {
+        const shipFd = new FormData();
+        shipFd.set("id", id);
+        const shipRes = await createShipmentAction(shipFd);
+        if (!shipRes.error) {
+          revalidatePath("/admin/orders");
+          revalidatePath(`/admin/orders/${id}`);
+          revalidatePath("/admin/dashboard");
+          return { success: true, message: shipRes.message || "تم إرسال الطلب للشحن" };
+        }
+        await supabase.from("shipping_logs").insert({
+          order_id: id,
+          event: "oto.shipment.auto_failed",
+          level: "error",
+          message: shipRes.error,
+        }).then(async (r) => { if (r.error) console.error("shipping_logs insert failed", r.error.message); });
+      } catch (e) {
+        await supabase.from("shipping_logs").insert({
+          order_id: id,
+          event: "oto.shipment.auto_error",
+          level: "error",
+          message: (e as Error)?.message || String(e),
+        }).then(async (r) => { if (r.error) console.error("shipping_logs insert failed", r.error.message); });
+      }
+    }
+
+    // صف شحنة محلي إن لم يوجد مسبقاً (يَظهر في قسم الشحنات حتى لو فشل OTO)
     try {
       const { data: existingShip } = await supabase.from("shipments").select("id").eq("order_id", id).limit(1).maybeSingle();
       if (!existingShip) {
