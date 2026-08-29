@@ -19,13 +19,40 @@ export async function updateOrderStatusAction(formData: FormData) {
 
   const supabase = createAdminClient();
 
-  const { data: current } = await supabase.from("orders").select("status, order_number, customer_identifier, customer_name").eq("id", id).maybeSingle();
+  const { data: current } = await supabase
+    .from("orders")
+    .select("id, status, order_number, customer_identifier, customer_name, shipping_method, delivery_option_name, total, payment_method")
+    .eq("id", id)
+    .maybeSingle();
   const oldStatus = current?.status || null;
 
   const { error } = await supabase.from("orders").update({ status }).eq("id", id);
   if (error) return { error: error.message };
 
   await logOrderStatusChange(id, oldStatus, status, "admin");
+
+  // أي حالة شحن (جاري الشحن فما بعده) تُنشئ تلقائياً صفاً في جدول الشحنات
+  // إن لم يوجد صف مسبقاً، بحيث يظهر الطلب في قسم «الشحنات» في اللوحة.
+  const shippingStatuses = ["shipped", "picked_up", "in_transit", "out_for_delivery", "delivered"];
+  if (oldStatus !== status && shippingStatuses.includes(status)) {
+    try {
+      const { data: existingShip } = await supabase.from("shipments").select("id").eq("order_id", id).limit(1).maybeSingle();
+      if (!existingShip) {
+        const shipStatus = status === "delivered" ? "delivered" : status === "in_transit" || status === "out_for_delivery" ? "in_transit" : "processing";
+        const isCod = (current?.payment_method || "").toLowerCase().includes("cod") || (current?.payment_method || "").toLowerCase().includes("عند الاستلام");
+        await supabase.from("shipments").insert({
+          order_id: id,
+          delivery_company: current?.delivery_option_name || current?.shipping_method || null,
+          delivery_option_name: current?.delivery_option_name || current?.shipping_method || null,
+          status: shipStatus,
+          cod_amount: isCod ? Number(current?.total) || null : null,
+        });
+        revalidatePath("/admin/shipments");
+      }
+    } catch {
+      // إنشاء صف الشحنة اختياري — تحديث حالة الطلب نجح بالفعل
+    }
+  }
 
   if (oldStatus !== status && current) {
     const statusLabel = ORDER_STATUS_META[status as keyof typeof ORDER_STATUS_META]?.label || status;
