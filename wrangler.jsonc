@@ -11,6 +11,10 @@
 		"directory": ".open-next/assets",
 		"binding": "ASSETS"
 	},
+	"vars": {
+		"NEXT_PUBLIC_SUPABASE_URL": "https://urofqjjfushrurnykgec.supabase.co",
+		"NEXT_PUBLIC_SUPABASE_ANON_KEY": "sb_publishable_bsiyKcWRrt4VcYtqABOu2w_GgCAtIxI"
+	},
 	"services": [
 		{
 			// Self-reference service binding, the service name must match the worker name
