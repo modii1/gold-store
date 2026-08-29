@@ -11,6 +11,7 @@ import { getCheckoutRatesAction, reverseGeocodeNationalAction, type CheckoutShip
 import { LocationMap } from "@/components/checkout/location-map";
 import { Currency } from "@/components/storefront/currency";
 import { cn } from "@/lib/utils";
+import { waMeNumber } from "@/lib/format";
 import { createClient } from "@/lib/supabase/client";
 import type { Settings, Carrier, PaymentMethod } from "@/types";
 
@@ -389,7 +390,7 @@ export function CheckoutForm({ settings, shipping, payment, customer, savedAddre
               <p className="text-xs text-stone-500 mb-3">بعد التحويل، ارفع صورة الإيصال هنا أو أرسله عبر واتساب.</p>
               {settings.whatsapp && (
                 <a
-                  href={`https://wa.me/${settings.whatsapp}?text=${encodeURIComponent("مرحباً، أرفق إثبات التحويل الخاص بطلبي:")}`}
+                  href={`https://wa.me/${waMeNumber(settings.whatsapp)}?text=${encodeURIComponent("مرحباً، أرفق إثبات التحويل الخاص بطلبي:")}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="mb-3 flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 text-sm font-bold text-white transition hover:bg-emerald-700"

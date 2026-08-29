@@ -5,6 +5,7 @@ import { StoreFooter } from "@/components/storefront/footer";
 import { getSettings } from "@/lib/services/settings";
 import { getCategoriesList } from "@/lib/services/products";
 import { WhatsappIcon } from "@/components/ui/social-icons";
+import { waMeNumber } from "@/lib/format";
 
 export default async function OrderSuccessPage({ searchParams }: { searchParams: Promise<{ num?: string; name?: string; phone?: string }> }) {
   const { num, name, phone } = await searchParams;
@@ -34,7 +35,7 @@ export default async function OrderSuccessPage({ searchParams }: { searchParams:
 
           {settings.whatsapp && (
             <a
-              href={`https://wa.me/${settings.whatsapp}?text=${encodeURIComponent(`مرحباً، تم تأكيد طلبي رقم #${num}${name ? ` (${name})` : ""}`)}`}
+              href={`https://wa.me/${waMeNumber(settings.whatsapp)}?text=${encodeURIComponent(`مرحباً، تم تأكيد طلبي رقم #${num}${name ? ` (${name})` : ""}`)}`}
               target="_blank"
               rel="noopener noreferrer"
               className="mt-6 flex w-full items-center justify-center gap-2 rounded-full bg-emerald-600 py-3.5 font-bold text-white hover:bg-emerald-700 transition"

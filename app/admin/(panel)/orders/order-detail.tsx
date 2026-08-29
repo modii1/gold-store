@@ -9,7 +9,7 @@ import {
 } from "lucide-react";
 import { updateOrderStatusAction, createShipmentAction, addOrderNoteAction, deleteOrderNoteAction } from "@/app/actions/orders-admin";
 import { Currency } from "@/components/storefront/currency";
-import { formatDate } from "@/lib/format";
+import { formatDate, waMeNumber } from "@/lib/format";
 import { shipmentCompanyName } from "@/lib/orders/order-meta";
 import type { Order, OrderStatusLog, OrderNote } from "@/types";
 
@@ -342,7 +342,7 @@ export function OrderDetail({ order, statusLog, notes: initialNotes, shipments }
               <div className="flex items-center gap-2 text-sm text-stone-600">
                 <Phone className="w-4 h-4 text-stone-400" />
                 <span dir="ltr">{order.customer_phone}</span>
-                <a href={`https://wa.me/${order.customer_phone?.replace(/^0/, "966")}`} target="_blank" rel="noopener noreferrer"
+                <a href={`https://wa.me/${waMeNumber(order.customer_phone)}`} target="_blank" rel="noopener noreferrer"
                   className="text-emerald-600 hover:underline text-xs">واتساب</a>
               </div>
               {order.email && (

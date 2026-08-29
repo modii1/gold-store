@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Phone, Mail, MapPin, Heart, Lock } from "lucide-react";
 import { InstagramIcon, TiktokIcon, SnapchatIcon, XTwitterIcon, WhatsappIcon } from "@/components/ui/social-icons";
 import { BrandLogo } from "./brand-logo";
+import { waMeNumber } from "@/lib/format";
 import type { Settings } from "@/types";
 
 export function StoreFooter({ settings }: { settings: Settings }) {
@@ -65,7 +66,7 @@ export function StoreFooter({ settings }: { settings: Settings }) {
              <ul className="space-y-2.5" style={{ fontSize: `${settings.header_footer_font_size || 13}px` }}>
               {settings.whatsapp && (
                 <li>
-                  <a href={`https://wa.me/${settings.whatsapp}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 hover:text-gold-light transition">
+                  <a href={`https://wa.me/${waMeNumber(settings.whatsapp)}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 hover:text-gold-light transition">
                     <WhatsappIcon className="w-4 h-4 text-emerald-400" /> <span dir="ltr">{settings.whatsapp}</span>
                   </a>
                 </li>

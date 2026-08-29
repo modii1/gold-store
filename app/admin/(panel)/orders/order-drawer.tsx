@@ -7,7 +7,7 @@ import {
 } from "lucide-react";
 import { addOrderNoteAction, deleteOrderNoteAction } from "@/app/actions/orders-admin";
 import { Currency } from "@/components/storefront/currency";
-import { formatDate } from "@/lib/format";
+import { formatDate, waMeNumber } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { Order, OrderDetails, OrderNote } from "@/types";
 import {
@@ -108,7 +108,7 @@ export function OrderDrawer({ drawer, busyId, onClose, onStatus, onShip, onAppro
                 <Phone className="h-3.5 w-3.5 text-stone-400" /> {order.customer_phone}
               </a>
               <a
-                href={`https://wa.me/${order.customer_phone?.replace(/^0/, "966")}`}
+                href={`https://wa.me/${waMeNumber(order.customer_phone)}`}
                 target="_blank" rel="noopener noreferrer"
                 className="rounded-lg bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700 hover:bg-emerald-100"
               >

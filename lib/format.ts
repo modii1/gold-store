@@ -11,6 +11,21 @@ export function formatCurrency(value: number | null | undefined) {
   return new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(value ?? 0);
 }
 
+// تحويل رقم محلي (0507606225) أو دولي (966507606225) إلى الصيغة الدولية
+// المطلوبة لروابط wa.me — الهدف: ألا يظهر خطأ عند فتح الرابط.
+export function waMeNumber(raw: string | null | undefined): string {
+  if (!raw) return "";
+  let n = String(raw).replace(/[^\d]/g, "");
+  if (n.startsWith("00")) n = n.slice(2);
+  if (n.length === 9 && n.startsWith("5")) n = "966" + n;
+  if (n.length === 10 && n.startsWith("0")) n = "966" + n.slice(1);
+  if (!n.startsWith("966")) {
+    if (n.startsWith("0")) n = "966" + n.slice(1);
+    else n = "966" + n;
+  }
+  return n;
+}
+
 function pad(n: number) {
   return String(n).padStart(2, "0");
 }

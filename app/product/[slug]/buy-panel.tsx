@@ -3,7 +3,7 @@
 import { useState, useMemo } from "react";
 import { ShoppingBag, Heart, Minus, Plus, Check } from "lucide-react";
 import { useCart, useFavorites } from "@/components/storefront/providers";
-import { effectivePrice } from "@/lib/format";
+import { effectivePrice, waMeNumber } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { WhatsappIcon } from "@/components/ui/social-icons";
 import type { Product, ProductVariant, Settings } from "@/types";
@@ -265,7 +265,7 @@ export function BuyPanel({ product, settings }: { product: Product; settings: Se
         </button>
         {settings.whatsapp && (
           <a
-            href={`https://wa.me/${settings.whatsapp}?text=${encodeURIComponent(`مرحباً، أريد الاستفسار عن: ${product.name} (SKU: ${product.sku || product.id.slice(0, 8)})`)}`}
+            href={`https://wa.me/${waMeNumber(settings.whatsapp)}?text=${encodeURIComponent(`مرحباً، أريد الاستفسار عن: ${product.name} (SKU: ${product.sku || product.id.slice(0, 8)})`)}`}
             target="_blank"
             rel="noopener noreferrer"
             className="flex items-center justify-center gap-2 rounded-full border-2 border-emerald-500 px-5 py-3 text-sm font-bold text-emerald-600 hover:bg-emerald-50 transition"
