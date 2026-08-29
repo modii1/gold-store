@@ -176,6 +176,25 @@ async function createNotificationRow(args: {
   actionUrl?: string | null;
 }): Promise<string | null> {
   const supabase = createAdminClient();
+
+  // منع التكرار: نفس الحدث قد يصل عبر أكثر من مسار (ويب هوك OTO + مزامنة لوحة
+  // التحكم) وقد تتعامل عدة أدوار معه. إن وُجد إشعار مطابق (نفس النوع والطلب
+  // والنص) خلال آخر 3 دقائق، نتخطى إنشاء صف جديد حتى لا تتكرر الرسالة.
+  let dupQuery = supabase
+    .from("notifications")
+    .select("id")
+    .eq("user_type", args.userType)
+    .eq("type", args.eventType)
+    .eq("title", args.title)
+    .eq("message", args.message)
+    .gte("created_at", new Date(Date.now() - 3 * 60 * 1000).toISOString());
+  if (args.orderId) dupQuery = dupQuery.eq("order_id", args.orderId);
+  else dupQuery = dupQuery.is("order_id", null);
+  if (args.shipmentId) dupQuery = dupQuery.eq("shipment_id", args.shipmentId);
+  else dupQuery = dupQuery.is("shipment_id", null);
+  const { data: dup } = await dupQuery.limit(1);
+  if (dup && dup.length) return null;
+
   const { data, error } = await supabase
     .from("notifications")
     .insert({
