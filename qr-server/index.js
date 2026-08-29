@@ -427,6 +427,29 @@ function startHttp() {
         return;
       }
 
+      if (urlPath === "/screen") {
+        const p = await qrPayload();
+        sendHtml(
+          res,
+          `<!doctype html><html lang="ar" dir="rtl"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">` +
+            `<title>ربط واتساب — امسح الرمز</title><body style="font-family:Tahoma,sans-serif;background:#f8f6f1;margin:0;padding:24px">` +
+            `<div style="max-width:420px;margin:0 auto;background:#fff;border:1px solid #eee;border-radius:16px;padding:24px;text-align:center">` +
+            `<h2 style="margin:0 0 4px;color:#111">ربط واتساب</h2>` +
+            `<p style="margin:0 0 16px;color:#777;font-size:13px">امسح الرمز: واتساب ← الإعدادات ← الأجهزة المرتبطة</p>` +
+            (p.connected
+              ? `<p style="font-size:15px;color:#16a34a"><b>متصل بالواتساب</b></p>` +
+                (p.phone ? `<p style="font-size:14px;color:#333">الرقم: <b dir="ltr">+${p.phone}</b></p>` : "")
+              : p.qr_png
+                ? `<img src="${p.qr_png}" alt="QR" style="width:100%;max-width:300px;border-radius:12px"/>` +
+                  `<p style="margin-top:12px;color:#b45309;font-size:13px">الرمز يتحدث تلقائياً — اسرع بالمسح.</p>`
+                : `<p style="color:#dc2626;font-size:13px">الرمز غير متوفر بعد — أعد التحميل بعد لحظة.</p>`) +
+            `</div>` +
+            (p.connected ? "" : `<script>setTimeout(()=>location.reload(),3000)</script>`) +
+            `</body></html>`
+        );
+        return;
+      }
+
       if (!isAuthed(req)) {
         sendJson(res, 401, { error: "unauthorized" });
         return;
