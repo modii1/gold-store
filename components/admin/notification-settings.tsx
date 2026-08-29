@@ -238,7 +238,6 @@ function WhatsAppBridgePanel({ config }: { config?: Record<string, string> | nul
   const [qrMsg, setQrMsg] = useState<string | null>(null);
 
   const url = ((status?.bridge_url || config?.bridge_url) || "").replace(/\/+$/, "");
-  const key = config?.bridge_api_key || "";
 
   const load = useCallback(async () => {
     try {
@@ -255,16 +254,21 @@ function WhatsAppBridgePanel({ config }: { config?: Record<string, string> | nul
     return () => clearInterval(t);
   }, [load]);
 
-  const auth = (): Record<string, string> => (key ? { Authorization: `Bearer ${key}` } : {});
-
   const pingBridge = async () => {
     if (!url) return setPing("أدخل رابط سيرفر الواتساب (QR) واحفظ أولاً.");
     setBusy("ping");
     setPing(null);
     try {
-      const res = await fetch(`${url}/health`, { headers: auth(), cache: "no-store" });
-      if (!res.ok) setPing(`السيرفر أجاب برمز ${res.status} — تأكد من صحة المفتاح (إن ضُبط).`);
-      else {
+      const res = await fetch("/api/admin/notifications/whatsapp-bridge?path=health", { cache: "no-store" });
+      if (!res.ok) {
+        let proxyMsg: string | null = null;
+        try {
+          proxyMsg = (await res.json())?.error || null;
+        } catch {
+          // ignore body parse errors
+        }
+        setPing(proxyMsg || `السيرفر أجاب برمز ${res.status} — تأكد من صحة المفتاح (إن ضُبط).`);
+      } else {
         const j = await res.json();
         setPing(j.connected ? "متصل بالواتساب — جاهز لإرسال الإشعارات." : "السيرفر يعمل لكن غير متصل بواتساب — لا يزال ينتظر مسح QR.");
       }
@@ -281,9 +285,15 @@ function WhatsAppBridgePanel({ config }: { config?: Record<string, string> | nul
     setQrMsg(null);
     setQrImg(null);
     try {
-      const res = await fetch(`${url}/qr`, { headers: auth(), cache: "no-store" });
+      const res = await fetch("/api/admin/notifications/whatsapp-bridge?path=qr", { cache: "no-store" });
       if (!res.ok) {
-        setQrMsg(res.status === 401 ? "المفتاح مرفوض — تأكد من «مفتاح سيرفر الواتساب»." : `السيرفر أجاب برمز ${res.status}.`);
+        let proxyMsg: string | null = null;
+        try {
+          proxyMsg = (await res.json())?.error || null;
+        } catch {
+          // ignore body parse errors
+        }
+        setQrMsg(proxyMsg || (res.status === 401 ? "المفتاح مرفوض — تأكد من «مفتاح سيرفر الواتساب»." : `السيرفر أجاب برمز ${res.status}.`));
       } else {
         const j = await res.json();
         if (j.connected) setQrMsg("السيرفر متصل بالفعل بالواتساب، لا حاجة لرمز QR.");

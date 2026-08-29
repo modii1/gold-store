@@ -51,3 +51,6 @@ next-env.d.ts
 .dev.vars*
 !.dev.vars.example
 !qr-server/.env.example
+
+# oci setup with real secrets (never commit)
+qr-server/oci-setup.ready.sh
