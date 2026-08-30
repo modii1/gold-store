@@ -89,7 +89,7 @@ export function NotificationBell({ scope = "admin" }: { scope?: "admin" | "custo
       </button>
 
       {open && (
-        <div className="absolute left-0 top-12 z-50 w-[min(92vw,380px)] overflow-hidden rounded-2xl border border-amber-100 bg-white shadow-2xl">
+        <div className="fixed inset-x-2 top-16 z-50 overflow-hidden rounded-2xl border border-amber-100 bg-white shadow-2xl sm:absolute sm:inset-x-auto sm:left-0 sm:right-auto sm:top-12 sm:w-[min(92vw,380px)]">
           <div className="flex items-center justify-between border-b border-stone-100 px-4 py-3">
             <div>
               <p className="text-sm font-bold text-stone-900">الإشعارات</p>
