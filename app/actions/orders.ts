@@ -4,8 +4,10 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getOtoRates } from "@/lib/oto/rates";
-import { getCustomerSession } from "@/lib/auth";
+import { getCustomerSession, setCustomerSession } from "@/lib/auth";
+import { normalizePhoneInternational } from "@/lib/format";
 import { emitNotification } from "@/lib/notifications/engine";
+import { sendCustomerWhatsApp } from "@/lib/customer-messaging";
 import type { Coupon, Carrier, PaymentMethod, Order } from "@/types";
 
 export async function getCheckoutData() {
@@ -82,7 +84,7 @@ export async function validateCouponAction(code: string, subtotal: number): Prom
 
 export async function createOrderAction(formData: FormData) {
   const name = (formData.get("name") as string).trim();
-  const phone = (formData.get("phone") as string).trim();
+  const rawPhone = (formData.get("phone") as string).trim();
   const email = (formData.get("email") as string).trim() || null;
   const city = (formData.get("city") as string).trim() || null;
   const region = (formData.get("region") as string).trim() || null;
@@ -108,7 +110,22 @@ export async function createOrderAction(formData: FormData) {
   const discount = parseFloat(formData.get("discount") as string) || 0;
 
   if (!name) return { error: "الاسم مطلوب" };
+
+  // رقمٌ موحّد من مصدر واحد: العميل المسجل يحتفظ بمعرّف حسابه (لتبقى طلباته
+  // مجمعة مع سجلِّه)، والجوال الجديد يُدوَّن بالصيغة الدولية 9665xxxxxxxx قصراً.
+  const session = await getCustomerSession();
+  let phone: string;
+  if (session) {
+    phone = session.phone;
+  } else {
+    const normalized = normalizePhoneInternational(rawPhone);
+    if (!normalized) return { error: "رقم الجوال غير صحيح — الصيغة المسموحة: 9665xxxxxxxx (دولي)" };
+    phone = normalized;
+  }
   if (!phone) return { error: "رقم الجوال مطلوب" };
+  // رقم الاتصال المعروض لشركة الشحن/OTO يبقى كما أدخله العميل (يُوحَّد فقط
+  // للعملاء الجدد) حتى لا يتأثر نظام الشحن برقم الحساب.
+  const contactPhone = session ? rawPhone : phone;
   if (!items || items.length === 0) return { error: "السلة فارغة" };
 
   const supabase = await createClient();
@@ -193,7 +210,7 @@ export async function createOrderAction(formData: FormData) {
     .from("orders")
     .insert({
       customer_name: name,
-      customer_phone: phone,
+      customer_phone: contactPhone,
       customer_identifier: phone,
       email,
       customer_city: city,
@@ -232,14 +249,15 @@ export async function createOrderAction(formData: FormData) {
     customerIdentifier: phone,
     payload: {
       customer_name: name,
-      customer_phone: phone,
+      customer_phone: contactPhone,
       order_number: orderNumber,
       order_total: Math.max(0, total),
     },
   });
 
-  const customer = await getCustomerSession();
-  if (customer && customer.phone === phone && (city || region || address || latitude || longitude)) {
+  const customer = await autoCreateCustomerAccount(name, phone, email, orderNumber);
+  const effectiveSession = customer || session;
+  if (effectiveSession && (city || region || address || latitude || longitude)) {
     const admin = createAdminClient();
     const { data: existing } = await admin.from("addresses").select("id").eq("customer_identifier", phone).eq("city", city || null).eq("address", address || null).maybeSingle();
     if (existing?.id) {
@@ -262,6 +280,85 @@ export async function createOrderAction(formData: FormData) {
   revalidatePath("/admin/orders");
   revalidatePath("/admin/dashboard");
   return { success: true, orderNumber };
+}
+
+/**
+ * عند إنشاء طلب من جوال لم يسجل صاحبه الدخول: يُفتح حساب العميل للجلسة
+ * تلقائياً ليظهر الطلب ضمن "طلباتي". إن لم يكن للحساب وجود يُنشأ فوراً بكلمة
+ * مرور سهلة (آخر 6 أرقام للجوال) ويُرسل "تم إنشاء حسابك" مع كلمة المرور عبر
+ * واتساب. لا يمس الحسابات القائمة ولا إعدادات الإشعارات.
+ */
+async function autoCreateCustomerAccount(
+  name: string,
+  phone: string,
+  email: string | null,
+  orderNumber: number
+): Promise<{ id: string; name: string; phone: string } | null> {
+  if (await getCustomerSession()) return null; // جلسة قائمة = حساب موجود
+
+  const admin = createAdminClient();
+  const { data: existing } = await admin
+    .from("customers")
+    .select("id, name, phone")
+    .eq("phone", phone)
+    .maybeSingle();
+
+  // الحساب موجود مسبقاً لكن العميل لم يسجل الدخول — نفتح الجلسة تلقائياً فقط.
+  if (existing) {
+    const c = existing as { id: string; name: string; phone: string };
+    await setCustomerSession(c);
+    return c;
+  }
+
+  const easyPassword = phone.slice(-6);
+  const { data: created, error } = await admin.rpc("create_customer", {
+    p_phone: phone,
+    p_name: name,
+    p_email: email,
+    p_password: easyPassword,
+  });
+
+  const newCustomer = Array.isArray(created) ? created[0] : created;
+
+  // سباق محتمل (طلبان متزامنان لأول مرة): الحساب أنشأه الطلب الآخر — نفتح الجلسة
+  // فقط دون إرسال رسالة مكررة (منفّذ السباق أرسلها).
+  if (!newCustomer && error) {
+    const msg = String(error.message || "").toLowerCase();
+    if (msg.includes("phone_exists") || msg.includes("duplicate key")) {
+      const { data: raced } = await admin
+        .from("customers")
+        .select("id, name, phone")
+        .eq("phone", phone)
+        .maybeSingle();
+      if (raced) {
+        await setCustomerSession({ id: raced.id, name: raced.name, phone: raced.phone });
+        return raced as { id: string; name: string; phone: string };
+      }
+    }
+    console.error("[orders] auto-create customer failed:", error.message);
+    return null;
+  }
+
+  if (!newCustomer) return null;
+
+  await setCustomerSession({ id: newCustomer.id, name: newCustomer.name, phone: newCustomer.phone });
+
+  try {
+    const { data: settingsRow } = await admin.from("settings").select("site_name").eq("id", 1).maybeSingle();
+    const storeName = (settingsRow as { site_name?: string } | null)?.site_name || "المتجر";
+    await sendCustomerWhatsApp({
+      phone: newCustomer.phone,
+      title: "تم إنشاء حسابك",
+      message:
+        `مرحباً ${newCustomer.name}، تم إنشاء حسابك في ${storeName} تلقائياً عند استلام طلبك رقم #${orderNumber}.` +
+        ` كلمة المرور للدخول لحسابك: ${easyPassword}. أدخلي رقم الجوال وكلمة المرور من صفحة "تسجيل الدخول" وستجدين طلبك ضمن "طلباتي".`,
+      orderNumber,
+    });
+  } catch (e) {
+    console.error("[orders] welcome whatsapp failed:", e);
+  }
+
+  return newCustomer as { id: string; name: string; phone: string };
 }
 
 export async function getCustomerOrderDetailsAction(orderId: string) {

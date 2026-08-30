@@ -26,6 +26,26 @@ export function waMeNumber(raw: string | null | undefined): string {
   return n;
 }
 
+// الصيغة الدولية الوحيدة المقبولة لبيانات العملاء: 966 + 5xxxxxxxx (12 رقماً).
+// تُرفض أي صيغة أخرى (محلية 05xxxxxxxx، بدون بادئة، أرقام ناقصة...).
+export function normalizePhoneInternational(raw: string | null | undefined): string | null {
+  if (!raw) return null;
+  let n = String(raw).replace(/[^\d]/g, "");
+  if (n.startsWith("00")) n = n.slice(2);
+  if (n.length === 9 && n.startsWith("5")) n = "966" + n; // 5xxxxxxxx
+  if (n.length === 10 && n.startsWith("0")) n = "966" + n.slice(1); // 05xxxxxxxx
+  return /^9665\d{8}$/.test(n) ? n : null;
+}
+
+// تحويل الرقم الدولي 9665xxxxxxxx إلى الصيغة المحلية 05xxxxxxxx.
+// يُستخدم فقط لمطابقة العملاء القدامى المسجلين بالصيغة المحلية.
+export function toLocalSaudiPhone(international: string | null | undefined): string | null {
+  if (!international) return null;
+  let n = String(international).replace(/[^\d]/g, "");
+  if (n.startsWith("966")) n = n.slice(3);
+  return /^5\d{8}$/.test(n) ? "0" + n : null;
+}
+
 function pad(n: number) {
   return String(n).padStart(2, "0");
 }

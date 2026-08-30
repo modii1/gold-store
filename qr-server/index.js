@@ -291,9 +291,12 @@ async function processDelivery(d) {
     jid = normalizeNumber(waSettings.adminNumber);
     label = waSettings.adminNumber || "(بدون رقم)";
   } else {
+    // يُفضَّل رقم الطلب إن وُجد، وإلا نستند إلى customer_id (يحمل رقم العميل)
+    // لرسائل لا تخص طلباً محدداً مثل «تم إنشاء حسابك» و«كلمة مرور جديدة».
     const orderPhone = await fetchOrderPhone(n.order_id);
-    jid = normalizeNumber(orderPhone);
-    label = orderPhone || "(بدون رقم)";
+    const customerPhone = orderPhone || n.customer_id || null;
+    jid = normalizeNumber(customerPhone);
+    label = customerPhone || "(بدون رقم)";
   }
 
   if (!jid) {

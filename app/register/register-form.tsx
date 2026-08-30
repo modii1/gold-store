@@ -60,7 +60,7 @@ export function RegisterForm() {
         <label className="mb-1.5 block text-sm font-bold text-ink">رقم الجوال *</label>
         <div className="relative">
           <Phone className="absolute end-4 top-1/2 h-4 w-4 -translate-y-1/2 text-gold" />
-          <input name="phone" type="tel" required value={phone} onChange={(e) => persist({ phone: e.target.value })} placeholder="05xxxxxxxx" dir="ltr" className="input-lux pe-11 py-3" />
+          <input name="phone" type="tel" required value={phone} onChange={(e) => persist({ phone: e.target.value })} placeholder="9665xxxxxxxx" dir="ltr" className="input-lux pe-11 py-3" />
         </div>
       </div>
 
