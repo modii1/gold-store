@@ -30,10 +30,10 @@ export function NotificationBell({ scope = "admin" }: { scope?: "admin" | "custo
   const load = useCallback(async () => {
     try {
       setLoading(true);
-      const base = scope === "admin" ? "/api/notifications" : "/api/notifications";
+      const q = scope === "customer" ? "as=customer" : "";
       const [countRes, listRes] = await Promise.all([
-        fetch(`${base}/unread-count`, { cache: "no-store" }),
-        fetch(`${base}?limit=6`, { cache: "no-store" }),
+        fetch(`/api/notifications/unread-count${q ? `?${q}` : ""}`, { cache: "no-store" }),
+        fetch(`/api/notifications?${[q, "limit=6"].filter(Boolean).join("&")}`, { cache: "no-store" }),
       ]);
       const countJson = await countRes.json();
       const listJson = await listRes.json();
@@ -62,13 +62,13 @@ export function NotificationBell({ scope = "admin" }: { scope?: "admin" | "custo
   }, []);
 
   const markAllRead = async () => {
-    await fetch("/api/notifications/read-all", { method: "POST", cache: "no-store" });
+    await fetch(`/api/notifications/read-all${scope === "customer" ? "?as=customer" : ""}`, { method: "POST", cache: "no-store" });
     setUnread(0);
     setItems((prev) => prev.map((i) => ({ ...i, is_read: true })));
   };
 
   const markRead = async (id: string) => {
-    await fetch(`/api/notifications/${id}/read`, { method: "POST", cache: "no-store" });
+    await fetch(`/api/notifications/${id}/read${scope === "customer" ? "?as=customer" : ""}`, { method: "POST", cache: "no-store" });
     setItems((prev) => prev.map((i) => (i.id === id ? { ...i, is_read: true } : i)));
     setUnread((u) => Math.max(0, u - 1));
   };

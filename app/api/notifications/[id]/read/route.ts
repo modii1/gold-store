@@ -4,9 +4,9 @@ import { getViewer, viewerFilter } from "@/lib/notifications/viewer";
 
 export const dynamic = "force-dynamic";
 
-export async function POST(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const viewer = await getViewer();
+  const viewer = await getViewer(req.nextUrl.searchParams.get("as") === "customer" ? "customer" : undefined);
   if (!viewer) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
   const supabase = createAdminClient();
