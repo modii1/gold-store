@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState, useCallback, useEffect, useState } from "react";
-import { Loader2, Save, Power, RefreshCcw, CheckCircle2, XCircle, Pause, Play, Wifi, WifiOff, ScanLine, ExternalLink, Link2 } from "lucide-react";
+import { Loader2, Save, Power, RefreshCcw, CheckCircle2, XCircle, Pause, Play, Wifi, WifiOff, ScanLine, ExternalLink, Link2, Send } from "lucide-react";
 import { updateTemplateAction, updateRuleAction, toggleTemplateAction, toggleRuleAction, updateChannelAction, setNotificationsPausedAction } from "@/app/actions/notifications-admin";
 import { SUPPORTED_VARIABLES } from "@/lib/notifications/templates";
 import { CHANNEL_CONFIG_FIELDS } from "@/lib/notifications/channel-config";
@@ -237,6 +237,9 @@ function WhatsAppBridgePanel({ config }: { config?: Record<string, string> | nul
   const [qrImg, setQrImg] = useState<string | null>(null);
   const [qrMsg, setQrMsg] = useState<string | null>(null);
   const [showQr, setShowQr] = useState(false);
+  const [testPhone, setTestPhone] = useState("");
+  const [testBusy, setTestBusy] = useState(false);
+  const [testResult, setTestResult] = useState<string | null>(null);
 
   const url = ((status?.bridge_url || config?.bridge_url) || "").replace(/\/+$/, "");
 
@@ -322,7 +325,36 @@ function WhatsAppBridgePanel({ config }: { config?: Record<string, string> | nul
     };
   }, [showQrLive, url, busy]);
 
-  const resetBridge = async () => {
+  const sendTestMessage = async () => {
+    const valid = /^9665\d{8}$/.test(String(testPhone).replace(/[^\d]/g, ""));
+    if (!valid) return setTestResult("أدخل رقم جوال بالصيغة الدولية (9665xxxxxxxx).");
+    setTestBusy(true);
+    setTestResult(null);
+    try {
+      const res = await fetch("/api/admin/notifications/whatsapp-test", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone: testPhone }),
+        cache: "no-store",
+      });
+      const j = await res.json().catch(() => null);
+      if (!res.ok || !j?.ok) {
+        setTestResult(j?.error || `فشل إرسال الرسالة (${res.status}).`);
+      } else if (j.status === "sent" || j.status === "delivered") {
+        setTestResult(`✅ أُرسلت الرسالة بنجاح إلى +${j.phone} — تحقق من واتساب.`);
+      } else if (j.status === "permanent_failed" || j.status === "failed") {
+        setTestResult(`❌ فشل التسليم: ${j.error_message || "خطأ غير معروف"}${j.hint ? ` — ${j.hint}` : ""}`);
+      } else {
+        setTestResult(`⏳ الحالة: ${j.status} — الرسالة قيد المعالجة، تحقق من واتساب خلال ثوانٍ.`);
+      }
+    } catch {
+      setTestResult("تعذر الاتصال — حاول مرة أخرى.");
+    } finally {
+      setTestBusy(false);
+    }
+  };
+
+const resetBridge = async () => {
     if (!url) return setQrMsg("أدخل رابط سيرفر الواتساب (QR) واحفظ أولاً.");
     if (!window.confirm("تنبيه: سيتم تسجيل خروج الرقم الحالي من سيرفر واتساب وإعادة ربطه برمز جديد.\nلو غيّرت رقم الواتساب، حدّث حقل «الرقم المرسل إليه» أعلاه ثم امسح الرمز بالرقم الجديد.\nمتابعة؟")) return;
     setBusy("reset");
@@ -395,6 +427,26 @@ function WhatsAppBridgePanel({ config }: { config?: Record<string, string> | nul
 
       {ping && <p className="mt-2 text-[11px] font-semibold text-stone-600">{ping}</p>}
       {ping && ping.startsWith("متصل بالواتساب") && <p className="mt-1.5 text-[10px] text-stone-400">الرقم الذي يظهر أعلاه يستقبل إشعارات الإدارة.</p>}
+
+      <div className="mt-3 rounded-xl border border-dashed border-sand bg-cream/40 p-3">
+        <p className="text-[11px] font-bold text-stone-600">إرسال رسالة اختبار</p>
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          <input
+            type="text"
+            inputMode="tel"
+            placeholder="9665xxxxxxxx"
+            dir="ltr"
+            value={testPhone}
+            onChange={(e) => setTestPhone(e.target.value)}
+            className="w-44 rounded-full border border-sand bg-white px-3 py-1.5 text-[11px] font-semibold text-stone-700 outline-none focus:border-gold"
+          />
+          <button type="button" onClick={sendTestMessage} disabled={testBusy} className="flex items-center gap-1.5 rounded-full bg-gold px-3 py-1.5 text-[11px] font-bold text-white transition hover:bg-gold-dark disabled:opacity-50">
+            {testBusy ? <Loader2 className="h-3 w-3 animate-spin" /> : <Send className="h-3 w-3" />}
+            {testBusy ? "جارٍ الإرسال..." : "إرسال رسالة اختبار"}
+          </button>
+        </div>
+        {testResult && <p className="mt-2 text-[11px] font-semibold text-stone-600">{testResult}</p>}
+      </div>
       {showQr && (
         <div className="mt-3 rounded-xl border border-dashed border-sand bg-cream/40 p-4 text-center">
           {connected ? (

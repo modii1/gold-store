@@ -57,8 +57,9 @@ as $$
 declare
   v_phone text := normalize_phone(p_phone);
 begin
+  -- 'phone' هنا ملتبس (عمود الإرجاع vs عمود الجدول) فلذلك نؤهل باسم الجدول
   update customers set password_hash = crypt(p_new_password, gen_salt('bf'))
-  where phone = v_phone;
+  where customers.phone = v_phone;
   return query
     select c.id, c.name, c.phone from customers c where c.phone = v_phone;
 end;
