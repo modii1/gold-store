@@ -1,26 +1,59 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Trash2, Check, Loader2 } from "lucide-react";
+import { Plus, Trash2, Check, Loader2, Upload, X } from "lucide-react";
+import { createClient } from "@/lib/supabase/client";
 import { saveCategoryAction, deleteCategoryAction } from "@/app/actions/categories-admin";
+import { ImageCropperModal } from "@/components/admin/image-cropper";
 import type { Category } from "@/types";
 
 type Row = { id?: string; name: string; slug: string; image: string; description: string; sort_order: string; is_active: boolean };
 
 export function CategoriesManager({ categories }: { categories: Category[] }) {
   const router = useRouter();
+  const supabase = createClient();
   const [rows, setRows] = useState<Row[]>(
     categories.map((c) => ({
       id: c.id, name: c.name, slug: c.slug, image: c.image || "", description: c.description || "", sort_order: String(c.sort_order ?? 0), is_active: c.is_active,
     }))
   );
   const [loading, setLoading] = useState(false);
+  const [uploadingIdx, setUploadingIdx] = useState<number | null>(null);
   const [error, setError] = useState("");
+  const fileInput = useRef<HTMLInputElement>(null);
+  const pickIdx = useRef<number | null>(null);
+  // محرر القصّ: الصورة المختارة تُفتح للقصّ قبل الرفع
+  const [cropSource, setCropSource] = useState<{ idx: number; url: string; name: string } | null>(null);
 
   const addRow = () => setRows((prev) => [...prev, { name: "", slug: "", image: "", description: "", sort_order: String(rows.length + 1), is_active: true }]);
 
   const updateRow = (idx: number, patch: Partial<Row>) => setRows((prev) => prev.map((r, i) => (i === idx ? { ...r, ...patch } : r)));
+
+  // رفع النتيجة المقطوعة (blob) — بنفس نظام الرفع الحالي
+  const doUpload = async (idx: number, blob: Blob, baseName: string) => {
+    setUploadingIdx(idx);
+    const ext = (baseName.split(".").pop() || "").toLowerCase().replace(/[^a-z0-9]/g, "") || "jpg";
+    const path = `categories/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+    const file = new File([blob], `category-${Date.now()}.${ext}`, { type: blob.type || "image/jpeg" });
+    const { error: upErr } = await supabase.storage.from("products").upload(path, file, { cacheControl: "3600" });
+    if (upErr) { setError(upErr.message); setUploadingIdx(null); return; }
+    const { data } = supabase.storage.from("products").getPublicUrl(path);
+    updateRow(idx, { image: data.publicUrl });
+    setUploadingIdx(null);
+  };
+
+  const onFilePicked = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const idx = pickIdx.current;
+    pickIdx.current = null;
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file || idx === null) return;
+    // فتح محرر القصّ على الصورة المختارة
+    setCropSource({ idx, url: URL.createObjectURL(file), name: file.name });
+  };
+
+  const removeImage = (idx: number) => updateRow(idx, { image: "" });
 
   const saveRow = async (row: Row) => {
     setLoading(true);
@@ -64,6 +97,7 @@ export function CategoriesManager({ categories }: { categories: Category[] }) {
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-stone-100 text-end text-stone-500">
+              <th className="p-3 font-semibold">صورة التصنيف</th>
               <th className="p-3 font-semibold">الاسم</th>
               <th className="p-3 font-semibold hidden md:table-cell">Slug</th>
               <th className="p-3 font-semibold hidden md:table-cell">الترتيب</th>
@@ -74,6 +108,26 @@ export function CategoriesManager({ categories }: { categories: Category[] }) {
           <tbody className="divide-y divide-stone-50">
             {rows.map((row, i) => (
               <tr key={i} className="align-top">
+                <td className="p-3 w-28">
+                  <div className="relative flex h-20 w-20 items-center justify-center overflow-hidden rounded-full border border-amber-100 bg-cream">
+                    {row.image ? (
+                      <>
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={row.image} alt="صورة التصنيف" className="h-full w-full object-cover" />
+                        <button type="button" onClick={() => removeImage(i)} title="حذف الصورة"
+                          className="absolute top-0.5 start-0.5 flex h-6 w-6 items-center justify-center rounded-full bg-black/60 text-white hover:bg-red-500 transition">
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </>
+                    ) : (
+                      <button type="button" onClick={() => { pickIdx.current = i; fileInput.current?.click(); }} disabled={uploadingIdx === i}
+                        title="رفع صورة التصنيف"
+                        className="flex h-full w-full flex-col items-center justify-center gap-1 text-stone-400 hover:text-gold transition">
+                        {uploadingIdx === i ? <Loader2 className="w-5 h-5 animate-spin" /> : <Upload className="w-5 h-5" />}
+                      </button>
+                    )}
+                  </div>
+                </td>
                 <td className="p-3">
                   <input value={row.name} onChange={(e) => updateRow(i, { name: e.target.value })} placeholder="اسم التصنيف"
                     className="w-full rounded-lg border border-stone-200 px-3 py-2 text-sm" />
@@ -104,6 +158,20 @@ export function CategoriesManager({ categories }: { categories: Category[] }) {
           </tbody>
         </table>
       </div>
+      <input ref={fileInput} type="file" accept="image/*" hidden onChange={onFilePicked} />
+      {cropSource && (
+        <ImageCropperModal
+          src={cropSource.url}
+          aspect={1}
+          title="قصّ صورة التصنيف"
+          onCancel={() => { setCropSource(null); }}
+          onConfirm={(blob) => {
+            const { idx, name } = cropSource;
+            setCropSource(null);
+            doUpload(idx, blob, name);
+          }}
+        />
+      )}
     </div>
   );
 }

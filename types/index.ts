@@ -218,6 +218,9 @@ export type Settings = {
   hero_subtitle: string;
   hero_cta_text: string | null;
   hero_cta_link: string | null;
+  hero_hide_mobile?: boolean;
+  hero_hide_tablet?: boolean;
+  hero_hide_desktop?: boolean;
   announcement: string | null;
   whatsapp: string | null;
   phone: string | null;
@@ -258,6 +261,37 @@ export type Page = {
   content: string | null;
   is_active: boolean;
   created_at: string;
+};
+
+// ============ Home Page Section Builder ============
+export type HomeSectionType =
+  | "hero"
+  | "categories"
+  | "features"
+  | "products_latest"
+  | "products_best"
+  | "products_featured"
+  | "products_sale"
+  | "custom";
+
+export type HomeSection = {
+  id: string;
+  type: HomeSectionType;
+  code: string;
+  title: string | null;
+  subtitle: string | null;
+  image_url: string | null;
+  icon: string | null;
+  content: string | null;
+  config: {
+    dark?: boolean;
+    viewAll?: string;
+    [key: string]: unknown;
+  } | null;
+  sort_order: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
 };
 
 // ============ Orders Management (admin) ============

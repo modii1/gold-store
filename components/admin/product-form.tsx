@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Loader2, Upload, X, Image as ImageIcon, PlayCircle, CheckCircle2, Star, ChevronUp, ChevronDown } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { saveProductAction } from "@/app/actions/products";
+import { ImageCropperModal } from "@/components/admin/image-cropper";
 import type { Product, MediaItem } from "@/types";
 
 type VariantRow = { color: string; color_hex: string; size: string; sku: string; price: string; sale_price: string; stock: string; image_url: string };
@@ -35,46 +36,63 @@ export function ProductForm({ product }: { product?: Product }) {
     return legacy;
   });
 
-  const imageInput = useRef<HTMLInputElement>(null);
+  const galleryInput = useRef<HTMLInputElement>(null);
   const videoInput = useRef<HTMLInputElement>(null);
+  // قائمة انتظار صور المعرض: كل صورة تُقصّ ويُرفع ناتجها قبل الانتقال للتالية
+  const [cropQueue, setCropQueue] = useState<{ url: string; name: string; kind: "gallery" | "variant"; variantIdx?: number }[]>([]);
 
-  const uploadFiles = async (files: FileList, kind: "images" | "videos") => {
+  // تحميل الفيديو مباشرة (لا قصّ للفيديو)
+  const uploadVideos = async (files: File[]) => {
     setUploading(true);
     setError("");
     const uploaded: MediaItem[] = [];
-
-    for (const file of Array.from(files)) {
-      if (kind === "videos" && file.size > 50 * 1024 * 1024) {
-        setError("حجم الفيديو يتجاوز 50MB (حد Supabase المجاني)");
-        continue;
-      }
+    for (const file of files) {
+      if (file.size > 50 * 1024 * 1024) { setError("حجم الفيديو يتجاوز 50MB (حد Supabase المجاني)"); continue; }
       const ext = file.name.split(".").pop() || "";
-      const path = `${kind}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+      const path = `videos/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
       const { error: upErr } = await supabase.storage.from("products").upload(path, file, { cacheControl: "3600" });
-      if (upErr) {
-        setError(upErr.message);
-        continue;
-      }
+      if (upErr) { setError(upErr.message); continue; }
       const { data: pub } = supabase.storage.from("products").getPublicUrl(path);
       uploaded.push({ url: pub.publicUrl });
     }
-
-    if (kind === "images") setImages((prev) => [...prev, ...uploaded]);
-    else setVideos((prev) => [...prev, ...uploaded]);
+    if (uploaded.length) setVideos((prev) => [...prev, ...uploaded]);
     setUploading(false);
   };
 
-  const uploadVariantImage = async (file: File, idx: number) => {
-    setUploading(true);
-    const ext = file.name.split(".").pop() || "";
-    const path = `variants/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+  // رفع نتيجة القصّ (blob) لصورة معرض
+  const uploadGalleryBlob = async (blob: Blob, baseName: string) => {
+    const ext = (baseName.split(".").pop() || "").toLowerCase().replace(/[^a-z0-9]/g, "") || "jpg";
+    const path = `images/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+    const file = new File([blob], `product-${Date.now()}.${ext}`, { type: blob.type || "image/jpeg" });
     const { error: upErr } = await supabase.storage.from("products").upload(path, file, { cacheControl: "3600" });
-    if (!upErr) {
-      const { data: pub } = supabase.storage.from("products").getPublicUrl(path);
-      setVariants((prev) => prev.map((r, i) => (i === idx ? { ...r, image_url: pub.publicUrl } : r)));
-    } else setError(upErr.message);
-    setUploading(false);
+    if (upErr) { setError(upErr.message); return; }
+    const { data: pub } = supabase.storage.from("products").getPublicUrl(path);
+    setImages((prev) => [...prev, { url: pub.publicUrl }]);
   };
+
+  // رفع نتيجة القصّ لصورة توليفة
+  const uploadVariantBlob = async (idx: number, blob: Blob) => {
+    const path = `variants/${Date.now()}-${Math.random().toString(36).slice(2)}.jpg`;
+    const file = new File([blob], `variant-${Date.now()}.jpg`, { type: blob.type || "image/jpeg" });
+    const { error: upErr } = await supabase.storage.from("products").upload(path, file, { cacheControl: "3600" });
+    if (upErr) { setError(upErr.message); return; }
+    const { data: pub } = supabase.storage.from("products").getPublicUrl(path);
+    setVariants((prev) => prev.map((r, i) => (i === idx ? { ...r, image_url: pub.publicUrl } : r)));
+  };
+
+  // معالجة صورة بعد تأكيد القصّ
+  const handleCropped = async (blob: Blob) => {
+    const current = cropQueue[0];
+    if (!current) return;
+    // أزل الصورة الحالية وابقه الباقي (بدون إغلاق المودال)
+    const rest = cropQueue.slice(1);
+    if (current.kind === "gallery") await uploadGalleryBlob(blob, current.name);
+    else if (current.variantIdx !== undefined) await uploadVariantBlob(current.variantIdx, blob);
+    setCropQueue(rest);
+    if (rest.length === 0) setUploading(false);
+  };
+
+  const activeCrop = cropQueue[0] ?? null;
 
   // المعرض الموحّد: صور التوليفات + الصور العامة معاً (بدون تكرار)، مرتب حسب ترتيب المستخدم.
   const variantImages: MediaItem[] = variants.filter((v) => v.image_url).map((v) => ({ url: v.image_url as string, caption: v.color || "" }));
@@ -269,7 +287,8 @@ export function ProductForm({ product }: { product?: Product }) {
                     <div className="relative aspect-square w-full max-w-[140px] mx-auto">
                       <label className="absolute inset-0 overflow-hidden rounded-xl border-2 border-dashed border-sand bg-cream flex items-center justify-center cursor-pointer">
                         {v.image_url ? <img src={v.image_url} alt="" className="h-full w-full object-cover" /> : <span className="text-xs text-stone-400">اضغط لرفع صورة اللون</span>}
-                        <input type="file" accept="image/*" className="hidden" onChange={(e) => e.target.files?.[0] && uploadVariantImage(e.target.files[0], idx)} />
+                        <input type="file" accept="image/*" className="hidden"
+                          onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (!f) return; setCropQueue([{ url: URL.createObjectURL(f), name: f.name, kind: "variant", variantIdx: idx }]); }} />
                       </label>
                       {v.image_url && (
                         <button type="button" onClick={() => setVariants((p) => p.map((r, i) => i === idx ? { ...r, image_url: "" } : r))} className="absolute -top-2 -left-2 h-7 w-7 rounded-full bg-rose-500 text-white shadow flex items-center justify-center">
@@ -302,7 +321,8 @@ export function ProductForm({ product }: { product?: Product }) {
                     <div className="relative h-20 w-20 shrink-0">
                       <label className="absolute inset-0 overflow-hidden rounded-xl border border-sand bg-cream flex items-center justify-center cursor-pointer group">
                         {v.image_url ? <img src={v.image_url} alt="" className="h-full w-full object-cover" /> : <span className="text-[11px] text-stone-400">صورة</span>}
-                        <input type="file" accept="image/*" className="hidden" onChange={(e) => e.target.files?.[0] && uploadVariantImage(e.target.files[0], idx)} />
+                        <input type="file" accept="image/*" className="hidden"
+                          onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (!f) return; setCropQueue([{ url: URL.createObjectURL(f), name: f.name, kind: "variant", variantIdx: idx }]); }} />
                         <span className="absolute inset-0 bg-black/0 group-hover:bg-black/10 flex items-center justify-center opacity-0 group-hover:opacity-100 transition"><Upload className="w-4 h-4 text-white" /></span>
                         {v.color_hex && <span className="absolute top-1 start-1 h-4 w-4 rounded-full border-2 border-white shadow" style={{ background: v.color_hex }} />}
                       </label>
@@ -337,12 +357,17 @@ export function ProductForm({ product }: { product?: Product }) {
             <h2 className="font-bold text-stone-800 flex items-center gap-2">
               <ImageIcon className="w-5 h-5 text-gold" /> معرض صور المنتج
             </h2>
-            <button type="button" onClick={() => imageInput.current?.click()} disabled={uploading}
+            <button type="button" onClick={() => galleryInput.current?.click()} disabled={uploading || !!activeCrop}
               className="flex items-center gap-1.5 rounded-lg bg-amber-50 px-3 py-1.5 text-xs font-bold text-gold hover:bg-amber-100 transition disabled:opacity-50">
               <Upload className="w-3.5 h-3.5" /> رفع صور عامة
             </button>
-            <input ref={imageInput} type="file" accept="image/*" multiple hidden
-              onChange={(e) => e.target.files && uploadFiles(e.target.files, "images")} />
+            <input ref={galleryInput} type="file" accept="image/*" multiple hidden
+              onChange={(e) => {
+                const files = e.target.files ? Array.from(e.target.files) : [];
+                e.target.value = "";
+                if (!files.length) return;
+                setCropQueue(files.map((f) => ({ url: URL.createObjectURL(f), name: f.name, kind: "gallery" })));
+              }} />
           </div>
           <p className="text-[11px] text-stone-400 mb-3">
             المعرض يضم صور التوليفات + الصور العامة. أول صورة هي <b>غلاف المنتج</b> — استخدم ★ لتثبيت أي صورة كغلاف، و▲▼ لإعادة الترتيب.
@@ -401,7 +426,7 @@ export function ProductForm({ product }: { product?: Product }) {
               <Upload className="w-3.5 h-3.5" /> رفع فيديو
             </button>
             <input ref={videoInput} type="file" accept="video/*" multiple hidden
-              onChange={(e) => e.target.files && uploadFiles(e.target.files, "videos")} />
+              onChange={(e) => { const f = e.target.files ? Array.from(e.target.files) : []; e.target.value = ""; if (f.length) uploadVideos(f); }} />
           </div>
           <p className="text-[11px] text-stone-400 mb-3">الحد الأقصى 50MB لكل فيديو (الباقة المجانية)</p>
 
@@ -429,6 +454,16 @@ export function ProductForm({ product }: { product?: Product }) {
           <div className="flex items-center gap-2 rounded-xl bg-amber-50 border border-amber-200 p-3 text-sm text-amber-700">
             <Loader2 className="w-4 h-4 animate-spin" /> جاري رفع الملفات...
           </div>
+        )}
+
+        {activeCrop && (
+          <ImageCropperModal
+            src={activeCrop.url}
+            aspect={activeCrop.kind === "variant" ? 1 : 0}
+            title={activeCrop.kind === "variant" ? "قصّ صورة التوليفة" : `قصّ صورة المعرض (${cropQueue.length})`}
+            onCancel={() => { setCropQueue([]); setUploading(false); }}
+            onConfirm={handleCropped}
+          />
         )}
       </div>
     </form>

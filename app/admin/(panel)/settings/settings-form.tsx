@@ -4,23 +4,33 @@ import { useRef, useState, useActionState } from "react";
 import { Loader2, Upload, X, Save } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { updateSettingsAction } from "@/app/actions/settings";
+import { ImageCropperModal } from "@/components/admin/image-cropper";
 import type { Settings } from "@/types";
 import { DesignSettings } from "@/components/admin/design-settings";
 
-function ImagePicker({ label, name, value, onChange }: { label: string; name: string; value: string | null; onChange: (url: string | null) => void }) {
+function ImagePicker({ label, name, value, onChange, aspect }: { label: string; name: string; value: string | null; onChange: (url: string | null) => void; aspect?: number }) {
   const supabase = createClient();
   const input = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
+  const [cropSource, setCropSource] = useState<{ url: string; name: string } | null>(null);
 
-  const upload = async (file: File) => {
+  const uploadBlob = async (blob: Blob, baseName: string) => {
     setUploading(true);
-    const ext = file.name.split(".").pop() || "";
-    const path = `settings/${name}-${Date.now()}.${ext}`;
+    const base = (baseName.split(".").pop() || "").toLowerCase().replace(/[^a-z0-9]/g, "") || "jpg";
+    const path = `settings/${name}-${Date.now()}.${base}`;
+    const file = new File([blob], `setting-${Date.now()}.${base}`, { type: blob.type || "image/jpeg" });
     const { error } = await supabase.storage.from("products").upload(path, file);
     if (error) { setUploading(false); alert(error.message); return; }
     const { data } = supabase.storage.from("products").getPublicUrl(path);
     onChange(data.publicUrl);
     setUploading(false);
+  };
+
+  const onPick = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setCropSource({ url: URL.createObjectURL(file), name: file.name });
   };
 
   return (
@@ -42,8 +52,21 @@ function ImagePicker({ label, name, value, onChange }: { label: string; name: st
           <span className="mt-1 text-xs font-semibold">{uploading ? "جاري الرفع..." : "ارفع صورة"}</span>
         </button>
       )}
-      <input ref={input} type="file" accept="image/*" hidden onChange={(e) => e.target.files?.[0] && upload(e.target.files[0])} />
+      <input ref={input} type="file" accept="image/*" hidden onChange={onPick} />
       <input type="hidden" name={name} value={value || ""} />
+      {cropSource && (
+        <ImageCropperModal
+          src={cropSource.url}
+          aspect={aspect || 1}
+          title={`قصّ ${label}`}
+          onCancel={() => setCropSource(null)}
+          onConfirm={(blob) => {
+            const { name } = cropSource;
+            setCropSource(null);
+            uploadBlob(blob, name);
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -74,7 +97,7 @@ export function SettingsForm({ settings }: { settings: Settings }) {
             className="w-full rounded-xl border border-stone-200 px-4 py-2.5 text-sm focus:border-gold focus:outline-none focus:ring-2 focus:ring-gold/20" />
         </div>
         <div className="grid gap-4 md:grid-cols-2">
-          <ImagePicker label="شعار المتجر" name="store_logo" value={logo} onChange={setLogo} />
+          <ImagePicker label="شعار المتجر" name="store_logo" value={logo} onChange={setLogo} aspect={1} />
           <ImagePicker label="صورة الواجهة (Hero)" name="hero_image" value={hero} onChange={setHero} />
           <ImagePicker label="صورة الواجهة للجوال" name="hero_image_mobile" value={heroMobile} onChange={setHeroMobile} />
         </div>
@@ -98,6 +121,24 @@ export function SettingsForm({ settings }: { settings: Settings }) {
             <label className="block text-sm font-semibold text-stone-700 mb-1">رابط زر الواجهة</label>
             <input name="hero_cta_link" defaultValue={settings.hero_cta_link || ""} placeholder="/shop" dir="ltr"
               className="w-full rounded-xl border border-stone-200 px-4 py-2.5 text-sm focus:border-gold focus:outline-none focus:ring-2 focus:ring-gold/20" />
+          </div>
+        </div>
+        <div className="rounded-xl border border-amber-100 bg-amber-50/40 p-4">
+          <p className="text-sm font-semibold text-stone-700">إخفاء نصوص الواجهة (العنوان، النص، زر «تسوقي الآن»)</p>
+          <p className="mt-0.5 text-xs text-stone-500">حدّد المقاسات التي تُخفى فيها النصوص فوق الصورة لتظهر نظيفة.</p>
+          <div className="mt-3 grid gap-3 sm:grid-cols-3">
+            <label className="flex items-center gap-3 rounded-xl border border-stone-200 bg-white p-4 text-sm font-semibold text-stone-700">
+              <input name="hero_hide_mobile" type="checkbox" defaultChecked={settings.hero_hide_mobile === true} className="h-5 w-5 accent-[#B08D57]" />
+              الجوال (أقل من 768px)
+            </label>
+            <label className="flex items-center gap-3 rounded-xl border border-stone-200 bg-white p-4 text-sm font-semibold text-stone-700">
+              <input name="hero_hide_tablet" type="checkbox" defaultChecked={settings.hero_hide_tablet === true} className="h-5 w-5 accent-[#B08D57]" />
+              التابلت (768px - 1023px)
+            </label>
+            <label className="flex items-center gap-3 rounded-xl border border-stone-200 bg-white p-4 text-sm font-semibold text-stone-700">
+              <input name="hero_hide_desktop" type="checkbox" defaultChecked={settings.hero_hide_desktop === true} className="h-5 w-5 accent-[#B08D57]" />
+              الكمبيوتر (1024px فأكثر)
+            </label>
           </div>
         </div>
       </section>

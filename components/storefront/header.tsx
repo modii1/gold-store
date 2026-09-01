@@ -28,29 +28,33 @@ export function StoreHeader({ settings, categories }: { settings: Settings; cate
           </div>
         )}
         <div className="bg-ivory/95 backdrop-blur border-b border-sand">
-          <div className="mx-auto max-w-7xl px-4 md:px-6">
-            <div className="flex items-center justify-between h-16 md:h-20 gap-2">
-              {/* Mobile: menu button */}
-              <button onClick={() => setMenuOpen(true)} className="md:hidden text-ink p-1" aria-label="القائمة">
-                <Menu className="w-6 h-6" />
-              </button>
+          <div className="mx-auto max-w-7xl px-3 md:px-6">
+            {/* 3 أعمدة متساوية على سطح المكتب: اللوغو (بداية)، الناف (منتصف)،
+                الأيقونات (نهاية). منتصف العمود الأوسط = منتصف الـ Header بالضبط. */}
+            <div className="grid grid-cols-[auto_1fr_auto] md:grid-cols-3 items-center h-16 md:h-20 gap-1 md:gap-4">
+              {/* Mobile: menu button + Logo (start) */}
+              <div className="flex items-center min-w-0 gap-1">
+                <button onClick={() => setMenuOpen(true)} className="md:hidden text-ink p-1 shrink-0" aria-label="القائمة">
+                  <Menu className="w-6 h-6" />
+                </button>
+                <div className="flex min-w-0 justify-start">
+                  <BrandLogo settings={settings} />
+                </div>
+              </div>
 
-              {/* Logo */}
-              <BrandLogo settings={settings} />
-
-              {/* Desktop nav */}
-                <nav className="hidden md:flex items-center gap-5 lg:gap-7 font-semibold text-stone-600" style={{ fontSize: `${settings.header_footer_font_size || 13}px` }}>
-                <Link href="/" className="hover:text-gold transition">الرئيسية</Link>
+              {/* Desktop nav — متمركز في المنتصف */}
+                <nav className="hidden md:flex items-center justify-center gap-5 lg:gap-7 font-semibold text-stone-600" style={{ fontSize: `${settings.header_footer_font_size || 13}px` }}>
+                <Link href="/" className="hover:text-gold transition whitespace-nowrap">الرئيسية</Link>
                 {nav.map((c) => (
                   <Link key={c.id} href={`/category/${c.slug}`} className="hover:text-gold transition whitespace-nowrap">
                     {c.name}
                   </Link>
                 ))}
-                <Link href="/shop" className="hover:text-gold transition">عروض</Link>
+                <Link href="/shop" className="hover:text-gold transition whitespace-nowrap">عروض</Link>
               </nav>
 
-              {/* Icons */}
-              <div className="flex items-center gap-1 md:gap-2">
+              {/* Icons (end) */}
+              <div className="flex items-center justify-end gap-0.5 md:gap-2 shrink-0">
                 <button onClick={() => setSearchOpen(true)} className="p-2 text-ink hover:text-gold transition" aria-label="بحث">
                   <Search className="w-5 h-5 md:w-6 md:h-6" />
                 </button>

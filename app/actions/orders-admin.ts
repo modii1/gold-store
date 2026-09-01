@@ -5,6 +5,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getCarrierByCode, getCarriers } from "@/lib/services/carriers";
 import { createCarrierShipment } from "@/lib/shipping";
 import { otoCreateOrder, getAccessToken } from "@/lib/oto/client";
+import { getOtoRates } from "@/lib/oto/rates";
 import { logOrderStatusChange, getOrderStatusLog, getOrderNotes } from "@/lib/orders/status-log";
 import { exportOrdersCsv } from "@/lib/orders/query";
 import { isTransfer } from "@/lib/orders/order-meta";
@@ -21,7 +22,7 @@ export async function updateOrderStatusAction(formData: FormData) {
 
   const { data: current } = await supabase
     .from("orders")
-    .select("id, status, order_number, customer_identifier, customer_name, shipping_method, delivery_option_id, total, payment_method")
+    .select("id, status, order_number, customer_identifier, customer_name, shipping_method, delivery_option_id, total, payment_method, customer_city, items")
     .eq("id", id)
     .maybeSingle();
   const oldStatus = current?.status || null;
@@ -48,12 +49,41 @@ export async function updateOrderStatusAction(formData: FormData) {
     // يُسمح بإعادة الضغط على نفس حالة الشحن للطلبات العالقة: الطلبات التي دخلت
     // حالة الشحن قبل تفعيل الإرسال الآلي تحمل صف شحنة محلياً بلا oto_order_id،
     // فالضغط مرتين مرة أخرى يُرسلها إلى OTO (بالشرط المانع للازدواجية).
-    const canAutoOto = status !== "delivered" && !!current?.delivery_option_id && !existingShipRow?.oto_order_id;
-    const retryStuckShipping = !!current?.delivery_option_id && existingShipRow && !existingShipRow.oto_order_id;
+    // في الطلبات القديمة التي فُقد فيها delivery_option_id (نتيجة فشل جلب الأسعار
+    // عند الدفع سابقاً) نعيد اشتقاق الخيار من اسم شركة الشحن المسجلة أو من نطاق
+    // أسعار OTO الحي لمدينة الطلب حتى يعمل الإرسال/إعادة الإرسال.
+    let optionId: number | null = current?.delivery_option_id ?? null;
+    if (!optionId && current?.shipping_method) {
+      const { data: setOptions } = await supabase
+        .from("carriers")
+        .select("delivery_option_id")
+        .eq("provider", "oto")
+        .ilike("name", current.shipping_method)
+        .limit(1)
+        .maybeSingle();
+      if (setOptions?.delivery_option_id) optionId = Number(setOptions.delivery_option_id);
+    }
+    // للطلبات العالقة التي فُقد فيها الخيار عند الدفع: نعيد الاشتقاق من الأسعار
+    // الحية لمدينة الطلب حتى تُرسل الشحنة العالقة إلى OTO عند إعادة الضغط.
+    if (!optionId && existingShipRow && !existingShipRow.oto_order_id && current?.customer_city) {
+      try {
+        const weightGrams = await computeWeightGrams(supabase, current as Order);
+        const rates = await getOtoRates({
+          destinationCity: current.customer_city || "",
+          weightKg: weightGrams > 0 ? weightGrams / 1000 : 1,
+        });
+        if (rates.length) optionId = rates[0].optionId;
+      } catch {
+        // لا نغيّر السلوك في حال فشل الأسعار الحية
+      }
+    }
+    const canAutoOto = status !== "delivered" && !!optionId && !existingShipRow?.oto_order_id;
+    const retryStuckShipping = !!optionId && existingShipRow && !existingShipRow.oto_order_id;
     if (canAutoOto || retryStuckShipping) {
       try {
         const shipFd = new FormData();
         shipFd.set("id", id);
+        if (optionId) shipFd.set("delivery_option_id", String(optionId));
         const shipRes = await createShipmentAction(shipFd);
         if (!shipRes.error) {
           // createShipmentAction يضبط حالة الطلب على shipped داخلياً — نعيد حالة المدير
