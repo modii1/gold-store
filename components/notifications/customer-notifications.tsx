@@ -50,7 +50,7 @@ export function CustomerNotifications() {
   const load = useCallback(async () => {
     try {
       setLoading(true);
-      const params = new URLSearchParams({ limit: "50" });
+      const params = new URLSearchParams({ as: "customer", limit: "50" });
       if (tab === "unread") params.set("unread", "true");
       if (tab === "orders" || tab === "shipping" || tab === "payment") params.set("category", tab);
       const res = await fetch(`/api/notifications?${params}`, { cache: "no-store" });
@@ -83,17 +83,17 @@ export function CustomerNotifications() {
   }, [loadPrefs]);
 
   const markRead = async (id: string) => {
-    await fetch(`/api/notifications/${id}/read`, { method: "POST", cache: "no-store" });
+    await fetch(`/api/notifications/${id}/read?as=customer`, { method: "POST", cache: "no-store" });
     setItems((prev) => prev.map((i) => (i.id === id ? { ...i, is_read: true } : i)));
   };
 
   const markAllRead = async () => {
-    await fetch("/api/notifications/read-all", { method: "POST", cache: "no-store" });
+    await fetch("/api/notifications/read-all?as=customer", { method: "POST", cache: "no-store" });
     setItems((prev) => prev.map((i) => ({ ...i, is_read: true })));
   };
 
   const remove = async (id: string) => {
-    await fetch(`/api/notifications/${id}`, { method: "DELETE", cache: "no-store" });
+    await fetch(`/api/notifications/${id}?as=customer`, { method: "DELETE", cache: "no-store" });
     setItems((prev) => prev.filter((i) => i.id !== id));
   };
 

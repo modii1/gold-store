@@ -1,11 +1,11 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getViewer, viewerFilter } from "@/lib/notifications/viewer";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
-  const viewer = await getViewer();
+export async function GET(req: NextRequest) {
+  const viewer = await getViewer(req.nextUrl.searchParams.get("as") === "customer" ? "customer" : undefined);
   if (!viewer) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
   const supabase = createAdminClient();

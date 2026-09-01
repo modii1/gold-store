@@ -138,6 +138,9 @@ export async function createOrderAction(formData: FormData) {
     if (shippingId.startsWith("oto:")) {
       const optionId = parseInt(shippingId.split(":")[1], 10);
       if (optionId) {
+        // لا نُسقط خيار OTO أبداً: نحتفظ بمعرّفه حتى لو فشل جلب الأسعار لاحقاً،
+        // وإلا يُنشأ الطلب بلا خيار توصيل ولا يُرسل إلى OTO من لوحة الشحن.
+        shippingOptionId = optionId;
         try {
           const supabaseAdmin = createAdminClient();
           const { data: cfg } = await supabaseAdmin.from("oto_config").select("is_connected, origin_city, origin_country").eq("id", 1).maybeSingle();
@@ -150,11 +153,19 @@ export async function createOrderAction(formData: FormData) {
             if (match) {
               finalShipping = match.price;
               shippingName = match.optionName;
-              shippingOptionId = optionId;
             }
           }
         } catch {
           // fall back to submitted value
+        }
+        if (!shippingName) {
+          const { data: opt } = await supabase
+            .from("carriers")
+            .select("delivery_option_id, name, mode, provider")
+            .eq("delivery_option_id", optionId)
+            .limit(1)
+            .maybeSingle();
+          shippingName = (opt as { name?: string } | null)?.name || null;
         }
       }
     } else {

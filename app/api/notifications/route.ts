@@ -10,12 +10,11 @@ export const dynamic = "force-dynamic";
  * Returns notifications for the current viewer (admin or customer).
  */
 export async function GET(req: NextRequest) {
-  const viewer = await getViewer();
+  const searchParams = req.nextUrl.searchParams;
+  const viewer = await getViewer(searchParams.get("as") === "customer" ? "customer" : undefined);
   if (!viewer) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
   await repairStaleNotifications(100);
-
-  const searchParams = req.nextUrl.searchParams;
   const limit = Math.min(Number(searchParams.get("limit") || "50"), 200);
   const offset = Math.max(Number(searchParams.get("offset") || "0"), 0);
 

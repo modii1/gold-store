@@ -7,6 +7,15 @@ export function Hero({ settings }: { settings: Settings }) {
   const ctaText = settings.hero_cta_text || "تسوقي الآن";
   const ctaLink = settings.hero_cta_link || "/shop";
 
+  // إخفاء تراكب النص (العنوان/النص/زر تسوقي الآن) على مقاسات محددة
+  const hideClasses = [
+    settings.hero_hide_mobile && "max-[767px]:hidden",
+    settings.hero_hide_tablet && "min-[768px]:max-[1023px]:hidden",
+    settings.hero_hide_desktop && "min-[1024px]:hidden",
+  ]
+    .filter(Boolean)
+    .join(" ");
+
   return (
     <section className="relative overflow-hidden bg-ink">
       {/* Desktop image */}
@@ -32,10 +41,7 @@ export function Hero({ settings }: { settings: Settings }) {
       )}
       <div className="absolute inset-0 bg-gradient-to-t from-ink/80 via-ink/30 to-ink/10" />
 
-      <div className="relative mx-auto max-w-7xl px-4 md:px-6 pt-40 md:pt-56 pb-24 md:pb-32 text-center text-ivory">
-        <p className="text-gold-light text-sm md:text-base font-semibold tracking-[0.35em] uppercase mb-4">
-          {settings.site_name || "إكسسوارات مطلية"}
-        </p>
+      <div className={`relative mx-auto max-w-7xl px-4 md:px-6 pt-28 md:pt-48 pb-20 md:pb-28 text-center text-ivory ${hideClasses}`}>
         <h1 className="text-3xl md:text-6xl font-bold leading-tight text-ivory drop-shadow">
           {settings.hero_title}
         </h1>

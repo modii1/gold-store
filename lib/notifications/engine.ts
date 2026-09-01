@@ -5,6 +5,7 @@ import { BUILT_IN_TEMPLATES, CUSTOMER_TEMPLATE_OVERRIDES, renderTemplate, render
 import { builtInRuleFor, matchRule, resolveChannels } from "./rules";
 import { getCustomerPreferences, filterChannelsForCustomer } from "./preferences";
 import { createDeliveries, attemptDelivery } from "./dispatcher";
+import { normalizePhoneInternational } from "@/lib/format";
 
 /**
  * Notification Engine — the single entry point for producing notifications.
@@ -333,12 +334,13 @@ export async function processEvent(args: {
 
   // --- Customer recipient (always create row; deliveries only if channels exist) ---
   if (customerIdentifier) {
-    const prefs = await getCustomerPreferences(customerIdentifier);
+    const ownerId = normalizePhoneInternational(customerIdentifier) ?? customerIdentifier;
+    const prefs = await getCustomerPreferences(ownerId);
     const customerChannels = filterChannelsForCustomer(category, channels, prefs);
     const customerNotificationId = await createNotificationRow({
       userType: "customer",
-      userId: customerIdentifier,
-      customerId: customerIdentifier,
+      userId: ownerId,
+      customerId: ownerId,
       orderId,
       orderNumber: args.orderNumber,
       shipmentId,

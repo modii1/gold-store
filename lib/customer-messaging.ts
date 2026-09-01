@@ -1,5 +1,6 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createDeliveries } from "@/lib/notifications/dispatcher";
+import { normalizePhoneInternational } from "@/lib/format";
 
 /**
  * رسالة مباشرة لعميل عبر واتساب (بدون قوالب/قواعد) — تُستخدم لرسائل الحساب
@@ -18,6 +19,7 @@ export async function sendCustomerWhatsApp(opts: {
 }): Promise<void> {
   const phone = (opts.phone || "").trim();
   if (!phone) return;
+  const ownerId = normalizePhoneInternational(phone) ?? phone;
   const type = opts.type || "customer.message";
   const supabase = createAdminClient();
 
@@ -26,7 +28,7 @@ export async function sendCustomerWhatsApp(opts: {
     .from("notifications")
     .select("id")
     .eq("user_type", "customer")
-    .eq("user_id", phone)
+    .eq("user_id", ownerId)
     .eq("type", type)
     .eq("title", opts.title)
     .eq("message", opts.message)
@@ -38,8 +40,8 @@ export async function sendCustomerWhatsApp(opts: {
     .from("notifications")
     .insert({
       user_type: "customer",
-      user_id: phone,
-      customer_id: phone,
+      user_id: ownerId,
+      customer_id: ownerId,
       order_id: opts.orderId ?? null,
       order_number: opts.orderNumber ?? null,
       type,

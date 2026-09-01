@@ -55,3 +55,6 @@ next-env.d.ts
 
 # oci setup with real secrets (never commit)
 qr-server/oci-setup.ready.sh
+
+# stray artifact from a bad command (never commit)
+/-4

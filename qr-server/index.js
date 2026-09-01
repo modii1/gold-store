@@ -274,7 +274,10 @@ async function fetchOrderPhone(orderId) {
 }
 
 async function processDelivery(d) {
-  const n = d.notifications;
+  // PostgREST قد يعيد العلاقة المدمجة ككائن أو كمصفوفة من عنصر واحد —
+  // نتكيف مع كليهما حتى لا نفقد customer_id عند حل رقم رسائل العملاء المباشرة.
+  const embedded = d.notifications;
+  const n = Array.isArray(embedded) ? (embedded[0] || null) : embedded;
   if (!n) {
     await settleDelivery(d.id, {
       status: "permanent_failed",
