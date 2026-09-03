@@ -24,18 +24,22 @@ export function CategoriesManager({ categories }: { categories: Category[] }) {
   const fileInput = useRef<HTMLInputElement>(null);
   const pickIdx = useRef<number | null>(null);
   // محرر القصّ: الصورة المختارة تُفتح للقصّ قبل الرفع
-  const [cropSource, setCropSource] = useState<{ idx: number; url: string; name: string } | null>(null);
+  const [cropSource, setCropSource] = useState<{ idx: number; url: string; name: string; type: string } | null>(null);
 
   const addRow = () => setRows((prev) => [...prev, { name: "", slug: "", image: "", description: "", sort_order: String(rows.length + 1), is_active: true }]);
 
   const updateRow = (idx: number, patch: Partial<Row>) => setRows((prev) => prev.map((r, i) => (i === idx ? { ...r, ...patch } : r)));
 
   // رفع النتيجة المقطوعة (blob) — بنفس نظام الرفع الحالي
-  const doUpload = async (idx: number, blob: Blob, baseName: string) => {
+  const doUpload = async (idx: number, blob: Blob, _baseName: string) => {
     setUploadingIdx(idx);
-    const ext = (baseName.split(".").pop() || "").toLowerCase().replace(/[^a-z0-9]/g, "") || "jpg";
+    const header = new Uint8Array(await blob.slice(0, 4).arrayBuffer());
+    const isPNG = header[0] === 0x89 && header[1] === 0x50 && header[2] === 0x4E && header[3] === 0x47;
+    const isWEBP = header[0] === 0x52 && header[1] === 0x49 && header[2] === 0x46 && header[3] === 0x46;
+    const ext = isPNG ? "png" : isWEBP ? "webp" : "jpg";
+    const mime = isPNG ? "image/png" : isWEBP ? "image/webp" : "image/jpeg";
     const path = `categories/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
-    const file = new File([blob], `category-${Date.now()}.${ext}`, { type: blob.type || "image/jpeg" });
+    const file = new File([blob], `category-${Date.now()}.${ext}`, { type: mime });
     const { error: upErr } = await supabase.storage.from("products").upload(path, file, { cacheControl: "3600" });
     if (upErr) { setError(upErr.message); setUploadingIdx(null); return; }
     const { data } = supabase.storage.from("products").getPublicUrl(path);
@@ -50,7 +54,7 @@ export function CategoriesManager({ categories }: { categories: Category[] }) {
     e.target.value = "";
     if (!file || idx === null) return;
     // فتح محرر القصّ على الصورة المختارة
-    setCropSource({ idx, url: URL.createObjectURL(file), name: file.name });
+    setCropSource({ idx, url: URL.createObjectURL(file), name: file.name, type: file.type });
   };
 
   const removeImage = (idx: number) => updateRow(idx, { image: "" });
@@ -162,6 +166,7 @@ export function CategoriesManager({ categories }: { categories: Category[] }) {
       {cropSource && (
         <ImageCropperModal
           src={cropSource.url}
+          fileType={cropSource.type}
           aspect={1}
           title="قصّ صورة التصنيف"
           onCancel={() => { setCropSource(null); }}

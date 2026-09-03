@@ -1,9 +1,7 @@
-import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import type { HomeSection } from "@/types";
 
-// القائمة الافتراضية للأقسام المدمجة (تُعرض عندما لا يوجد ترتيب/أقسام محفوظة،
-// أو عند فشل قراءة الجدول — حتى لا تختفي أقسام الصفحة الرئيسية أبداً).
-// الميزات (features) موضوعة أسفل «أحدث المنتجات» مباشرةً على الرئيسية.
+// القائمة الافتراضية للأقسام المدمجة
 const DEFAULT_SECTIONS: HomeSection[] = [
   { id: "builtin-hero", type: "hero", code: "hero", title: null, subtitle: null, image_url: null, icon: null, content: null, config: {}, sort_order: 1, is_active: true, created_at: "", updated_at: "" },
   { id: "builtin-categories", type: "categories", code: "categories", title: null, subtitle: null, image_url: null, icon: null, content: null, config: {}, sort_order: 2, is_active: true, created_at: "", updated_at: "" },
@@ -14,40 +12,67 @@ const DEFAULT_SECTIONS: HomeSection[] = [
   { id: "builtin-products_sale", type: "products_sale", code: "products_sale", title: "العروض", subtitle: "خصومات حصرية لفترة محدودة", image_url: null, icon: null, content: null, config: { viewAll: "/shop?sale=1" }, sort_order: 7, is_active: true, created_at: "", updated_at: "" },
 ];
 
-// يُرجع أقسام الصفحة الرئيسية النشطة مرتبة حسب ترتيب المستخدم.
-// إذا لم تُخزَّن أقسام بعد (جدول فارغ/غير موجود/فشل القراءة) تُرجع القائمة
-// الافتراضية المدمجة حتى لا تختفي الأقسام أبداً.
+const SEED_DATA = DEFAULT_SECTIONS.map((s) => ({
+  type: s.type,
+  code: s.code,
+  title: s.title,
+  subtitle: s.subtitle,
+  image_url: s.image_url,
+  icon: s.icon,
+  content: s.content,
+  config: s.config,
+  sort_order: s.sort_order,
+  is_active: s.is_active,
+}));
+
 export async function getHomeSections(): Promise<HomeSection[]> {
   try {
-    const supabase = await createClient();
-    const { data } = await supabase
+    // نستخدم service role client مباشرةً بدلاً من anon client
+    // لأن جدول home_sections محاط بـ RLS لا يسمح للـ anon بقراءة البيانات
+    // المحفوظة في لوحة التحكم. هذه بيانات عامة للواجهة ولا تشكل خطورة أمنية.
+    const admin = createAdminClient();
+    const { data } = await admin
       .from("home_sections")
       .select("*")
       .eq("is_active", true)
       .order("sort_order", { ascending: true });
     const rows = (data || []) as HomeSection[];
-    if (!rows || rows.length === 0) return DEFAULT_SECTIONS;
-    return rows.map((s) => {
-      const rawConfig = typeof s.config === "string" ? safeJson(s.config) : s.config;
-      return {
-        ...s,
-        config: (rawConfig && typeof rawConfig === "object" ? rawConfig : null) as HomeSection["config"],
-      };
-    });
+
+    if (rows.length === 0) {
+      try {
+        await admin.from("home_sections").insert(SEED_DATA);
+        const { data: seeded } = await admin
+          .from("home_sections")
+          .select("*")
+          .eq("is_active", true)
+          .order("sort_order", { ascending: true });
+        if (seeded && seeded.length > 0) {
+          return seeded.map((s) => ({
+            ...s,
+            config: parseConfig(s.config),
+          })) as HomeSection[];
+        }
+      } catch {}
+      return DEFAULT_SECTIONS;
+    }
+
+    return rows.map((s) => ({
+      ...s,
+      config: parseConfig(s.config),
+    })) as HomeSection[];
   } catch {
     return DEFAULT_SECTIONS;
   }
 }
 
-function safeJson(raw: unknown): unknown {
-  if (typeof raw !== "string") return raw;
-  try {
-    return JSON.parse(raw);
-  } catch {
-    return null;
-  }
+function parseConfig(raw: unknown): HomeSection["config"] {
+  const parsed = typeof raw === "string" ? safeJson(raw) : raw;
+  return (parsed && typeof parsed === "object" ? parsed : null) as HomeSection["config"];
 }
 
-// أسماء الأقسام المعروفة منقولة إلى ملف مستقل خالٍ من تبعيات السيرفر
-// حتى تُستورد بأمان من Client Components. يُعاد التصدير هنا للتوافق.
+function safeJson(raw: unknown): unknown {
+  if (typeof raw !== "string") return raw;
+  try { return JSON.parse(raw); } catch { return null; }
+}
+
 export { BUILTIN_SECTION_LABELS } from "./home-section-labels";

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { CSSProperties } from "react";
 import type { Settings } from "@/types";
 
 export function Hero({ settings }: { settings: Settings }) {
@@ -6,6 +7,17 @@ export function Hero({ settings }: { settings: Settings }) {
   const mobileImage = settings.hero_image_mobile || image;
   const ctaText = settings.hero_cta_text || "تسوقي الآن";
   const ctaLink = settings.hero_cta_link || "/shop";
+  const showCta = settings.hero_show_cta !== false;
+
+  const heroWidth = Number.isFinite(settings.hero_width) && settings.hero_width! > 0
+    ? settings.hero_width!
+    : 1920;
+
+  const heroStyle: CSSProperties = {
+    width: "100%",
+    maxWidth: `${heroWidth}px`,
+    marginInline: "auto",
+  };
 
   // إخفاء تراكب النص (العنوان/النص/زر تسوقي الآن) على مقاسات محددة
   const hideClasses = [
@@ -17,31 +29,23 @@ export function Hero({ settings }: { settings: Settings }) {
     .join(" ");
 
   return (
-    <section className="relative overflow-hidden bg-ink">
-      {/* Desktop image */}
+    <section className="relative w-full overflow-hidden bg-ink" style={heroStyle}>
+      {/* Desktop image — flows at its natural aspect ratio (no crop / no zoom) */}
       {image && (
         // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={image}
-          alt={settings.hero_title}
-          className="absolute inset-0 h-full w-full object-cover hidden md:block"
-        />
+        <img src={image} alt={settings.hero_title} className="hidden md:block w-full h-auto" />
       )}
       {/* Mobile image */}
       {mobileImage && (
         // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={mobileImage}
-          alt={settings.hero_title}
-          className="absolute inset-0 h-full w-full object-cover md:hidden"
-        />
+        <img src={mobileImage} alt={settings.hero_title} className="md:hidden w-full h-auto" />
       )}
       {!image && !mobileImage && (
-        <div className="absolute inset-0 bg-gradient-to-b from-ink via-[#2a241c] to-background" />
+        <div className="block min-h-[50vh] w-full bg-gradient-to-b from-ink via-[#2a241c] to-background" />
       )}
-      <div className="absolute inset-0 bg-gradient-to-t from-ink/80 via-ink/30 to-ink/10" />
+      <div className="absolute inset-0 bg-gradient-to-t from-ink/60 via-ink/25 to-ink/5 pointer-events-none" />
 
-      <div className={`relative mx-auto max-w-7xl px-4 md:px-6 pt-28 md:pt-48 pb-20 md:pb-28 text-center text-ivory ${hideClasses}`}>
+      <div className={`absolute inset-0 flex items-center justify-center mx-auto w-full max-w-7xl px-4 md:px-6 py-16 md:py-20 text-center text-ivory ${hideClasses}`}>
         <h1 className="text-3xl md:text-6xl font-bold leading-tight text-ivory drop-shadow">
           {settings.hero_title}
         </h1>
@@ -50,12 +54,14 @@ export function Hero({ settings }: { settings: Settings }) {
             {settings.hero_subtitle}
           </p>
         )}
-        <Link
-          href={ctaLink}
-          className="mt-8 inline-flex items-center justify-center rounded-full bg-ivory px-10 py-3.5 text-sm md:text-base font-bold text-ink hover:bg-gold hover:text-ivory transition shadow-lg"
-        >
-          {ctaText}
-        </Link>
+        {showCta && (
+          <Link
+            href={ctaLink}
+            className="mt-8 inline-flex items-center justify-center rounded-full bg-ivory px-10 py-3.5 text-sm md:text-base font-bold text-ink hover:bg-gold hover:text-ivory transition shadow-lg"
+          >
+            {ctaText}
+          </Link>
+        )}
       </div>
     </section>
   );

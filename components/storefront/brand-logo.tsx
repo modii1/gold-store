@@ -3,22 +3,43 @@ import { Gem } from "lucide-react";
 import type { CSSProperties } from "react";
 import type { Settings } from "@/types";
 
-export function BrandLogo({ settings, size = "md" }: { settings: Settings; size?: "md" | "lg" }) {
+export function BrandLogo({ settings, size = "md", showName = true }: { settings: Settings; size?: "md" | "lg"; showName?: boolean }) {
   const rawName = settings.site_name || "لمعة للاكسسوارات المطلية";
-  // هوية العرض: نُزيل بادئة «متجر» من الاسم المعروض (تظهر مرة واحدة فقط في الـ Header)
   const name = rawName.replace(/^متجر\s*/i, "").trim() || "لمعة للاكسسوارات المطلية";
-  const markCls = size === "lg" ? "h-12 w-12" : "h-9 w-9 md:h-11 md:w-11";
-  const iconCls = size === "lg" ? "h-6 w-6" : "h-5 w-5 md:h-6 md:w-6";
-  // الاسم يلتف لسطرين بأمان على الشاشات الضيقة بدل قصّه، ويبقى بسطر واحد
-  // على الشاشات الأوسع. لا نستخدم truncate/overflow مطلقاً حتى لا يُقصّ النص.
+
+  const isHeader = size === "md";
+
+  // Read user values directly — no fallbacks that override
+  const w = isHeader ? settings.header_logo_width : settings.footer_brand_logo_width;
+  const h = isHeader ? settings.header_logo_height : settings.footer_brand_logo_height;
+
+  const hasExplicitWidth = typeof w === "number" && w > 0;
+  const hasExplicitHeight = typeof h === "number" && h > 0;
+
+  // Build image style: apply exactly what the user set, nothing more
+  const imgStyle: CSSProperties = { objectFit: "contain" };
+  if (hasExplicitWidth) imgStyle.width = w;
+  if (hasExplicitHeight) imgStyle.height = h;
+  // Auto mode (both 0): let the image size itself naturally
+  // but cap it so it doesn't blow up the header
+  if (!hasExplicitWidth && !hasExplicitHeight) {
+    if (isHeader) {
+      imgStyle.height = 40;
+    } else {
+      imgStyle.width = 120;
+    }
+  }
+
+  const markCls = size === "lg" ? "h-12 w-12" : "h-8 w-8 md:h-9 md:w-9";
+  const iconCls = size === "lg" ? "h-6 w-6" : "h-4 w-4 md:h-5 md:w-5";
   const textCls = "font-bold text-gradient-gold leading-tight";
   const textStyle = { fontSize: `${settings.header_footer_font_size || 13}px` };
 
   return (
-    <Link href="/" className="inline-flex items-center gap-2.5 min-w-0" aria-label={name}>
+    <Link href="/" className="inline-flex items-center gap-2 min-w-0 shrink-0" aria-label={name}>
       {settings.store_logo ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={settings.store_logo} alt={name} className="h-9 md:h-11 w-auto object-contain shrink-0" />
+        <img src={settings.store_logo} alt={name} className="shrink-0" style={imgStyle} />
       ) : (
         <span
           className={`flex ${markCls} shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-gold to-gold-dark text-ivory shadow-sm`}
@@ -26,7 +47,7 @@ export function BrandLogo({ settings, size = "md" }: { settings: Settings; size?
           <Gem className={iconCls} />
         </span>
       )}
-      <span className={textCls} style={textStyle}>{name}</span>
+      {showName && <span className={textCls} style={textStyle}>{name}</span>}
     </Link>
   );
 }

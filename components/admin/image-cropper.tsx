@@ -14,12 +14,14 @@ type DragState = { mode: DragMode; startX: number; startY: number; startCrop: { 
 
 export function ImageCropperModal({
   src,
+  fileType,
   onCancel,
   onConfirm,
   aspect = 1,
   title = "قصّ الصورة",
 }: {
   src: string;
+  fileType?: string; // MIME type الأصلي للملف (image/png, image/webp, إلخ)
   onCancel: () => void;
   onConfirm: (blob: Blob) => void;
   aspect?: number; // نسبة الأبعاد، 1 = مربع
@@ -189,14 +191,34 @@ export function ImageCropperModal({
   const endDrag = () => { dragRef.current = null; };
 
   // الحفظ: قصّ canvas بالجزء المحدد
-  const doCrop = () => {
+  const doCrop = async () => {
     if (!imgEl || !stage.scale) return;
     setProcessing(true);
-    // المرحلة = أبعاد الصورة المعروضة بالضبط، فالتحويل مباشر
     const sx = crop.x / stage.scale;
     const sy = crop.y / stage.scale;
     const sw = crop.w / stage.scale;
     const sh = crop.h / stage.scale;
+
+    // كشف الصيغة الحقيقية من أول 12 بايت للملف الأصلي
+    let realMime = "image/jpeg";
+    try {
+      const resp = await fetch(src);
+      const headerBuf = new Uint8Array(await resp.arrayBuffer()).slice(0, 12);
+      const isPNG = headerBuf[0] === 0x89 && headerBuf[1] === 0x50 && headerBuf[2] === 0x4E && headerBuf[3] === 0x47;
+      const isWEBP = headerBuf[0] === 0x52 && headerBuf[1] === 0x49 && headerBuf[2] === 0x46 && headerBuf[3] === 0x46
+        && headerBuf[8] === 0x57 && headerBuf[9] === 0x45 && headerBuf[10] === 0x42 && headerBuf[11] === 0x50;
+      const isGIF = headerBuf[0] === 0x47 && headerBuf[1] === 0x49 && headerBuf[2] === 0x46;
+      realMime = isPNG ? "image/png" : isWEBP ? "image/webp" : isGIF ? "image/gif" : "image/jpeg";
+    } catch {
+      // fallback: اعتمد على fileType الممرر
+      const m = (fileType || "").toLowerCase();
+      if (m === "image/png") realMime = "image/png";
+      else if (m === "image/webp") realMime = "image/webp";
+    }
+
+    if (process.env.NODE_ENV !== "production") {
+      console.log("[cropper] realMime:", realMime, "(fileType prop:", fileType, ")");
+    }
 
     const canvas = document.createElement("canvas");
     const outW = Math.max(1, Math.round(sw));
@@ -207,16 +229,20 @@ export function ImageCropperModal({
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = "high";
     ctx.drawImage(imgEl, sx, sy, sw, sh, 0, 0, outW, outH);
+
     canvas.toBlob(
       (blob) => {
         setProcessing(false);
         if (blob) {
+          if (process.env.NODE_ENV !== "production") {
+            console.log("[cropper] output blob type:", blob.type, "size:", blob.size);
+          }
           setPreviewUrl(URL.createObjectURL(blob));
           onConfirm(blob);
         }
       },
-      "image/jpeg",
-      0.95 // جودة عالية لتقليل فقد الجودة
+      realMime,
+      realMime === "image/jpeg" ? 0.95 : undefined
     );
   };
 

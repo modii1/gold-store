@@ -7,6 +7,7 @@ import { ProductSection } from "@/components/storefront/product-section";
 import { CustomSection } from "@/components/storefront/custom-section";
 import { getSettings } from "@/lib/services/settings";
 import { getHomeSections } from "@/lib/services/home-sections";
+import { getActivePages } from "@/lib/services/pages";
 import { getCategoriesList, getLatestProducts, getBestSellers, getFeaturedProducts, getOnSaleProducts } from "@/lib/services/products";
 import type { HomeSection } from "@/types";
 
@@ -17,7 +18,7 @@ type ProductArray = Awaited<ReturnType<typeof getLatestProducts>>;
 export const dynamic = "force-dynamic";
 
 export default async function HomePage() {
-  const [settings, categories, latest, bestSellers, featured, onSale, sections] = await Promise.all([
+  const [settings, categories, latest, bestSellers, featured, onSale, sections, pages] = await Promise.all([
     getSettings(),
     getCategoriesList(),
     getLatestProducts(8),
@@ -25,6 +26,7 @@ export default async function HomePage() {
     getFeaturedProducts(8),
     getOnSaleProducts(8),
     getHomeSections(),
+    getActivePages(),
   ]);
 
   const productFeeds: Record<string, ProductArray> = {
@@ -46,22 +48,15 @@ export default async function HomePage() {
       <main className="flex-1">
         {orderSectionsForDisplay(sections).map((section) => renderSectionSafe(section, settings, categories, productFeeds, defaultFeedMeta))}
       </main>
-      <StoreFooter settings={settings} />
+      <StoreFooter settings={settings} pages={pages} />
     </>
   );
 }
 
-// يضع قسم الميزات (features) أسفل أول قسم منتجات مباشرةً على الصفحة الرئيسية
-// (بدل موضعه العلوي السابق)، دون التأثير على باقي الترتيب المختار في لوحة التحكم.
+// يقرأ الترتيب من قاعدة البيانات مباشرةً بدون أي تعديل.
+// الترتيب المحفوظ في لوحة التحكم هو المصدر الوحيد لترتيب العرض.
 function orderSectionsForDisplay(sections: HomeSection[]): HomeSection[] {
-  const featuresIdx = sections.findIndex((s) => s.type === "features");
-  if (featuresIdx === -1) return sections;
-  const features = sections[featuresIdx];
-  const rest = sections.filter((s) => s.type !== "features");
-  const firstProductIdx = rest.findIndex((s) => s.type.startsWith("products_"));
-  if (firstProductIdx === -1) return sections;
-  rest.splice(firstProductIdx + 1, 0, features);
-  return rest;
+  return sections;
 }
 
 // يرند قسماً منعزلاً: فشل قسم واحد لا يُسقط بقية الأقسام ولا الصفحة نفسها.
@@ -100,7 +95,7 @@ function SectionRenderer({
   const cfg = section.config || {};
 
   if (type === "hero") return <Hero settings={settings} />;
-  if (type === "categories") return <CategoryStrip categories={categories} />;
+  if (type === "categories") return <CategoryStrip categories={categories} settings={settings} />;
   if (type === "features") return <FeaturesStrip />;
 
   if (type.startsWith("products_")) {
@@ -113,6 +108,7 @@ function SectionRenderer({
         viewAll={(section.config?.viewAll as string) || meta.viewAll}
         products={feed}
         dark={cfg.dark ?? meta.dark}
+        settings={settings}
       />
     );
   }

@@ -19,47 +19,60 @@ export function StoreHeader({ settings, categories }: { settings: Settings; cate
 
   const nav = categories.slice(0, 7);
 
+  // Header settings (independent from footer)
+  const headerHeight = settings.header_height ?? 64;
+  const headerPaddingTop = settings.header_padding_top ?? 0;
+  const headerPaddingBottom = settings.header_padding_bottom ?? 0;
+  const headerGap = settings.header_gap ?? 8;
+  const headerBg = settings.header_bg_color || "#FAFAF9";
+  const headerText = settings.header_text_color || "#111111";
+  const headerLink = settings.header_link_color || "#57534e";
+  const headerLinkHover = settings.header_link_hover_color || "#B08D57";
+  const headerIcon = settings.header_icon_color || "#111111";
+  const fontSize = settings.header_footer_font_size || 14;
+
   return (
     <>
-      <header className="sticky top-0 z-50" style={{ fontSize: `${settings.header_footer_font_size || 14}px` }}>
+      <header className="sticky top-0 z-50" style={{ fontSize: `${fontSize}px` }}>
         {settings.announcement && (
           <div className="bg-ink text-amber-100 text-center text-xs py-2 px-4 tracking-wide">
             {settings.announcement}
           </div>
         )}
-        <div className="bg-ivory/95 backdrop-blur border-b border-sand">
-          <div className="mx-auto max-w-7xl px-3 md:px-6">
-            {/* 3 أعمدة متساوية على سطح المكتب: اللوغو (بداية)، الناف (منتصف)،
-                الأيقونات (نهاية). منتصف العمود الأوسط = منتصف الـ Header بالضبط. */}
-            <div className="grid grid-cols-[auto_1fr_auto] md:grid-cols-3 items-center h-16 md:h-20 gap-1 md:gap-4">
+        <div style={{ backgroundColor: headerBg, borderBottom: "1px solid #e7e5e4" }}>
+          <div className="mx-auto max-w-7xl px-3 md:px-6" style={{ paddingTop: headerPaddingTop, paddingBottom: headerPaddingBottom }}>
+            <div
+              className="grid grid-cols-[auto_1fr_auto] md:grid-cols-3 items-center"
+              style={{ minHeight: headerHeight, gap: headerGap }}
+            >
               {/* Mobile: menu button + Logo (start) */}
-              <div className="flex items-center min-w-0 gap-1">
-                <button onClick={() => setMenuOpen(true)} className="md:hidden text-ink p-1 shrink-0" aria-label="القائمة">
+              <div className="flex items-center min-w-0" style={{ gap: headerGap }}>
+                <button onClick={() => setMenuOpen(true)} className="md:hidden p-1 shrink-0 transition" style={{ color: headerIcon }} aria-label="القائمة">
                   <Menu className="w-6 h-6" />
                 </button>
-                <div className="flex min-w-0 justify-start">
-                  <BrandLogo settings={settings} />
+                <div className="flex min-w-0" style={{ justifyContent: settings.header_logo_align === "center" ? "center" : settings.header_logo_align === "flex-end" ? "flex-end" : "flex-start" }}>
+                  <BrandLogo settings={settings} size="md" />
                 </div>
               </div>
 
               {/* Desktop nav — متمركز في المنتصف */}
-                <nav className="hidden md:flex items-center justify-center gap-5 lg:gap-7 font-semibold text-stone-600" style={{ fontSize: `${settings.header_footer_font_size || 13}px` }}>
-                <Link href="/" className="hover:text-gold transition whitespace-nowrap">الرئيسية</Link>
+              <nav className="hidden md:flex items-center justify-center font-semibold" style={{ gap: headerGap, color: headerLink, fontSize: `${fontSize}px` }}>
+                <Link href="/" className="hover:opacity-70 transition whitespace-nowrap" style={{ ["--hover-color" as string]: headerLinkHover }}>الرئيسية</Link>
                 {nav.map((c) => (
-                  <Link key={c.id} href={`/category/${c.slug}`} className="hover:text-gold transition whitespace-nowrap">
+                  <Link key={c.id} href={`/category/${c.slug}`} className="hover:opacity-70 transition whitespace-nowrap">
                     {c.name}
                   </Link>
                 ))}
-                <Link href="/shop" className="hover:text-gold transition whitespace-nowrap">عروض</Link>
+                <Link href="/shop" className="hover:opacity-70 transition whitespace-nowrap">عروض</Link>
               </nav>
 
               {/* Icons (end) */}
-              <div className="flex items-center justify-end gap-0.5 md:gap-2 shrink-0">
-                <button onClick={() => setSearchOpen(true)} className="p-2 text-ink hover:text-gold transition" aria-label="بحث">
+              <div className="flex items-center justify-end shrink-0" style={{ gap: headerGap * 0.5 }}>
+                <button onClick={() => setSearchOpen(true)} className="p-2 transition" style={{ color: headerIcon }} aria-label="بحث">
                   <Search className="w-5 h-5 md:w-6 md:h-6" />
                 </button>
-                <AccountLink className="hidden md:block p-2 text-ink hover:text-gold transition" />
-                <Link href="/favorites" className="hidden sm:block p-2 text-ink hover:text-gold transition relative" aria-label="المفضلة">
+                <AccountLink className="hidden md:block p-2 transition" style={{ color: headerIcon }} />
+                <Link href="/favorites" className="hidden sm:block p-2 transition relative" style={{ color: headerIcon }} aria-label="المفضلة">
                   <Heart className="w-5 h-5 md:w-6 md:h-6" />
                   {favs.size > 0 && (
                     <span className="absolute -top-0.5 -start-0.5 h-4 w-4 rounded-full bg-gold text-white text-[9px] flex items-center justify-center font-bold">
@@ -67,7 +80,7 @@ export function StoreHeader({ settings, categories }: { settings: Settings; cate
                     </span>
                   )}
                 </Link>
-                <button onClick={openCart} className="p-2 text-ink hover:text-gold transition relative" aria-label="السلة">
+                <button onClick={openCart} className="p-2 transition relative" style={{ color: headerIcon }} aria-label="السلة">
                   <ShoppingBag className="w-5 h-5 md:w-6 md:h-6" />
                   {count > 0 && (
                     <span className="absolute -top-0.5 -start-0.5 h-4 w-4 rounded-full bg-gold text-white text-[9px] flex items-center justify-center font-bold">
@@ -92,17 +105,18 @@ export function StoreHeader({ settings, categories }: { settings: Settings; cate
                 <X className="w-6 h-6" />
               </button>
             </div>
-            <nav className="p-4 space-y-1" style={{ fontSize: `${settings.header_footer_font_size || 13}px` }}>
+            <nav className="p-4 space-y-1" style={{ fontSize: `${fontSize}px` }}>
               <Link href="/" onClick={() => setMenuOpen(false)} className="block rounded-lg px-3 py-2.5 text-sm font-bold text-ink hover:bg-white transition">الرئيسية</Link>
               {categories.map((c) => (
                 <Link key={c.id} href={`/category/${c.slug}`} onClick={() => setMenuOpen(false)} className="block rounded-lg px-3 py-2.5 text-sm font-semibold text-stone-600 hover:bg-white hover:text-gold transition">
                   {c.name}
                 </Link>
               ))}
-              <Link href="/shop" onClick={() => setMenuOpen(false)} className="block rounded-lg px-3 py-2.5 text-sm font-bold text-gold hover:bg-white transition">العروض</Link>
+              <Link href="/shop" onClick={() => setMenuOpen(false)} className="block rounded-lg px-3 py-2.5 text-sm font-bold text-gold hover:bg-white transition">عروض</Link>
               <Link href="/account" onClick={() => setMenuOpen(false)} className="flex items-center gap-2 rounded-lg px-3 py-2.5 text-sm font-semibold text-stone-600 hover:bg-white transition">
                 <User className="w-4 h-4" /> حسابي
-              </Link>              <Link href="/favorites" onClick={() => setMenuOpen(false)} className="flex items-center gap-2 rounded-lg px-3 py-2.5 text-sm font-semibold text-stone-600 hover:bg-white transition">
+              </Link>
+              <Link href="/favorites" onClick={() => setMenuOpen(false)} className="flex items-center gap-2 rounded-lg px-3 py-2.5 text-sm font-semibold text-stone-600 hover:bg-white transition">
                 <Heart className="w-4 h-4" /> المفضلة
               </Link>
             </nav>

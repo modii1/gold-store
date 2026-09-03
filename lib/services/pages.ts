@@ -15,3 +15,17 @@ export async function getPage(slug: string): Promise<Page | null> {
     return null;
   }
 }
+
+export async function getActivePages(): Promise<Page[]> {
+  try {
+    const supabase = await createClient();
+    const { data } = await supabase
+      .from("pages")
+      .select("id, slug, title, is_active")
+      .eq("is_active", true)
+      .order("created_at", { ascending: true });
+    return (data as Page[]) || [];
+  } catch {
+    return [];
+  }
+}

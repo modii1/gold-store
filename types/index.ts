@@ -221,6 +221,14 @@ export type Settings = {
   hero_hide_mobile?: boolean;
   hero_hide_tablet?: boolean;
   hero_hide_desktop?: boolean;
+  hero_width?: number;
+  hero_height?: number;
+  hero_show_cta?: boolean;
+  category_section_width?: number;
+  category_section_height?: number;
+  category_item_size?: number;
+  category_item_gap?: number;
+  category_item_shape?: "circle" | "square";
   announcement: string | null;
   whatsapp: string | null;
   phone: string | null;
@@ -252,6 +260,46 @@ export type Settings = {
   currency_mark_url?: string | null;
   show_currency_mark?: boolean;
   notifications_paused?: boolean;
+  footer_bg_color?: string;
+  footer_text_color?: string;
+  footer_link_color?: string;
+  footer_link_hover_color?: string;
+  footer_heading_color?: string;
+  footer_border_color?: string;
+  footer_bottom_bg_color?: string;
+  footer_bottom_text_color?: string;
+  footer_show_brand?: boolean;
+  footer_show_links?: boolean;
+  footer_show_contact?: boolean;
+  footer_links_json?: string | null;
+  // Brand section (independent from rest of footer)
+  footer_brand_bg_color?: string;
+  footer_brand_padding_y?: number;
+  footer_brand_logo_width?: number;
+  footer_brand_logo_height?: number;
+  footer_brand_logo_align?: string;
+  footer_brand_logo_gap?: number;
+  footer_brand_desc_size?: number;
+  footer_brand_desc_color?: string;
+  footer_brand_desc_weight?: number;
+  footer_brand_desc_align?: string;
+  footer_brand_desc_max_width?: number;
+  // Header settings
+  header_height?: number;
+  header_padding_top?: number;
+  header_padding_bottom?: number;
+  header_gap?: number;
+  header_logo_width?: number;
+  header_logo_height?: number;
+  header_logo_align?: string;
+  header_bg_color?: string;
+  header_text_color?: string;
+  header_link_color?: string;
+  header_link_hover_color?: string;
+  header_icon_color?: string;
+  // Mobile products layout
+  mobile_products_layout?: "grid" | "horizontal";
+  mobile_products_allow_user_toggle?: boolean;
 };
 
 export type Page = {

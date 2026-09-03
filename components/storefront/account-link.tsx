@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { User } from "lucide-react";
 
-export function AccountLink({ className }: { className?: string }) {
+export function AccountLink({ className, style }: { className?: string; style?: React.CSSProperties }) {
   const [name, setName] = useState<string | null>(null);
 
   useEffect(() => {
@@ -17,7 +17,7 @@ export function AccountLink({ className }: { className?: string }) {
   }, []);
 
   return (
-    <Link href="/account" className={className} aria-label="حسابي" title={name || "حسابي"}>
+    <Link href="/account" className={className} style={style} aria-label="حسابي" title={name || "حسابي"}>
       {name ? (
         <span className="flex items-center gap-1.5 text-xs font-bold text-gold-dark">
           <User className="h-6 w-6" />
