@@ -7,13 +7,6 @@ import { BrandLogo } from "./brand-logo";
 import { waMeNumber } from "@/lib/format";
 import type { Settings, Page } from "@/types";
 
-// Static navigation links (not from pages table — these are shop navigation)
-const STATIC_LINKS = [
-  { label: "جميع المنتجات", href: "/shop" },
-  { label: "الأكثر مبيعاً", href: "/shop?sort=best" },
-  { label: "العروض", href: "/shop?sale=1" },
-];
-
 export function StoreFooter({ settings, pages = [] }: { settings: Settings; pages?: Page[] }) {
   const fontSize = settings.header_footer_font_size || 14;
 
@@ -45,11 +38,6 @@ export function StoreFooter({ settings, pages = [] }: { settings: Settings; page
   const pageLinks = pages.map((p) => ({ label: p.title, href: `/pages/${p.slug}` }));
 
   const footerGroups: { title: string; links: { label: string; href: string }[] }[] = [];
-
-  // Store group: static navigation links
-  if (STATIC_LINKS.length > 0) {
-    footerGroups.push({ title: "المتجر", links: STATIC_LINKS });
-  }
 
   // Pages group: all active pages from DB (admin-controlled)
   if (pageLinks.length > 0) {
