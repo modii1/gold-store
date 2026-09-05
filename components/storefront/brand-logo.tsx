@@ -19,9 +19,12 @@ export function BrandLogo({ settings, size = "md", showName = true, mobileMaxSiz
   // Build image style: apply exactly what the user set, nothing more
   const imgStyle: CSSProperties = { objectFit: "contain" };
   if (mobileMaxSize) {
+    // Mobile: fixed size from header, ignore admin width/height
     imgStyle.width = mobileMaxSize;
     imgStyle.height = mobileMaxSize;
+    if (mobileScale) imgStyle.transform = `scale(${mobileScale})`;
   } else if (hasExplicitWidth) {
+    // Desktop: read from admin settings
     imgStyle.width = w;
     if (hasExplicitHeight) imgStyle.height = h;
   } else if (hasExplicitHeight) {
@@ -33,7 +36,6 @@ export function BrandLogo({ settings, size = "md", showName = true, mobileMaxSiz
       imgStyle.width = 120;
     }
   }
-  if (mobileScale) imgStyle.transform = `scale(${mobileScale})`;
 
   const markCls = size === "lg" ? "h-12 w-12" : "h-8 w-8 md:h-9 md:w-9";
   const iconCls = size === "lg" ? "h-6 w-6" : "h-4 w-4 md:h-5 md:w-5";

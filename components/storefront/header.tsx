@@ -55,7 +55,7 @@ export function StoreHeader({ settings, categories }: { settings: Settings; cate
               {/* Mobile: Logo centered on full screen width */}
               <div className="md:hidden absolute inset-0 flex items-center justify-center" style={{ pointerEvents: "none", marginTop: "-50px" }}>
                 <div style={{ pointerEvents: "auto" }}>
-                  <BrandLogo settings={settings} size="md" showName={false} mobileScale={2} />
+                  <BrandLogo settings={settings} size="md" showName={false} mobileMaxSize={40} mobileScale={2} />
                 </div>
               </div>
 
