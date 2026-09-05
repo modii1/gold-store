@@ -23,10 +23,8 @@ export function CategoryStrip({ categories, settings }: { categories: Category[]
         <div
           className="md:hidden grid justify-items-center"
           style={{
-            gridTemplateColumns: "repeat(2, auto)",
+            gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
             gap: mobileGap,
-            width: "fit-content",
-            marginInline: "auto",
             justifyContent: "center",
           }}
         >
@@ -38,7 +36,7 @@ export function CategoryStrip({ categories, settings }: { categories: Category[]
             >
               <span
                 className="flex items-center justify-center overflow-hidden bg-cream border border-sand transition group-hover:border-gold shadow-sm group-hover:shadow-md"
-                style={{ width: mobileSize, height: mobileSize, borderRadius }}
+                style={{ width: "100%", maxWidth: mobileSize, aspectRatio: "1/1", borderRadius }}
               >
                 {c.image ? (
                   // eslint-disable-next-line @next/next/no-img-element
