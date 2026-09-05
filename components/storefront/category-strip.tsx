@@ -19,16 +19,16 @@ export function CategoryStrip({ categories, settings }: { categories: Category[]
   return (
     <section className="border-b border-sand bg-ivory">
       <div className="mx-auto px-4 md:px-6 py-8" style={{ maxWidth: sectionWidth > 0 ? sectionWidth : undefined, height: sectionHeight > 0 ? sectionHeight : undefined }}>
-        {/* Mobile: flex horizontal scroll */}
+        {/* Mobile: 2-column grid */}
         <div
-          className="md:hidden flex overflow-x-auto pb-2 gap-4 scrollbar-hide"
-          style={{ WebkitOverflowScrolling: "touch" }}
+          className="md:hidden grid justify-items-center"
+          style={{ gridTemplateColumns: "repeat(2, auto)", gap: mobileGap }}
         >
           {categories.map((c) => (
             <Link
               key={c.id}
               href={`/category/${c.slug}`}
-              className="group flex shrink-0 flex-col items-center"
+              className="group flex flex-col items-center"
             >
               <span
                 className="flex items-center justify-center overflow-hidden bg-cream border border-sand transition group-hover:border-gold shadow-sm group-hover:shadow-md"
