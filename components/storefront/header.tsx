@@ -55,12 +55,12 @@ export function StoreHeader({ settings, categories }: { settings: Settings; cate
               {/* Mobile: Logo centered on full screen width */}
               <div className="md:hidden absolute inset-0 flex items-center justify-center" style={{ pointerEvents: "none", marginTop: "-50px" }}>
                 <div style={{ pointerEvents: "auto" }}>
-                  <BrandLogo settings={settings} size="md" showName={false} mobileMaxSize={40} mobileScale={2} />
+                  <BrandLogo settings={settings} size="md" showName={false} mobileMaxSize={50} mobileScale={2} />
                 </div>
               </div>
 
               {/* Desktop: Logo in normal flow */}
-              <div className="hidden md:flex min-w-0" style={{ justifyContent: settings.header_logo_align === "center" ? "center" : settings.header_logo_align === "flex-end" ? "flex-end" : "flex-start" }}>
+              <div className="hidden md:flex min-w-0" style={{ justifyContent: settings.header_logo_align === "center" ? "center" : settings.header_logo_align === "flex-end" ? "flex-end" : "flex-start", marginTop: "-75px", marginLeft: "160px" }}>
                 <BrandLogo settings={settings} size="md" showName={false} />
               </div>
 
