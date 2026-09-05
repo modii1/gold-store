@@ -25,7 +25,7 @@ export function ColorStrip({ colors }: { colors: string[] }) {
       <div className="mx-auto max-w-7xl px-4 md:px-6 py-8">
         <h2 className="text-center text-lg md:text-xl font-bold text-ink">تسوقي حسب اللون</h2>
         <p className="mt-1 text-center text-xs text-stone-400">اختاري لونك المفضل</p>
-        <div className="mt-6 flex gap-5 overflow-x-auto pb-2 -mx-4 px-4 scrollbar-hide justify-start md:justify-center">
+        <div className="mt-6 flex gap-5 overflow-x-auto pb-2 px-1 scrollbar-hide justify-start md:justify-center">
           {uniq.map((c) => (
             <Link
               key={c}

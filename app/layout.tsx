@@ -12,18 +12,48 @@ const cairo = Cairo({
   variable: "--font-cairo",
 });
 
-export const metadata: Metadata = {
-  title: {
-    default: "متجر لمعة للاكسسوارات المطلية | متجر اكسسوارات فاخر",
-    template: "%s | متجر لمعة للاكسسوارات المطلية",
-  },
-  description: "متجر إكسسوارات مطلية نسائية فاخرة — تشكيلة مختارة بعناية من القطع الراقية",
-  icons: {
-    icon: "/icon.svg",
-    shortcut: "/icon.svg",
-    apple: "/icon.svg",
-  },
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const settings = await getSettings();
+  const logo = settings.store_logo || "/icon.svg";
+  const siteName = settings.site_name || "متجر لمعة للاكسسوارات المطلية";
+  return {
+    title: {
+      default: `${siteName} | متجر اكسسوارات فاخر`,
+      template: `%s | ${siteName}`,
+    },
+    description: "متجر إكسسوارات مطلية نسائية فاخرة — تشكيلة مختارة بعناية من القطع الراقية",
+    icons: {
+      icon: [
+        { url: "/favicon.png", sizes: "32x32", type: "image/png" },
+        { url: "/favicon.png", sizes: "192x192", type: "image/png" },
+        { url: "/favicon.png", sizes: "512x512", type: "image/png" },
+      ],
+      shortcut: "/favicon.png",
+      apple: "/favicon.png",
+    },
+    openGraph: {
+      title: siteName,
+      description: "متجر إكسسوارات مطلية نسائية فاخرة — تشكيلة مختارة بعناية من القطع الراقية",
+      images: [
+        {
+          url: logo,
+          width: 512,
+          height: 512,
+          alt: siteName,
+        },
+      ],
+      type: "website",
+      locale: "ar_SA",
+      siteName,
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: siteName,
+      description: "متجر إكسسوارات مطلية نسائية فاخرة — تشكيلة مختارة بعناية من القطع الراقية",
+      images: [logo],
+    },
+  };
+}
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const settings = await getSettings();

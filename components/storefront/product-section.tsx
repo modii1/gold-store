@@ -48,34 +48,55 @@ export function ProductSection({
   const effectiveLayout = allowToggle ? mobileLayout : defaultLayout;
 
   return (
-    <section className={`py-12 md:py-16 ${dark ? "bg-ink text-ivory" : "bg-ivory"}`}>
+    <section
+      className="py-12 md:py-16"
+      style={dark ? { background: "linear-gradient(180deg, #705B42 0%, #A68B62 100%)" } : { background: "#faf9f6" }}
+    >
       <div className="mx-auto max-w-7xl px-4 md:px-6">
         <div className="flex items-end justify-between mb-8 gap-4">
           <div className="flex items-center gap-3">
             <div>
-              <h2 className={`text-2xl md:text-3xl font-bold ${dark ? "text-ivory" : "text-ink"}`}>{title}</h2>
-              {subtitle && <p className={`mt-1 text-sm md:text-base ${dark ? "text-ivory/60" : "text-stone-500"}`}>{subtitle}</p>}
+              <h2
+                className="text-2xl md:text-3xl font-bold"
+                style={dark ? { color: "#FFFFFF" } : { color: "#1a1a1a" }}
+              >
+                {title}
+              </h2>
+              {subtitle && (
+                <p
+                  className="mt-1 text-sm md:text-base"
+                  style={dark ? { color: "rgba(255,255,255,0.72)" } : { color: "#78716c" }}
+                >
+                  {subtitle}
+                </p>
+              )}
             </div>
             {allowToggle && (
               <div className="flex items-center gap-1 md:hidden">
                 <button
                   onClick={() => toggleLayout("grid")}
-                  className={`flex h-8 w-8 items-center justify-center rounded-lg transition ${
+                  className="flex h-8 w-8 items-center justify-center rounded-lg transition"
+                  style={
                     effectiveLayout === "grid"
-                      ? "bg-gold text-white"
-                      : dark ? "bg-white/10 text-ivory/60 hover:text-ivory" : "bg-stone-100 text-stone-400 hover:text-stone-700"
-                  }`}
+                      ? { backgroundColor: "#FFFFFF", color: "#705B42" }
+                      : dark
+                        ? { backgroundColor: "rgba(255,255,255,0.18)", color: "#FFFFFF", border: "1px solid rgba(255,255,255,0.25)" }
+                        : { backgroundColor: "#f5f5f4", color: "#a8a29e" }
+                  }
                   aria-label="عرض شبكي"
                 >
                   <LayoutGrid className="w-4 h-4" />
                 </button>
                 <button
                   onClick={() => toggleLayout("horizontal")}
-                  className={`flex h-8 w-8 items-center justify-center rounded-lg transition ${
+                  className="flex h-8 w-8 items-center justify-center rounded-lg transition"
+                  style={
                     effectiveLayout === "horizontal"
-                      ? "bg-gold text-white"
-                      : dark ? "bg-white/10 text-ivory/60 hover:text-ivory" : "bg-stone-100 text-stone-400 hover:text-stone-700"
-                  }`}
+                      ? { backgroundColor: "#FFFFFF", color: "#705B42" }
+                      : dark
+                        ? { backgroundColor: "rgba(255,255,255,0.18)", color: "#FFFFFF", border: "1px solid rgba(255,255,255,0.25)" }
+                        : { backgroundColor: "#f5f5f4", color: "#a8a29e" }
+                  }
                   aria-label="عرض أفقي"
                 >
                   <Rows3 className="w-4 h-4" />
@@ -85,7 +106,8 @@ export function ProductSection({
           </div>
           <Link
             href={viewAll}
-            className={`flex items-center gap-1 text-sm font-bold whitespace-nowrap ${dark ? "text-gold-light hover:text-ivory" : "text-gold-dark hover:text-ink"} transition`}
+            className="flex items-center gap-1 text-sm font-bold whitespace-nowrap transition"
+            style={dark ? { color: "#E2C98F" } : { color: "#8b7355" }}
           >
             عرض الكل <ChevronLeft className="w-4 h-4" />
           </Link>

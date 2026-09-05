@@ -12,33 +12,47 @@ export function CategoryStrip({ categories, settings }: { categories: Category[]
   const mobileSize = settings.category_grid_mobile_size || 80;
   const mobileHeight = settings.category_grid_mobile_height || 80;
   const mobileGap = settings.category_grid_mobile_gap || 16;
-  const mobileCols = settings.category_grid_mobile_cols || 3;
+  const mobileCols = settings.category_grid_mobile_cols || 2;
   const isSquare = settings.category_item_shape === "square";
   const borderRadius = isSquare ? "12px" : "9999px";
 
-  const sectionStyle: React.CSSProperties = {};
-  if (sectionWidth > 0) sectionStyle.maxWidth = `${sectionWidth}px`;
-  if (sectionHeight > 0) sectionStyle.height = `${sectionHeight}px`;
-
   return (
     <section className="border-b border-sand bg-ivory">
-      <style dangerouslySetInnerHTML={{ __html: `
-        .cat-grid { grid-template-columns: repeat(${mobileCols}, auto); justify-content: center; gap: ${mobileGap}px; }
-        .cat-item { width: ${mobileSize}px; height: ${mobileHeight}px; }
-        @media (min-width: 768px) {
-          .cat-grid { grid-template-columns: repeat(${tabletCols}, auto); justify-content: center; gap: ${desktopGap}px; }
-          .cat-item { width: ${desktopSize}px; height: ${desktopHeight}px; }
-        }
-        @media (min-width: 1024px) {
-          .cat-grid { grid-template-columns: repeat(${desktopCols}, auto); justify-content: center; gap: ${desktopGap}px; }
-          .cat-item { width: ${desktopSize}px; height: ${desktopHeight}px; }
-        }
-      `}} />
-      <div
-        className="mx-auto px-4 md:px-6 py-8"
-        style={sectionStyle}
-      >
-        <div className="cat-grid grid">
+      <div className="mx-auto px-4 md:px-6 py-8" style={{ maxWidth: sectionWidth > 0 ? sectionWidth : undefined, height: sectionHeight > 0 ? sectionHeight : undefined }}>
+        {/* Mobile: flex horizontal scroll */}
+        <div
+          className="md:hidden flex overflow-x-auto pb-2 gap-4 scrollbar-hide"
+          style={{ WebkitOverflowScrolling: "touch" }}
+        >
+          {categories.map((c) => (
+            <Link
+              key={c.id}
+              href={`/category/${c.slug}`}
+              className="group flex shrink-0 flex-col items-center"
+            >
+              <span
+                className="flex items-center justify-center overflow-hidden bg-cream border border-sand transition group-hover:border-gold shadow-sm group-hover:shadow-md"
+                style={{ width: mobileSize, height: mobileSize, borderRadius }}
+              >
+                {c.image ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={c.image} alt={c.name} loading="lazy" className="h-full w-full object-cover" />
+                ) : (
+                  <span className="text-gold font-bold text-3xl">{c.name.slice(0, 1)}</span>
+                )}
+              </span>
+              <span className="mt-2 w-full text-center text-sm font-semibold text-stone-600 group-hover:text-gold transition whitespace-nowrap overflow-hidden text-ellipsis">
+                {c.name}
+              </span>
+            </Link>
+          ))}
+        </div>
+
+        {/* Tablet: flex wrap centered */}
+        <div
+          className="hidden md:flex lg:hidden flex-wrap justify-center"
+          style={{ gap: desktopGap }}
+        >
           {categories.map((c) => (
             <Link
               key={c.id}
@@ -46,8 +60,37 @@ export function CategoryStrip({ categories, settings }: { categories: Category[]
               className="group flex flex-col items-center"
             >
               <span
-                className="cat-item flex items-center justify-center overflow-hidden bg-cream border border-sand transition group-hover:border-gold shadow-sm group-hover:shadow-md"
-                style={{ borderRadius }}
+                className="flex items-center justify-center overflow-hidden bg-cream border border-sand transition group-hover:border-gold shadow-sm group-hover:shadow-md"
+                style={{ width: desktopSize, height: desktopHeight, borderRadius }}
+              >
+                {c.image ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={c.image} alt={c.name} loading="lazy" className="h-full w-full object-cover" />
+                ) : (
+                  <span className="text-gold font-bold text-3xl">{c.name.slice(0, 1)}</span>
+                )}
+              </span>
+              <span className="mt-2 w-full text-center text-sm md:text-base font-semibold text-stone-600 group-hover:text-gold transition whitespace-nowrap overflow-hidden text-ellipsis">
+                {c.name}
+              </span>
+            </Link>
+          ))}
+        </div>
+
+        {/* Desktop: flex wrap centered */}
+        <div
+          className="hidden lg:flex flex-wrap justify-center"
+          style={{ gap: desktopGap }}
+        >
+          {categories.map((c) => (
+            <Link
+              key={c.id}
+              href={`/category/${c.slug}`}
+              className="group flex flex-col items-center"
+            >
+              <span
+                className="flex items-center justify-center overflow-hidden bg-cream border border-sand transition group-hover:border-gold shadow-sm group-hover:shadow-md"
+                style={{ width: desktopSize, height: desktopHeight, borderRadius }}
               >
                 {c.image ? (
                   // eslint-disable-next-line @next/next/no-img-element

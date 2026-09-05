@@ -10,23 +10,23 @@ import type { Settings, Page } from "@/types";
 export function StoreFooter({ settings, pages = [] }: { settings: Settings; pages?: Page[] }) {
   const fontSize = settings.header_footer_font_size || 14;
 
-  // Main footer colors
-  const bgColor = settings.footer_bg_color || "#1a1a1a";
-  const textColor = settings.footer_text_color || "#a8a29e";
-  const linkColor = settings.footer_link_color || "#a8a29e";
+  // Main footer colors — forced black backgrounds, light text
+  const bgColor = "#000000";
+  const textColor = "#d6d3d1";
+  const linkColor = "#d6d3d1";
   const linkHoverColor = settings.footer_link_hover_color || "#d4af37";
-  const headingColor = settings.footer_heading_color || "#f5f5f4";
-  const borderColor = settings.footer_border_color || "rgba(255,255,255,0.1)";
-  const bottomBg = settings.footer_bottom_bg_color || "#1a1a1a";
-  const bottomText = settings.footer_bottom_text_color || "#78716c";
+  const headingColor = settings.footer_heading_color || "#d4af37";
+  const borderColor = "rgba(255,255,255,0.08)";
+  const bottomBg = "#000000";
+  const bottomText = "#a8a29e";
 
-  // Brand section independent colors
-  const brandBg = settings.footer_brand_bg_color || "#292524";
+  // Brand section — forced black
+  const brandBg = "#000000";
   const brandPaddingY = settings.footer_brand_padding_y ?? 48;
   const logoAlign = settings.footer_brand_logo_align || "center";
   const logoGap = settings.footer_brand_logo_gap ?? 16;
   const descSize = settings.footer_brand_desc_size ?? 14;
-  const descColor = settings.footer_brand_desc_color || textColor;
+  const descColor = "#d6d3d1";
   const descWeight = settings.footer_brand_desc_weight ?? 400;
   const descAlign = settings.footer_brand_desc_align || "center";
   const descMaxWidth = settings.footer_brand_desc_max_width ?? 600;
@@ -91,9 +91,9 @@ export function StoreFooter({ settings, pages = [] }: { settings: Settings; page
                   {socials.map((s) => (
                     <a key={s.label} href={s.href!} target="_blank" rel="noopener noreferrer"
                       className="flex h-9 w-9 items-center justify-center rounded-full transition"
-                      style={{ backgroundColor: "rgba(255,255,255,0.05)", color: descColor }}
-                      onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = linkHoverColor; e.currentTarget.style.color = "#fff"; }}
-                      onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.05)"; e.currentTarget.style.color = descColor; }}
+                      style={{ backgroundColor: "rgba(212,175,55,0.1)", color: "#d6d3d1" }}
+                      onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = linkHoverColor; e.currentTarget.style.color = "#000"; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "rgba(212,175,55,0.1)"; e.currentTarget.style.color = "#d6d3d1"; }}
                       aria-label={s.label}>
                       <s.Icon className="w-4 h-4" />
                     </a>
@@ -136,10 +136,10 @@ export function StoreFooter({ settings, pages = [] }: { settings: Settings; page
 
           {/* Bottom bar */}
           <div className="mt-10 pt-5" style={{ borderTop: `1px solid ${borderColor}` }}>
-            <div className="flex flex-col md:flex-row items-center justify-between gap-3 text-xs" style={{ color: bottomText, backgroundColor: bottomBg }}>
+            <div className="flex flex-col md:flex-row items-center justify-between gap-3 text-xs" style={{ color: bottomText }}>
               <p className="flex flex-wrap items-center gap-x-4 gap-y-1 justify-center">
                 <span>© {new Date().getFullYear()} {settings.site_name || "متجر لمعة للاكسسوارات المطلية"} — جميع الحقوق محفوظة</span>
-                <Link href="/admin" className="inline-flex items-center gap-1 hover:opacity-80 transition" title="لوحة التحكم" aria-label="لوحة التحكم">
+                <Link href="/admin" className="inline-flex items-center gap-1 hover:opacity-80 transition" style={{ color: "#d4af37" }} title="لوحة التحكم" aria-label="لوحة التحكم">
                   <Lock className="h-3 w-3" /> لوحة التحكم
                 </Link>
               </p>
