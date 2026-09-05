@@ -22,7 +22,13 @@ export function CategoryStrip({ categories, settings }: { categories: Category[]
         {/* Mobile: 2-column grid */}
         <div
           className="md:hidden grid justify-items-center"
-          style={{ gridTemplateColumns: "repeat(2, auto)", gap: mobileGap }}
+          style={{
+            gridTemplateColumns: "repeat(2, auto)",
+            gap: mobileGap,
+            width: "fit-content",
+            marginInline: "auto",
+            justifyContent: "center",
+          }}
         >
           {categories.map((c) => (
             <Link
