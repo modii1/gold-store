@@ -3,7 +3,7 @@ import { Gem } from "lucide-react";
 import type { CSSProperties } from "react";
 import type { Settings } from "@/types";
 
-export function BrandLogo({ settings, size = "md", showName = true }: { settings: Settings; size?: "md" | "lg"; showName?: boolean }) {
+export function BrandLogo({ settings, size = "md", showName = true, mobileMaxSize, mobileScale }: { settings: Settings; size?: "md" | "lg"; showName?: boolean; mobileMaxSize?: number; mobileScale?: number }) {
   const rawName = settings.site_name || "لمعة للاكسسوارات المطلية";
   const name = rawName.replace(/^متجر\s*/i, "").trim() || "لمعة للاكسسوارات المطلية";
 
@@ -18,17 +18,22 @@ export function BrandLogo({ settings, size = "md", showName = true }: { settings
 
   // Build image style: apply exactly what the user set, nothing more
   const imgStyle: CSSProperties = { objectFit: "contain" };
-  if (hasExplicitWidth) imgStyle.width = w;
-  if (hasExplicitHeight) imgStyle.height = h;
-  // Auto mode (both 0): let the image size itself naturally
-  // but cap it so it doesn't blow up the header
-  if (!hasExplicitWidth && !hasExplicitHeight) {
+  if (mobileMaxSize) {
+    imgStyle.width = mobileMaxSize;
+    imgStyle.height = mobileMaxSize;
+  } else if (hasExplicitWidth) {
+    imgStyle.width = w;
+    if (hasExplicitHeight) imgStyle.height = h;
+  } else if (hasExplicitHeight) {
+    imgStyle.height = h;
+  } else {
     if (isHeader) {
       imgStyle.height = 40;
     } else {
       imgStyle.width = 120;
     }
   }
+  if (mobileScale) imgStyle.transform = `scale(${mobileScale})`;
 
   const markCls = size === "lg" ? "h-12 w-12" : "h-8 w-8 md:h-9 md:w-9";
   const iconCls = size === "lg" ? "h-6 w-6" : "h-4 w-4 md:h-5 md:w-5";

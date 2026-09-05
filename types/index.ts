@@ -229,6 +229,17 @@ export type Settings = {
   category_item_size?: number;
   category_item_gap?: number;
   category_item_shape?: "circle" | "square";
+  category_grid_width?: number;
+  category_grid_height?: number;
+  category_grid_desktop_size?: number;
+  category_grid_desktop_height?: number;
+  category_grid_desktop_gap?: number;
+  category_grid_desktop_cols?: number;
+  category_grid_tablet_cols?: number;
+  category_grid_mobile_size?: number;
+  category_grid_mobile_height?: number;
+  category_grid_mobile_gap?: number;
+  category_grid_mobile_cols?: number;
   announcement: string | null;
   whatsapp: string | null;
   phone: string | null;

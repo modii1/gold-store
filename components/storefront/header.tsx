@@ -42,17 +42,26 @@ export function StoreHeader({ settings, categories }: { settings: Settings; cate
         <div style={{ backgroundColor: headerBg, borderBottom: "1px solid #e7e5e4" }}>
           <div className="mx-auto max-w-7xl px-3 md:px-6" style={{ paddingTop: headerPaddingTop, paddingBottom: headerPaddingBottom }}>
             <div
-              className="grid grid-cols-[auto_1fr_auto] md:grid-cols-3 items-center"
+              className="relative grid grid-cols-[auto_1fr_auto] md:grid-cols-3 items-center"
               style={{ minHeight: headerHeight, gap: headerGap }}
             >
-              {/* Mobile: menu button + Logo (start) */}
-              <div className="flex items-center min-w-0" style={{ gap: headerGap }}>
-                <button onClick={() => setMenuOpen(true)} className="md:hidden p-1 shrink-0 transition" style={{ color: headerIcon }} aria-label="القائمة">
+              {/* Mobile: menu button (start) */}
+              <div className="flex items-center min-w-0 md:hidden" style={{ gap: headerGap }}>
+                <button onClick={() => setMenuOpen(true)} className="p-1 shrink-0 transition" style={{ color: headerIcon }} aria-label="القائمة">
                   <Menu className="w-6 h-6" />
                 </button>
-                <div className="flex min-w-0" style={{ justifyContent: settings.header_logo_align === "center" ? "center" : settings.header_logo_align === "flex-end" ? "flex-end" : "flex-start" }}>
-                  <BrandLogo settings={settings} size="md" />
+              </div>
+
+              {/* Mobile: Logo centered on full screen width */}
+              <div className="md:hidden absolute inset-0 flex items-center justify-center" style={{ pointerEvents: "none", marginTop: "-50px" }}>
+                <div style={{ pointerEvents: "auto" }}>
+                  <BrandLogo settings={settings} size="md" showName={false} mobileScale={2} />
                 </div>
+              </div>
+
+              {/* Desktop: Logo in normal flow */}
+              <div className="hidden md:flex min-w-0" style={{ justifyContent: settings.header_logo_align === "center" ? "center" : settings.header_logo_align === "flex-end" ? "flex-end" : "flex-start" }}>
+                <BrandLogo settings={settings} size="md" showName={false} />
               </div>
 
               {/* Desktop nav — متمركز في المنتصف */}

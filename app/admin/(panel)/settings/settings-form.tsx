@@ -297,50 +297,13 @@ export function SettingsForm({ settings }: { settings: Settings }) {
         </div>
       </section>
 
-      {/* Categories section settings */}
+      {/* Categories grid settings */}
       <section className="space-y-4 rounded-2xl border border-amber-100 bg-white p-6">
         <div>
-          <h2 className="font-bold text-stone-800">قسم التصنيفات</h2>
-          <p className="mt-1 text-sm text-stone-500">تخصيص مقاسات وشكل قسم التصنيفات في الصفحة الرئيسية.</p>
+          <h2 className="font-bold text-stone-800">إعدادات شبكة التصنيفات</h2>
+          <p className="mt-1 text-sm text-stone-500">تحكم كامل بمقاسات وتخطيط شبكة التصنيفات على Desktop وMobile.</p>
         </div>
-        <div className="grid gap-4 md:grid-cols-2">
-          <div>
-            <label htmlFor="category_section_width" className="block text-sm font-semibold text-stone-700 mb-1">عرض القسم</label>
-            <div className="flex items-center rounded-xl border border-stone-200 focus-within:border-gold focus-within:ring-2 focus-within:ring-gold/20">
-              <input id="category_section_width" name="category_section_width" type="number" min="0"
-                defaultValue={settings.category_section_width || 1200} dir="ltr"
-                className="w-full min-w-0 flex-1 rounded-l-xl px-4 py-2.5 text-sm focus:outline-none" />
-              <span className="px-3 text-sm text-stone-400 select-none">px</span>
-            </div>
-          </div>
-          <div>
-            <label htmlFor="category_section_height" className="block text-sm font-semibold text-stone-700 mb-1">ارتفاع القسم</label>
-            <div className="flex items-center rounded-xl border border-stone-200 focus-within:border-gold focus-within:ring-2 focus-within:ring-gold/20">
-              <input id="category_section_height" name="category_section_height" type="number" min="0"
-                defaultValue={settings.category_section_height || 200} dir="ltr"
-                className="w-full min-w-0 flex-1 rounded-l-xl px-4 py-2.5 text-sm focus:outline-none" />
-              <span className="px-3 text-sm text-stone-400 select-none">px</span>
-            </div>
-          </div>
-          <div>
-            <label htmlFor="category_item_size" className="block text-sm font-semibold text-stone-700 mb-1">حجم الدائرة / المربع</label>
-            <div className="flex items-center rounded-xl border border-stone-200 focus-within:border-gold focus-within:ring-2 focus-within:ring-gold/20">
-              <input id="category_item_size" name="category_item_size" type="number" min="0"
-                defaultValue={settings.category_item_size || 120} dir="ltr"
-                className="w-full min-w-0 flex-1 rounded-l-xl px-4 py-2.5 text-sm focus:outline-none" />
-              <span className="px-3 text-sm text-stone-400 select-none">px</span>
-            </div>
-          </div>
-          <div>
-            <label htmlFor="category_item_gap" className="block text-sm font-semibold text-stone-700 mb-1">المسافة بين العناصر</label>
-            <div className="flex items-center rounded-xl border border-stone-200 focus-within:border-gold focus-within:ring-2 focus-within:ring-gold/20">
-              <input id="category_item_gap" name="category_item_gap" type="number" min="0"
-                defaultValue={settings.category_item_gap || 28} dir="ltr"
-                className="w-full min-w-0 flex-1 rounded-l-xl px-4 py-2.5 text-sm focus:outline-none" />
-              <span className="px-3 text-sm text-stone-400 select-none">px</span>
-            </div>
-          </div>
-        </div>
+
         <div>
           <label className="block text-sm font-semibold text-stone-700 mb-2">شكل التصنيفات</label>
           <div className="flex gap-3">
@@ -352,6 +315,125 @@ export function SettingsForm({ settings }: { settings: Settings }) {
               <input type="radio" name="category_item_shape" value="square" defaultChecked={settings.category_item_shape === "square"} className="h-5 w-5 accent-[#B08D57]" />
               مربع
             </label>
+          </div>
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-2">
+          <div>
+            <label htmlFor="category_grid_width" className="block text-sm font-semibold text-stone-700 mb-1">عرض القسم</label>
+            <div className="flex items-center rounded-xl border border-stone-200 focus-within:border-gold focus-within:ring-2 focus-within:ring-gold/20">
+              <input id="category_grid_width" name="category_grid_width" type="number" min="0"
+                defaultValue={settings.category_grid_width ?? 1200} dir="ltr"
+                className="w-full min-w-0 flex-1 rounded-l-xl px-4 py-2.5 text-sm focus:outline-none" />
+              <span className="px-3 text-sm text-stone-400 select-none">px</span>
+            </div>
+            <p className="mt-1 text-xs text-stone-400">0 = عرض تلقائي/100%</p>
+          </div>
+          <div>
+            <label htmlFor="category_grid_height" className="block text-sm font-semibold text-stone-700 mb-1">ارتفاع القسم</label>
+            <div className="flex items-center rounded-xl border border-stone-200 focus-within:border-gold focus-within:ring-2 focus-within:ring-gold/20">
+              <input id="category_grid_height" name="category_grid_height" type="number" min="0"
+                defaultValue={settings.category_grid_height ?? 0} dir="ltr"
+                className="w-full min-w-0 flex-1 rounded-l-xl px-4 py-2.5 text-sm focus:outline-none" />
+              <span className="px-3 text-sm text-stone-400 select-none">px</span>
+            </div>
+            <p className="mt-1 text-xs text-stone-400">0 = ارتفاع تلقائي</p>
+          </div>
+        </div>
+
+        <div className="border-t border-stone-100 pt-4">
+          <h3 className="text-sm font-bold text-stone-700 mb-3">Desktop</h3>
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+            <div>
+              <label htmlFor="category_grid_desktop_size" className="block text-sm font-semibold text-stone-700 mb-1">حجم الصورة</label>
+              <div className="flex items-center rounded-xl border border-stone-200 focus-within:border-gold focus-within:ring-2 focus-within:ring-gold/20">
+                <input id="category_grid_desktop_size" name="category_grid_desktop_size" type="number" min="0"
+                  defaultValue={settings.category_grid_desktop_size ?? 120} dir="ltr"
+                  className="w-full min-w-0 flex-1 rounded-l-xl px-4 py-2.5 text-sm focus:outline-none" />
+                <span className="px-3 text-sm text-stone-400 select-none">px</span>
+              </div>
+            </div>
+            <div>
+              <label htmlFor="category_grid_desktop_height" className="block text-sm font-semibold text-stone-700 mb-1">ارتفاع الصورة</label>
+              <div className="flex items-center rounded-xl border border-stone-200 focus-within:border-gold focus-within:ring-2 focus-within:ring-gold/20">
+                <input id="category_grid_desktop_height" name="category_grid_desktop_height" type="number" min="0"
+                  defaultValue={settings.category_grid_desktop_height ?? 120} dir="ltr"
+                  className="w-full min-w-0 flex-1 rounded-l-xl px-4 py-2.5 text-sm focus:outline-none" />
+                <span className="px-3 text-sm text-stone-400 select-none">px</span>
+              </div>
+            </div>
+            <div>
+              <label htmlFor="category_grid_desktop_gap" className="block text-sm font-semibold text-stone-700 mb-1">المسافة</label>
+              <div className="flex items-center rounded-xl border border-stone-200 focus-within:border-gold focus-within:ring-2 focus-within:ring-gold/20">
+                <input id="category_grid_desktop_gap" name="category_grid_desktop_gap" type="number" min="0"
+                  defaultValue={settings.category_grid_desktop_gap ?? 28} dir="ltr"
+                  className="w-full min-w-0 flex-1 rounded-l-xl px-4 py-2.5 text-sm focus:outline-none" />
+                <span className="px-3 text-sm text-stone-400 select-none">px</span>
+              </div>
+            </div>
+            <div>
+              <label htmlFor="category_grid_desktop_cols" className="block text-sm font-semibold text-stone-700 mb-1">عدد الأعمدة</label>
+              <div className="flex items-center rounded-xl border border-stone-200 focus-within:border-gold focus-within:ring-2 focus-within:ring-gold/20">
+                <input id="category_grid_desktop_cols" name="category_grid_desktop_cols" type="number" min="1" max="12"
+                  defaultValue={settings.category_grid_desktop_cols ?? 6} dir="ltr"
+                  className="w-full min-w-0 flex-1 rounded-l-xl px-4 py-2.5 text-sm focus:outline-none" />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="border-t border-stone-100 pt-4">
+          <h3 className="text-sm font-bold text-stone-700 mb-3">Tablet</h3>
+          <div className="grid gap-4 md:grid-cols-2">
+            <div>
+              <label htmlFor="category_grid_tablet_cols" className="block text-sm font-semibold text-stone-700 mb-1">عدد الأعمدة</label>
+              <div className="flex items-center rounded-xl border border-stone-200 focus-within:border-gold focus-within:ring-2 focus-within:ring-gold/20">
+                <input id="category_grid_tablet_cols" name="category_grid_tablet_cols" type="number" min="1" max="12"
+                  defaultValue={settings.category_grid_tablet_cols ?? 4} dir="ltr"
+                  className="w-full min-w-0 flex-1 rounded-l-xl px-4 py-2.5 text-sm focus:outline-none" />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="border-t border-stone-100 pt-4">
+          <h3 className="text-sm font-bold text-stone-700 mb-3">Mobile</h3>
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+            <div>
+              <label htmlFor="category_grid_mobile_size" className="block text-sm font-semibold text-stone-700 mb-1">حجم الصورة</label>
+              <div className="flex items-center rounded-xl border border-stone-200 focus-within:border-gold focus-within:ring-2 focus-within:ring-gold/20">
+                <input id="category_grid_mobile_size" name="category_grid_mobile_size" type="number" min="0"
+                  defaultValue={settings.category_grid_mobile_size ?? 80} dir="ltr"
+                  className="w-full min-w-0 flex-1 rounded-l-xl px-4 py-2.5 text-sm focus:outline-none" />
+                <span className="px-3 text-sm text-stone-400 select-none">px</span>
+              </div>
+            </div>
+            <div>
+              <label htmlFor="category_grid_mobile_height" className="block text-sm font-semibold text-stone-700 mb-1">ارتفاع الصورة</label>
+              <div className="flex items-center rounded-xl border border-stone-200 focus-within:border-gold focus-within:ring-2 focus-within:ring-gold/20">
+                <input id="category_grid_mobile_height" name="category_grid_mobile_height" type="number" min="0"
+                  defaultValue={settings.category_grid_mobile_height ?? 80} dir="ltr"
+                  className="w-full min-w-0 flex-1 rounded-l-xl px-4 py-2.5 text-sm focus:outline-none" />
+                <span className="px-3 text-sm text-stone-400 select-none">px</span>
+              </div>
+            </div>
+            <div>
+              <label htmlFor="category_grid_mobile_gap" className="block text-sm font-semibold text-stone-700 mb-1">المسافة</label>
+              <div className="flex items-center rounded-xl border border-stone-200 focus-within:border-gold focus-within:ring-2 focus-within:ring-gold/20">
+                <input id="category_grid_mobile_gap" name="category_grid_mobile_gap" type="number" min="0"
+                  defaultValue={settings.category_grid_mobile_gap ?? 16} dir="ltr"
+                  className="w-full min-w-0 flex-1 rounded-l-xl px-4 py-2.5 text-sm focus:outline-none" />
+                <span className="px-3 text-sm text-stone-400 select-none">px</span>
+              </div>
+            </div>
+            <div>
+              <label htmlFor="category_grid_mobile_cols" className="block text-sm font-semibold text-stone-700 mb-1">عدد الأعمدة</label>
+              <div className="flex items-center rounded-xl border border-stone-200 focus-within:border-gold focus-within:ring-2 focus-within:ring-gold/20">
+                <input id="category_grid_mobile_cols" name="category_grid_mobile_cols" type="number" min="1" max="12"
+                  defaultValue={settings.category_grid_mobile_cols ?? 3} dir="ltr"
+                  className="w-full min-w-0 flex-1 rounded-l-xl px-4 py-2.5 text-sm focus:outline-none" />
+              </div>
+            </div>
           </div>
         </div>
       </section>

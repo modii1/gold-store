@@ -10,6 +10,10 @@ export async function updateSettingsAction(formData: FormData) {
     "hero_hide_mobile", "hero_hide_tablet", "hero_hide_desktop",
     "hero_width", "hero_height", "hero_show_cta",
     "category_section_width", "category_section_height", "category_item_size", "category_item_gap", "category_item_shape",
+    "category_grid_width", "category_grid_height",
+    "category_grid_desktop_size", "category_grid_desktop_height", "category_grid_desktop_gap", "category_grid_desktop_cols",
+    "category_grid_tablet_cols",
+    "category_grid_mobile_size", "category_grid_mobile_height", "category_grid_mobile_gap", "category_grid_mobile_cols",
     "announcement", "whatsapp", "phone", "email", "address",
     "instagram", "tiktok", "snapchat", "twitter",
     "payment_instructions", "bank_name", "iban", "account_name",
@@ -39,7 +43,7 @@ export async function updateSettingsAction(formData: FormData) {
   const data: Record<string, string | number | boolean | null> = {};
   for (const f of fields) {
     const v = (formData.get(f) as string)?.trim() ?? "";
-    if (["shipping_fee", "free_shipping_threshold", "base_font_size", "heading_scale", "card_radius", "header_footer_font_size", "hero_width", "hero_height", "category_section_width", "category_section_height", "category_item_size", "category_item_gap", "footer_brand_padding_y", "footer_brand_logo_width", "footer_brand_logo_height", "footer_brand_logo_gap", "footer_brand_desc_size", "footer_brand_desc_weight", "footer_brand_desc_max_width", "header_height", "header_padding_top", "header_padding_bottom", "header_gap", "header_logo_width", "header_logo_height"].includes(f)) {
+    if (["shipping_fee", "free_shipping_threshold", "base_font_size", "heading_scale", "card_radius", "header_footer_font_size", "hero_width", "hero_height", "category_section_width", "category_section_height", "category_item_size", "category_item_gap", "footer_brand_padding_y", "footer_brand_logo_width", "footer_brand_logo_height", "footer_brand_logo_gap", "footer_brand_desc_size", "footer_brand_desc_weight", "footer_brand_desc_max_width", "header_height", "header_padding_top", "header_padding_bottom", "header_gap", "header_logo_width", "header_logo_height", "category_grid_width", "category_grid_height", "category_grid_desktop_size", "category_grid_desktop_height", "category_grid_desktop_gap", "category_grid_desktop_cols", "category_grid_tablet_cols", "category_grid_mobile_size", "category_grid_mobile_height", "category_grid_mobile_gap", "category_grid_mobile_cols"].includes(f)) {
       data[f] = parseFloat(v) || 0;
     } else if (f === "show_currency_mark" || f === "hero_hide_mobile" || f === "hero_hide_tablet" || f === "hero_hide_desktop" || f === "hero_show_cta" || f === "footer_show_brand" || f === "footer_show_links" || f === "footer_show_contact" || f === "mobile_products_allow_user_toggle") {
       data[f] = v === "on";
