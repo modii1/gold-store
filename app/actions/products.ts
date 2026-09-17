@@ -87,7 +87,7 @@ export async function saveProductAction(formData: FormData) {
     try {
       const { error: rpcErr } = await supabase.rpc("save_product_variants", {
         p_product_id: productId,
-        p_variants: JSON.stringify(variants),
+        p_variants: variants,
       });
       if (!rpcErr) {
         revalidatePath("/");
