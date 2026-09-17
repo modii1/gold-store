@@ -13,6 +13,7 @@ import { Currency } from "@/components/storefront/currency";
 import { cn } from "@/lib/utils";
 import { waMeNumber } from "@/lib/format";
 import { createClient } from "@/lib/supabase/client";
+import { isFreeShippingEligible } from "@/lib/shipping/types";
 import type { Settings, Carrier, PaymentMethod } from "@/types";
 
 type SavedAddress = { id: string; label: string | null; city: string | null; region: string | null; address: string | null; national_address: string | null; building_number: string | null; latitude: number | null; longitude: number | null; maps_url: string | null; is_default: boolean };
@@ -117,7 +118,8 @@ export function CheckoutForm({ settings, shipping, payment, customer, savedAddre
   const filteredOptions = pickupOnly ? pickupOptions : options;
   // auto-select a pickup option if the current one gets filtered out
   const selectedShip = (pickupOnly ? pickupOptions : options).find((o) => o.ref === shippingId) || filteredOptions[0];
-  const shipCost = selectedShip && selectedShip.freeAbove && subtotal >= selectedShip.freeAbove ? 0 : selectedShip?.cost || 0;
+  const freeShipping = isFreeShippingEligible(subtotal, settings.free_shipping_threshold);
+  const shipCost = freeShipping ? 0 : selectedShip?.cost || 0;
   const discount = applied?.amount || 0;
   const total = subtotal + shipCost - discount;
 
@@ -328,7 +330,6 @@ export function CheckoutForm({ settings, shipping, payment, customer, savedAddre
           ) : (
             <div className="space-y-2">
               {filteredOptions.map((s) => {
-                const free = s.freeAbove && subtotal >= s.freeAbove;
                 return (
                   <label key={s.ref} className={cn("flex items-center justify-between rounded-xl border p-4 cursor-pointer transition", shippingId === s.ref ? "border-gold bg-cream/50" : "border-sand hover:border-gold/40")}>
                     <div className="flex items-center gap-3">
@@ -344,7 +345,14 @@ export function CheckoutForm({ settings, shipping, payment, customer, savedAddre
                         {s.estimatedDays && <p className="text-xs text-stone-400">{s.estimatedDays}</p>}
                       </div>
                     </div>
-                    <span className="font-bold text-gold text-sm">{free ? "مجاني" : <Currency value={s.cost} />}</span>
+                    {freeShipping ? (
+                      <span className="inline-flex items-center gap-2 text-sm font-bold text-emerald-700">
+                        {s.cost != null && s.cost > 0 && <span className="font-normal text-stone-400 line-through"><Currency value={s.cost} /></span>}
+                        <span>مجاني</span>
+                      </span>
+                    ) : (
+                      <span className="font-bold text-gold text-sm"><Currency value={s.cost} /></span>
+                    )}
                   </label>
                 );
               })}

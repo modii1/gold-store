@@ -6,12 +6,13 @@ import { useCart } from "./providers";
 import { formatCurrency } from "@/lib/format";
 import { Currency } from "@/components/storefront/currency";
 import type { Settings } from "@/types";
+import { isFreeShippingEligible } from "@/lib/shipping/types";
 
 export function CartDrawer({ settings }: { settings: Settings }) {
   const { items, isOpen, closeCart, subtotal, updateQty, removeFromCart } = useCart();
   const router = useRouter();
 
-  const shipping = subtotal >= (settings.free_shipping_threshold || 0) || subtotal === 0 ? 0 : settings.shipping_fee;
+  const shipping = isFreeShippingEligible(subtotal, settings.free_shipping_threshold) ? 0 : settings.shipping_fee;
   const total = subtotal + shipping;
 
   if (!isOpen) return null;

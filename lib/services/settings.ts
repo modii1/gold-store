@@ -44,7 +44,7 @@ const defaults: Settings = {
   iban: null,
   account_name: null,
   shipping_fee: 25,
-  free_shipping_threshold: 300,
+  free_shipping_threshold: 200,
   shipping_display_mode: "pickup",
   commercial_register: null,
   tax_number: null,

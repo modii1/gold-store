@@ -167,13 +167,12 @@ export async function getCheckoutRatesAction(city: string, weightKg: number, cod
   const flat: CheckoutShippingOption[] = carriers
     .filter((c) => c.provider !== "oto")
     .map((c) => {
-      const free = c.free_above && codAmount && codAmount >= c.free_above ? true : false;
       return {
         carrierId: c.id,
         carrierCode: c.code,
         ref: c.id,
         name: c.name,
-        cost: free ? 0 : c.cost,
+        cost: c.cost,
         estimatedDays: c.estimated_days,
         freeAbove: c.free_above,
         live: false,
@@ -216,7 +215,7 @@ export async function getCheckoutRatesAction(city: string, weightKg: number, cod
   return flat;
 }
 
-export async function resolveShippingRef(ref: string, subtotal: number): Promise<{ cost: number; name: string } | null> {
+export async function resolveShippingRef(ref: string, _subtotal: number): Promise<{ cost: number; name: string } | null> {
   if (ref.startsWith("oto:")) {
     const optionId = parseInt(ref.split(":")[1], 10);
     if (!optionId) return null;
@@ -230,6 +229,5 @@ export async function resolveShippingRef(ref: string, subtotal: number): Promise
   const supabase = createAdminClient();
   const { data: carrier } = await supabase.from("carriers").select("id, name, cost, free_above").eq("id", ref).maybeSingle();
   if (!carrier) return null;
-  const cost = carrier.free_above && subtotal >= carrier.free_above ? 0 : carrier.cost;
-  return { cost, name: carrier.name };
+  return { cost: carrier.cost, name: carrier.name };
 }

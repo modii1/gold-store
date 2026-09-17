@@ -8,6 +8,8 @@ import { getCustomerSession, setCustomerSession } from "@/lib/auth";
 import { normalizePhoneInternational } from "@/lib/format";
 import { emitNotification } from "@/lib/notifications/engine";
 import { sendCustomerWhatsApp } from "@/lib/customer-messaging";
+import { isFreeShippingEligible } from "@/lib/shipping/types";
+import { getSettings } from "@/lib/services/settings";
 import type { Coupon, Carrier, PaymentMethod, Order } from "@/types";
 
 export async function getCheckoutData() {
@@ -129,6 +131,7 @@ export async function createOrderAction(formData: FormData) {
   if (!items || items.length === 0) return { error: "السلة فارغة" };
 
   const supabase = await createClient();
+  const storeSettings = await getSettings();
 
   // Resolve shipping by id to get authoritative cost (carriers table, fallback to legacy shipping_methods)
   let finalShipping = shippingCost;
@@ -171,17 +174,19 @@ export async function createOrderAction(formData: FormData) {
     } else {
       const { data: carrier } = await supabase.from("carriers").select("*").eq("id", shippingId).maybeSingle();
       if (carrier) {
-        finalShipping = carrier.free_above && subtotal >= carrier.free_above ? 0 : carrier.cost;
+        finalShipping = carrier.cost;
         shippingName = carrier.name;
       } else {
         const { data: sm } = await supabase.from("shipping_methods").select("*").eq("id", shippingId).maybeSingle();
         if (sm) {
-          finalShipping = sm.free_above && subtotal >= sm.free_above ? 0 : sm.cost;
+          finalShipping = sm.cost;
           shippingName = sm.name;
         }
       }
     }
   }
+
+  if (isFreeShippingEligible(subtotal, storeSettings.free_shipping_threshold)) finalShipping = 0;
 
   // Validate coupon server-side
   let finalDiscount = 0;

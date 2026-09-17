@@ -70,8 +70,8 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   } as React.CSSProperties;
 
   return (
-    <html lang="ar" dir="rtl" className={`${cairo.variable} h-full antialiased`} style={designStyle}>
-      <body className="min-h-full flex flex-col bg-background font-cairo">
+    <html lang="ar" dir="rtl" className={`${cairo.variable} ${cairo.className} h-full antialiased`} style={designStyle}>
+      <body className="min-h-full flex flex-col bg-background">
         <StoreProviders settings={settings}>
           <PageViewTracker />
           {children}

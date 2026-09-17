@@ -572,6 +572,7 @@ export function SettingsForm({ settings }: { settings: Settings }) {
             <label className="block text-sm font-semibold text-stone-700 mb-1">شحن مجاني عند (﷼)</label>
             <input name="free_shipping_threshold" type="number" min="0" step="0.01" defaultValue={settings.free_shipping_threshold || ""}
               className="w-full rounded-xl border border-stone-200 px-4 py-2.5 text-sm focus:border-gold focus:outline-none focus:ring-2 focus:ring-gold/20" />
+            <p className="mt-1 text-xs text-stone-400">اكتبي 0 لتعطيل الشحن المجاني.</p>
           </div>
         </div>
       </section>

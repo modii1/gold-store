@@ -17,18 +17,21 @@ export type ShippingQuote = {
   live: boolean;
 };
 
+export function isFreeShippingEligible(subtotal: number, threshold: number): boolean {
+  return Number.isFinite(subtotal) && Number.isFinite(threshold) && threshold > 0 && subtotal > threshold;
+}
+
 export function carrierConfigured(carrier: Carrier): boolean {
   const c = carrier.config || {};
   return !!(c.apiKey || c.username || c.accountNumber || c.clientCode);
 }
 
-export function flatQuote(carrier: Carrier, input: ShippingQuoteInput): ShippingQuote {
-  const free = carrier.free_above && input.subtotal >= carrier.free_above;
+export function flatQuote(carrier: Carrier, _input: ShippingQuoteInput): ShippingQuote {
   return {
     carrierId: carrier.id,
     carrierCode: carrier.code,
     name: carrier.name,
-    cost: free ? 0 : carrier.cost,
+    cost: carrier.cost,
     estimatedDays: carrier.estimated_days,
     freeAbove: carrier.free_above,
     live: false,
