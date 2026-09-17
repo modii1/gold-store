@@ -134,7 +134,7 @@ export function StoreHeader({ settings, categories }: { settings: Settings; cate
       )}
 
       <SearchOverlay open={searchOpen} onClose={() => setSearchOpen(false)} />
-      <CartDrawer settings={settings} />
+      <CartDrawer />
     </>
   );
 }

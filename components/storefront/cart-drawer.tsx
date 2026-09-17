@@ -3,17 +3,11 @@
 import { useRouter } from "next/navigation";
 import { X, Plus, Minus, Trash2, ShoppingBag } from "lucide-react";
 import { useCart } from "./providers";
-import { formatCurrency } from "@/lib/format";
 import { Currency } from "@/components/storefront/currency";
-import type { Settings } from "@/types";
-import { isFreeShippingEligible } from "@/lib/shipping/types";
 
-export function CartDrawer({ settings }: { settings: Settings }) {
-  const { items, isOpen, closeCart, subtotal, updateQty, removeFromCart } = useCart();
+export function CartDrawer() {
+  const { items, isOpen, closeCart, subtotal, updateQty } = useCart();
   const router = useRouter();
-
-  const shipping = isFreeShippingEligible(subtotal, settings.free_shipping_threshold) ? 0 : settings.shipping_fee;
-  const total = subtotal + shipping;
 
   if (!isOpen) return null;
 
@@ -85,11 +79,11 @@ export function CartDrawer({ settings }: { settings: Settings }) {
             </div>
             <div className="flex justify-between text-sm">
               <span className="text-stone-500">الشحن</span>
-              <span className="font-bold">{shipping === 0 && subtotal > 0 ? "مجاني" : <Currency value={shipping} />}</span>
+              <span className="text-end text-xs font-semibold text-stone-400">سيتم حسابه عند اختيار شركة الشحن</span>
             </div>
             <div className="flex justify-between border-t border-sand pt-3">
-              <span className="font-bold text-ink">الإجمالي</span>
-              <Currency value={total} className="font-bold text-gold text-lg" />
+              <span className="font-bold text-ink">الإجمالي قبل الشحن</span>
+              <Currency value={subtotal} className="font-bold text-gold text-lg" />
             </div>
             <button onClick={checkout} className="w-full rounded-full bg-ink py-3 font-bold text-ivory hover:bg-gold transition">
               إتمام الطلب
