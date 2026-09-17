@@ -103,6 +103,8 @@ export function SettingsForm({ settings }: { settings: Settings }) {
   const [hero, setHero] = useState<string | null>(settings.hero_image);
   const [heroMobile, setHeroMobile] = useState<string | null>(settings.hero_image_mobile);
   const [currencyMark, setCurrencyMark] = useState<string | null>(settings.currency_mark_url || "/currency-mark.svg");
+  const [freeShippingEnabled, setFreeShippingEnabled] = useState(settings.free_shipping_threshold > 0);
+  const [freeShippingThreshold, setFreeShippingThreshold] = useState(settings.free_shipping_threshold > 0 ? settings.free_shipping_threshold : 200);
 
   return (
     <form action={formAction} className="space-y-8">
@@ -569,10 +571,37 @@ export function SettingsForm({ settings }: { settings: Settings }) {
               className="w-full rounded-xl border border-stone-200 px-4 py-2.5 text-sm focus:border-gold focus:outline-none focus:ring-2 focus:ring-gold/20" />
           </div>
           <div>
-            <label className="block text-sm font-semibold text-stone-700 mb-1">شحن مجاني عند (﷼)</label>
-            <input name="free_shipping_threshold" type="number" min="0" step="0.01" defaultValue={settings.free_shipping_threshold || ""}
+            <div className="mb-1 flex items-center justify-between gap-3">
+              <label htmlFor="free_shipping_threshold" className="block text-sm font-semibold text-stone-700">الحد الأدنى للشحن المجاني (﷼)</label>
+              <div className="flex items-center gap-2 text-xs font-semibold text-stone-600">
+                <span>تفعيل الشحن المجاني</span>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={freeShippingEnabled}
+                  aria-label="تفعيل الشحن المجاني"
+                  onClick={() => {
+                    setFreeShippingEnabled((enabled) => {
+                      if (!enabled && freeShippingThreshold <= 0) setFreeShippingThreshold(200);
+                      return !enabled;
+                    });
+                  }}
+                  className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition ${freeShippingEnabled ? "bg-gold" : "bg-stone-300"}`}
+                >
+                  <span className={`inline-block h-5 w-5 rounded-full bg-white shadow transition ${freeShippingEnabled ? "translate-x-0.5" : "translate-x-5"}`} />
+                </button>
+              </div>
+            </div>
+            <input id="free_shipping_threshold" type="number" min="1" step="0.01" value={freeShippingThreshold}
+              onChange={(e) => {
+                const value = Number(e.target.value);
+                setFreeShippingThreshold(Number.isFinite(value) ? Math.max(0, value) : 0);
+                if (!value || value < 0) setFreeShippingEnabled(false);
+              }}
+              disabled={!freeShippingEnabled}
               className="w-full rounded-xl border border-stone-200 px-4 py-2.5 text-sm focus:border-gold focus:outline-none focus:ring-2 focus:ring-gold/20" />
-            <p className="mt-1 text-xs text-stone-400">اكتبي 0 لتعطيل الشحن المجاني.</p>
+            <input type="hidden" name="free_shipping_threshold" value={freeShippingEnabled ? freeShippingThreshold : 0} />
+            <p className="mt-1 text-xs text-stone-400">{freeShippingEnabled ? "يصبح الشحن مجانيًا عند بلوغ الحد أو تجاوزه." : "الشحن المجاني معطل."}</p>
           </div>
         </div>
       </section>

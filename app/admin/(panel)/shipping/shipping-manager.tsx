@@ -129,9 +129,6 @@ export function ShippingManager({ carriers, shippingDisplayMode }: { carriers: C
           <p className="mt-1 text-sm text-stone-500">
             أضف شركات الشحن وبيانات الـ API. في وضع «ثابت» تعمل بتكلفة محددة، وفي وضع «API» تحسب التكلفة وتُنشئ الشحنة تلقائياً.
           </p>
-          <p className="mt-1 text-xs text-stone-400">
-            رسوم الشركات وتفعيلها تُدار هنا، بينما شرط الشحن المجاني العام يُدار من إعداد «شحن مجاني عند» في صفحة الإعدادات ولا يغيّر السعر الأصلي للشركة.
-          </p>
         </div>
         <button onClick={addRow} className="flex items-center gap-2 rounded-xl bg-gold px-4 py-2.5 text-sm font-bold text-white hover:bg-gold-light transition">
           <Plus className="w-4 h-4" /> إضافة شركة

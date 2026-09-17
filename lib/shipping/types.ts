@@ -18,7 +18,7 @@ export type ShippingQuote = {
 };
 
 export function isFreeShippingEligible(subtotal: number, threshold: number): boolean {
-  return Number.isFinite(subtotal) && Number.isFinite(threshold) && threshold > 0 && subtotal > threshold;
+  return Number.isFinite(subtotal) && Number.isFinite(threshold) && threshold > 0 && subtotal >= threshold;
 }
 
 export function carrierConfigured(carrier: Carrier): boolean {
