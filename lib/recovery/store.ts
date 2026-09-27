@@ -1,0 +1,424 @@
+import { createAdminClient } from "@/lib/supabase/admin";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import type { RecoveryCase } from "./types";
+
+/**
+ * المخزن — فصل كامل عن منطق القرار. المرحلة الأولى (بلا migration) تعمل فقط
+ * عبر InMemoryStore (للاختبارات) ومخزن Supabase محروس لا يكتب حتى يُنشأ الجدول.
+ */
+export interface RecoveryCaseStore {
+  readonly ready: boolean;
+  create(c: RecoveryCase): Promise<void>;
+  update(id: string, patch: Partial<RecoveryCase>): Promise<void>;
+  findActiveByVisitor(visitorId: string): Promise<RecoveryCase | null>;
+  findLatestByVisitor(visitorId: string): Promise<RecoveryCase | null>;
+  findActiveByCustomer(phone: string): Promise<RecoveryCase[]>;
+  listActive(): Promise<RecoveryCase[]>;
+  listAll(limit?: number): Promise<RecoveryCase[]>;
+}
+
+export function newCaseId(): string {
+  try {
+    return crypto.randomUUID();
+  } catch {
+    return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
+  }
+}
+
+const ACTIVE_FILTER = "status.in.(OPEN,ELIGIBLE,SCHEDULED,CONTACTED)";
+
+/**
+ * F3: التحقق من صلاحية UUID قبل كتابته في purchase_ref.
+ * purchase_ref نوعه uuid؛ وقيمته تأتي من notification_events.order_id
+ * (نوعه text) فلا نضمن شكله. أي قيمة غير صالحة تُرفَض بدل كسر الـupdate.
+ */
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+export function isValidUuid(value: unknown): value is string {
+  return typeof value === "string" && UUID_RE.test(value.trim());
+}
+
+/** سبب رفض قيمة order_id قبل ربطها بـ purchase_ref. */
+export type OrderRefProblem = "missing" | "empty" | "whitespace" | "not_uuid";
+
+/**
+ * تصنيف قيمة order_id (من notification_events.order_id وهو text) قبل ربطها
+ * بـ purchase_ref (نوعه uuid).
+ *
+ * القواعد:
+ *  - missing: الحقل غائب/غير نصي (undefined | null | أي نوع غير string).
+ *  - empty / whitespace: نص فارغ أو مسافات فقط.
+ *  - not_uuid: نص موجود لكنه ليس UUID صالحًا.
+ *  - "valid": يُرجع القيم المُطبَّعة (مقصوصّة المسافات) صالحة للكتابة.
+ *  - أي حالة غير صالحة تُرجع purchaseRef=null — لا قيمة تُكتب في purchase_ref.
+ */
+export type OrderRefResolution =
+  | { ok: true; normalized: string; problem: null }
+  | { ok: false; normalized: null; problem: OrderRefProblem };
+
+export function resolveOrderRef(value: unknown): OrderRefResolution {
+  if (typeof value !== "string") return { ok: false, normalized: null, problem: "missing" };
+  if (value === "") return { ok: false, normalized: null, problem: "empty" };
+  if (!value.trim()) return { ok: false, normalized: null, problem: "whitespace" };
+  if (!UUID_RE.test(value.trim())) return { ok: false, normalized: null, problem: "not_uuid" };
+  return { ok: true, normalized: value.trim(), problem: null };
+}
+
+/**
+ * إخفاء الجوال جزئيًا (***1234) — للعرض في اللوحات والسجلات فقط.
+ * لا يُستخدم في التخزين: قيمة قاعدة البيانات تبقى كما هي.
+ */
+export function maskPhone(phone: string | null | undefined): string | null {
+  if (typeof phone !== "string") return null;
+  const digits = phone.replace(/\D/g, "");
+  if (!digits) return null;
+  if (digits.length < 4) return "***";
+  return `***${digits.slice(-4)}`;
+}
+
+export class InMemoryRecoveryStore implements RecoveryCaseStore {
+  readonly ready = true;
+  private rows = new Map<string, RecoveryCase>();
+
+  async create(c: RecoveryCase): Promise<void> {
+    this.rows.set(c.id, c);
+  }
+
+  async update(id: string, patch: Partial<RecoveryCase>): Promise<void> {
+    const cur = this.rows.get(id);
+    if (cur) this.rows.set(id, { ...cur, ...patch, updatedAt: patch.updatedAt ?? Date.now() });
+  }
+
+  async findActiveByVisitor(visitorId: string): Promise<RecoveryCase | null> {
+    for (const c of this.rows.values()) {
+      if (c.visitorId === visitorId && !["PURCHASED", "EXPIRED", "CANCELLED", "SUPPRESSED"].includes(c.status)) return c;
+    }
+    return null;
+  }
+
+  async findLatestByVisitor(visitorId: string): Promise<RecoveryCase | null> {
+    let latest: RecoveryCase | null = null;
+    for (const c of this.rows.values()) {
+      if (c.visitorId === visitorId && (!latest || c.lastActivityAt > latest.lastActivityAt)) latest = c;
+    }
+    return latest;
+  }
+
+  async findActiveByCustomer(phone: string): Promise<RecoveryCase[]> {
+    return [...this.rows.values()].filter(
+      (c) => c.customerPhone === phone && !["PURCHASED", "EXPIRED", "CANCELLED", "SUPPRESSED"].includes(c.status)
+    );
+  }
+
+  async listActive(): Promise<RecoveryCase[]> {
+    return [...this.rows.values()].filter((c) => !["PURCHASED", "EXPIRED", "CANCELLED", "SUPPRESSED"].includes(c.status));
+  }
+
+  async listAll(limit = 200): Promise<RecoveryCase[]> {
+    return [...this.rows.values()]
+      .sort((a, b) => b.lastActivityAt - a.lastActivityAt)
+      .slice(0, limit);
+  }
+
+  /** وصول مباشر للاختبارات فقط. */
+  all(): RecoveryCase[] {
+    return [...this.rows.values()];
+  }
+}
+
+/**
+ * مخزن Supabase مقترن بجدول recovery_cases.
+ * حتى يُنشأ الجدول (بعد موافقتك على migration-034) يبقى ready=false
+ * وكل الأساليب لا تفعل شيئًا — بلا أي كتابة إنتاج.
+ */
+export type RecoveryStoreError = { op: "create" | "update"; code?: string; message: string };
+
+export type SupabaseRecoveryStoreOptions = {
+  /** للاختبارات: عميل وهمي. الافتراضي عميل service_role الحقيقي. */
+  createClient?: () => SupabaseClient;
+  /** للاختبارات: التقاط الأخطاء بدل console. لا يجب أن يرمي. */
+  onError?: (e: RecoveryStoreError) => void;
+};
+
+/**
+ * مسجّل الأخطاء الافتراضي: console.warn فقط.
+ * لا نطبع أي صف/مفتاح/بيانات عميل — فقط رمز ورسالة PostgREST (مقطوعة للطول).
+ */
+function defaultOnError(e: RecoveryStoreError): void {
+  console.warn(`[recovery] ${e.op} failed: ${e.code ?? "no-code"} ${e.message}`.slice(0, 300));
+}
+
+/** رسالة خطأ آمنة: بلا أسرار، بلاحمولة بيانات. */
+function safeErrorMessage(error: unknown): { code?: string; message: string } {
+  const anyErr = error as { code?: unknown; message?: unknown } | null;
+  return {
+    code: typeof anyErr?.code === "string" ? anyErr.code : undefined,
+    message: typeof anyErr?.message === "string" ? anyErr.message : "unknown error",
+  };
+}
+
+export class SupabaseRecoveryStore implements RecoveryCaseStore {
+  private _ready = false;
+  private checked = false;
+  private lastError: string | null = null;
+  private readonly table = "recovery_cases";
+  private readonly createClient: () => SupabaseClient;
+  private readonly onError: (e: RecoveryStoreError) => void;
+
+  constructor(options: SupabaseRecoveryStoreOptions = {}) {
+    this.createClient = options.createClient ?? createAdminClient;
+    this.onError = options.onError ?? defaultOnError;
+  }
+
+  /**
+   * فحص الجاهزية عبر استعلام فعلي على الجدول نفسه.
+   * ملاحظة: `information_schema` غير معرّضة عبر PostgREST، ولا يرمي
+   * supabase-js استثناءً عند فشل الاستعلام (يُعيد { error }). لذلك نقرأ
+   * `error` صراحةً — وإلا لبقي readiness=false إلى الأبد بعد الـmigration.
+   */
+  async ensureReady(): Promise<boolean> {
+    if (this.checked) return this._ready;
+    try {
+      const supabase = this.createClient();
+      const { error } = await supabase.from(this.table).select("id", { count: "exact", head: true }).limit(1);
+      this._ready = !error;
+      this.lastError = error ? `${error.code ?? ""} ${error.message}`.trim() : null;
+    } catch (e) {
+      this._ready = false;
+      this.lastError = e instanceof Error ? e.message : String(e);
+    }
+    this.checked = true;
+    return this._ready;
+  }
+
+  get ready(): boolean {
+    return this._ready;
+  }
+
+  /** سبب عدم الجاهزية (لعرضه في لوحة الإدارة) — لا يحتوي أي بيانات. */
+  get error(): string | null {
+    return this.lastError;
+  }
+
+  private guard(): boolean {
+    if (this._ready) return true;
+    // الجدول غير موجود بعد — منع أي كتابة إنتاج.
+    return false;
+  }
+
+  /**
+   * F2: insert مع فحص صريح لـ error. supabase-js لا يرمي عند فشل الاستعلام،
+   * فالفحص الصريح هو ما يمنع الابتلاع الصامت. لا نرمي أبدًا حتى لا نكسر
+   * مسار Analytics، لكن الخطأ يُسجَّل صراحةً عبر onError.
+   */
+  async create(c: RecoveryCase): Promise<void> {
+    if (!this.guard()) return;
+    try {
+      const supabase = this.createClient();
+      const { error } = await supabase.from(this.table).insert(caseToRow(c));
+      if (error) this.onError({ op: "create", ...safeErrorMessage(error) });
+    } catch (e) {
+      this.onError({ op: "create", message: e instanceof Error ? e.message : String(e) });
+    }
+  }
+
+  /**
+   * F1 + F2: update برسم partial patch حقيقي + فحص صريح لـ error.
+   *
+   * كان قبل الإصلاح: caseToRow({ ...emptyRow(), ...patch, id }) — أي patch جزئي
+   * كان يمسح كل الحقول غير المذكورة (visitor_id='' و score=0 و timestamps=1970).
+   * الآن: casePatchToRow(patch) يرسل الحقول الموجودة فقط.
+   */
+  async update(id: string, patch: Partial<RecoveryCase>): Promise<void> {
+    if (!this.guard()) return;
+    const row = casePatchToRow(patch);
+    if (Object.keys(row).length === 0) return; // لا شيء لتحديثه — بلا استعلام فارغ
+    try {
+      const supabase = this.createClient();
+      const { error } = await supabase.from(this.table).update(row).eq("id", id);
+      if (error) this.onError({ op: "update", ...safeErrorMessage(error) });
+    } catch (e) {
+      this.onError({ op: "update", message: e instanceof Error ? e.message : String(e) });
+    }
+  }
+
+  async findActiveByVisitor(visitorId: string): Promise<RecoveryCase | null> {
+    if (!this.guard()) return null;
+    const supabase = this.createClient();
+    const { data } = await supabase
+      .from(this.table)
+      .select("*")
+      .eq("visitor_id", visitorId)
+      .or(ACTIVE_FILTER)
+      .order("updated_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    return data ? rowToCase(data) : null;
+  }
+
+  async findLatestByVisitor(visitorId: string): Promise<RecoveryCase | null> {
+    if (!this.guard()) return null;
+    const supabase = this.createClient();
+    const { data } = await supabase
+      .from(this.table)
+      .select("*")
+      .eq("visitor_id", visitorId)
+      .order("last_activity_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    return data ? rowToCase(data) : null;
+  }
+
+  async findActiveByCustomer(phone: string): Promise<RecoveryCase[]> {
+    if (!this.guard()) return [];
+    const supabase = this.createClient();
+    const { data } = await supabase
+      .from(this.table)
+      .select("*")
+      .eq("customer_phone", phone)
+      .or(ACTIVE_FILTER);
+    return ((data as Record<string, unknown>[]) || []).map(rowToCase);
+  }
+
+  async listActive(): Promise<RecoveryCase[]> {
+    if (!this.guard()) return [];
+    const supabase = this.createClient();
+    const { data } = await supabase
+      .from(this.table)
+      .select("*")
+      .or(ACTIVE_FILTER)
+      .order("last_activity_at", { ascending: false })
+      .limit(500);
+    return ((data as Record<string, unknown>[]) || []).map(rowToCase);
+  }
+
+  async listAll(limit = 200): Promise<RecoveryCase[]> {
+    if (!this.guard()) return [];
+    const supabase = this.createClient();
+    const { data } = await supabase
+      .from(this.table)
+      .select("*")
+      .order("last_activity_at", { ascending: false })
+      .limit(limit);
+    return ((data as Record<string, unknown>[]) || []).map(rowToCase);
+  }
+}
+
+function epoch(v: unknown): number | null {
+  if (v === null || v === undefined) return null;
+  const n = typeof v === "number" ? v : new Date(String(v)).getTime();
+  return Number.isFinite(n) ? n : null;
+}
+
+function epochOrZero(v: unknown): number {
+  return epoch(v) ?? 0;
+}
+
+/**
+ * خريطة (field -> column) لـ RecoveryCase — كل الحقول عدا id.
+ * تُستخدم في المسارين الكامل والجزئي حتى لا تتفرّع أسماء الأعمدة.
+ */
+const COLUMNS = {
+  customerId: "customer_id",
+  customerPhone: "customer_phone",
+  visitorId: "visitor_id",
+  sessionId: "session_id",
+  caseType: "case_type",
+  status: "status",
+  score: "score",
+  cartValue: "cart_value",
+  productIds: "product_ids",
+  preferredProductId: "preferred_product_id",
+  preferredProductSlug: "preferred_product_slug",
+  firstDetectedAt: "first_detected_at",
+  lastActivityAt: "last_activity_at",
+  lastMessageAt: "last_message_at",
+  messageCount: "message_count",
+  discountCount: "discount_count",
+  lastDiscountAt: "last_discount_at",
+  nextActionAt: "next_action_at",
+  lastReminderStep: "last_reminder_step",
+  completedAt: "completed_at",
+  purchaseRef: "purchase_ref",
+  discountRef: "discount_ref",
+  suppressReason: "suppress_reason",
+  decision: "decision",
+  decidedAt: "decided_at",
+  createdAt: "created_at",
+  updatedAt: "updated_at",
+} as const satisfies Record<Exclude<keyof RecoveryCase, "id">, string>;
+
+/**
+ * حقول الأوقات: رقم (ms) → ISO string (timestamptz). null يبقى null.
+ * يجب أن تشمل كل حقل من نوع number يمثّل وقتًا، وإلا أرسلنا رقمًا لعمود timestamptz.
+ */
+const TIME_FIELDS = new Set<keyof RecoveryCase>([
+  "firstDetectedAt",
+  "lastActivityAt",
+  "lastMessageAt",
+  "lastDiscountAt",
+  "nextActionAt",
+  "completedAt",
+  "decidedAt",
+  "createdAt",
+  "updatedAt",
+]);
+
+/**
+ * F1: تحويل partial patch إلى صف يحتوي الحقول الموجودة فقط.
+ *
+ * سبب وجوده: `update()` كان يبني صفًا كاملًا من emptyRow + patch، فأي patch
+ * جزئي (مثل الإغلاق عند الشراء) كان يمسح visitor_id/session_id/case_type/
+ * score/cart_value/product_ids ويُسقط التواريخ إلى 1970. الآن: الحقول
+ * غير المذكورة في الـpatch لا تُرسل إطلاقًا، فتبقى كما هي في قاعدة البيانات.
+ *
+ * ملاحظة: `undefined` = "لم يُحدَّث" (يُتجاهل). `null` = "امسح القيمة" (يُرسل).
+ */
+export function casePatchToRow(patch: Partial<RecoveryCase>): Record<string, unknown> {
+  const row: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(patch) as [keyof RecoveryCase, unknown][]) {
+    if (key === "id") continue; // id يُستعمل في .eq() فقط — لا يُرسل كقيمة
+    if (value === undefined) continue;
+    const column = COLUMNS[key as Exclude<keyof RecoveryCase, "id">];
+    if (!column) continue; // مفتاح غير معروف — يُتجاهل بأمان
+    row[column] = TIME_FIELDS.has(key) && typeof value === "number" ? new Date(value).toISOString() : value;
+  }
+  return row;
+}
+
+export function caseToRow(c: RecoveryCase): Record<string, unknown> {
+  return { id: c.id || newCaseId(), ...casePatchToRow(c) };
+}
+
+export function rowToCase(row: Record<string, unknown>): RecoveryCase {
+  return {
+    id: String(row.id ?? ""),
+    customerId: row.customer_id ? String(row.customer_id) : null,
+    customerPhone: row.customer_phone ? String(row.customer_phone) : null,
+    visitorId: String(row.visitor_id ?? ""),
+    sessionId: String(row.session_id ?? ""),
+    caseType: (row.case_type as RecoveryCase["caseType"]) || "ADD_TO_CART",
+    status: (row.status as RecoveryCase["status"]) || "OPEN",
+    score: Number(row.score ?? 0),
+    cartValue: row.cart_value === null || row.cart_value === undefined ? null : Number(row.cart_value),
+    productIds: Array.isArray(row.product_ids) ? (row.product_ids as string[]) : [],
+    preferredProductId: row.preferred_product_id ? String(row.preferred_product_id) : null,
+    preferredProductSlug: row.preferred_product_slug ? String(row.preferred_product_slug) : null,
+    firstDetectedAt: epochOrZero(row.first_detected_at),
+    lastActivityAt: epochOrZero(row.last_activity_at),
+    lastMessageAt: epoch(row.last_message_at),
+    messageCount: Number(row.message_count ?? 0),
+    discountCount: Number(row.discount_count ?? 0),
+    lastDiscountAt: epoch(row.last_discount_at),
+    nextActionAt: epoch(row.next_action_at),
+    lastReminderStep: Number(row.last_reminder_step ?? 0),
+    completedAt: epoch(row.completed_at),
+    purchaseRef: row.purchase_ref ? String(row.purchase_ref) : null,
+    discountRef: row.discount_ref ? String(row.discount_ref) : null,
+    suppressReason: row.suppress_reason ? String(row.suppress_reason) : null,
+    decision: row.decision ? (row.decision as RecoveryCase["decision"]) : null,
+    decidedAt: epoch(row.decided_at),
+    createdAt: epochOrZero(row.created_at),
+    updatedAt: epochOrZero(row.updated_at),
+  };
+}
