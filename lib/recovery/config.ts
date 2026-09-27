@@ -97,13 +97,16 @@ export const DEFAULT_RECOVERY_CONFIG = loadRecoveryConfig({} as NodeJS.ProcessEn
  *   enabled=true. لم تُطبَّق بعد في Production ولا يوجد في المستودع أي مسار
  *   إرسال أو كوبون، فحتى هنا يبقى الإجراء محسوبًا بلا تنفيذ فعلي.
  *
- * ملاحظة: canPersistCases أدناه ما زالت تشترط dryRun (تخزين بيانات القرار
- * علامة DRY_RUN) بينما محركات الكتابة الفعلية تشترط ¬dryRun — القصد فصل
- * «تسجيل القرار» عن «تنفيذ الإجراء».
+ * مفتاح التشغيل (enabled) صار مصدر الحقيقة من لوحة الإدارة، ومصدره
+ * settings.recovery_enabled في قاعدة البيانات. canPersistCases أدناه تشترط
+ * enabled وحده: فـOFF يوقف كل شيء، وON يسمح بتسجيل الحالات وتحديثها.
+ * أما dryRun فلم يعد قفلًا للتشغيل — إنه يبقى للقراءة فقط ولا يظهر في
+ * الواجهة، ومحرّك الإغلاق الكتابي (completePurchaseByCustomer) ما زال
+ * يفرض ¬dryRun كما هو دون أي تعديل.
  *
  * There is no send/coupon execution layer yet, so no mode can actually
  * message a customer or mint a coupon.
  */
 export function canPersistCases(cfg: RecoveryConfig): boolean {
-  return cfg.enabled && cfg.dryRun;
+  return cfg.enabled;
 }

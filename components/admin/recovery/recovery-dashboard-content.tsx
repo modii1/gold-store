@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { Loader2, Users, ShoppingCart, Package, Banknote, Receipt, RefreshCcw, AlertTriangle, WifiOff, EyeOff, Settings2, PowerOff, FlaskConical, Power } from "lucide-react";
+import { Loader2, Users, ShoppingCart, Package, Banknote, Receipt, RefreshCcw, AlertTriangle, EyeOff, Settings2, PowerOff, Power } from "lucide-react";
 import { formatCurrency } from "@/lib/format";
 import type { ContactDecision, DiscountProposal } from "@/lib/recovery/types";
 import type { RecoveryMetrics } from "@/lib/recovery/metrics";
@@ -24,7 +24,6 @@ type CaseRow = {
 };
 
 type Payload = {
-  dryRun: boolean;
   storageReady: boolean;
   enabled: boolean;
   metrics: RecoveryMetrics | null;
@@ -49,13 +48,11 @@ const STATUS_LABEL: Record<string, string> = {
   SUPPRESSED: "موقوفة",
 };
 
-function SystemStatus({ enabled, dryRun }: { enabled: boolean; dryRun: boolean }) {
+function SystemStatus({ enabled }: { enabled: boolean }) {
   const off = !enabled;
   const view = off
     ? { label: "متوقف", hint: "النظام معطّل — لا متابعة ولا توصيات.", icon: <PowerOff className="h-4 w-4" />, cls: "border-stone-200 bg-stone-50 text-stone-600" }
-    : dryRun
-      ? { label: "تشغيل تجريبي", hint: "قراءة وتوصيات فقط — بلا أي إرسال أو خصم.", icon: <FlaskConical className="h-4 w-4" />, cls: "border-amber-200 bg-amber-50 text-amber-800" }
-      : { label: "مفعّل", hint: "النظام مفعّل في وضع التشغيل الفعلي.", icon: <Power className="h-4 w-4" />, cls: "border-emerald-200 bg-emerald-50 text-emerald-800" };
+    : { label: "مفعّل", hint: "النظام يعمل: متابعة الحالات وتحديثها وإغلاقها عند شراء موثّق.", icon: <Power className="h-4 w-4" />, cls: "border-emerald-200 bg-emerald-50 text-emerald-800" };
 
   return (
     <div className={`flex items-center gap-3 rounded-xl border px-4 py-3 ${view.cls}`}>
@@ -142,17 +139,10 @@ export function RecoveryDashboardContent() {
       </header>
 
       {data ? (
-        <SystemStatus enabled={data.enabled} dryRun={data.dryRun} />
+        <SystemStatus enabled={data.enabled} />
       ) : (
         <div className="flex items-center gap-3 rounded-xl border border-stone-200 bg-stone-50 px-4 py-3 text-sm font-semibold text-stone-600">
           <Loader2 className="h-4 w-4 animate-spin" /> جارٍ تحميل حالة النظام…
-        </div>
-      )}
-
-      {data && data.enabled && data.dryRun && (
-        <div className="flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs font-semibold text-amber-800">
-          <WifiOff className="h-4 w-4" />
-          التشغيل تجريبي: لا تُرسل رسائل، ولا يُنشأ أي كود خصم. العرض = توصيات فقط.
         </div>
       )}
 

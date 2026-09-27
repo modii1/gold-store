@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { readRecoveryEnabled } from "@/lib/recovery/toggle";
 import { loadRecoveryConfig } from "@/lib/recovery/config";
+import type { RecoveryConfig } from "@/lib/recovery/config";
 import { maskPhone, resolveOrderRef, SupabaseRecoveryStore } from "@/lib/recovery/store";
 import { isCronAuthorized } from "@/lib/recovery/cron-auth";
 import { RecoveryEngine } from "@/lib/recovery/engine";
@@ -10,7 +12,10 @@ export const runtime = "nodejs";
 
 /**
  * POST /api/recovery/run — دورة الاسترجاع (نفس نمط /api/cron/notifications).
- * المرحلة الأولى DRY_RUN إلزاميًا: يقرأ ويقرر فقط، ولا يرسل ولا ينشئ خصومات.
+ * التشغيل محكوم بـsettings.recovery_enabled من لوحة الإدارة:
+ *  - OFF (الافتراضي): يتوقف فورًا بلا استيعاب ولا تقييم ولا معالجة.
+ *  - ON: يستوعب الإشارات، يقيّم ويرتّب، ويغلق الحالة عند شراء موثّق.
+ * لا يوجد ولا يُضاف أي إرسال رسائل أو إنشاء أكواد خصم.
  */
 export async function POST(req: NextRequest) {
   // fail-closed: لا مسار مفتوح إطلاقًا — سر غير معرَّف = رفض، لا تمرير.
@@ -18,7 +23,27 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
-  const cfg = loadRecoveryConfig();
+  // مصدر الحقيقة بعد التحقق من السر: settings.recovery_enabled (افتراضيًا OFF).
+  // OFF ⇒ لا استيعاب ولا تقييم ولا معالجة ولا أي كتابة.
+  const enabled = await readRecoveryEnabled();
+  const base = loadRecoveryConfig();
+  // dryRun ليس قفل تشغيل: عند ON نعمل بالوظائف الموجودة فعليًا في المحرّك.
+  const cfg: RecoveryConfig = { ...base, enabled, dryRun: enabled ? false : base.dryRun };
+
+  // OFF: توقف كامل — لا نفتح التخزين ولا نقرأ الإشارات ولا نكتب شيئًا.
+  if (!cfg.enabled) {
+    return NextResponse.json({
+      ok: true,
+      disabled: true,
+      storageReady: null,
+      enabled: false,
+      closedByPurchase: 0,
+      skippedInvalidOrderRef: 0,
+      skippedMissingOrderRef: 0,
+      plannedMessages: 0,
+      outcomes: [],
+    });
+  }
 
   // 1) إتمام الحالات عند شراء حقيقي: نقرأ notification_events من نوع
   //    order.created (المصدر الموثوق الوحيد — لا نلمس جدول orders ولا نعدّله).
@@ -75,7 +100,7 @@ export async function POST(req: NextRequest) {
 
   return NextResponse.json({
     ok: true,
-    dryRun: true,
+    disabled: false,
     storageReady: ready,
     enabled: cfg.enabled,
     closedByPurchase,

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getAdminSession } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { loadRecoveryConfig } from "@/lib/recovery/config";
+import { readRecoveryEnabled } from "@/lib/recovery/toggle";
 import { maskPhone, SupabaseRecoveryStore } from "@/lib/recovery/store";
 import { RecoveryEngine } from "@/lib/recovery/engine";
 import { computeMetrics } from "@/lib/recovery/metrics";
@@ -20,13 +21,16 @@ export async function GET() {
   const admin = await getAdminSession();
   if (!admin) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
-  const cfg = loadRecoveryConfig();
+  // مصدر الحقيقة للتشغيل: settings.recovery_enabled (لا متغيّرات النشر).
+  const enabled = await readRecoveryEnabled();
+  const cfg = { ...loadRecoveryConfig(), enabled };
   const store = new SupabaseRecoveryStore();
   const ready = await store.ensureReady();
 
   if (!ready) {
     return NextResponse.json({
       dryRun: true,
+      disabled: true,
       storageReady: false,
       enabled: cfg.enabled,
       metrics: null,
@@ -63,6 +67,7 @@ export async function GET() {
 
     return NextResponse.json({
       dryRun: cfg.dryRun,
+    disabled: !cfg.enabled,
       storageReady: true,
       enabled: cfg.enabled,
       metrics,

@@ -546,11 +546,14 @@ describe("Recovery — Decision Engine scenarios", () => {
     expect(m.potentialRecoveryCandidates).toBe(1);
   });
 
-  // 25) قفل المرحلة الأولى: DRY_RUN فقط
-  it("25. القفل: لا تخزين إلا في وضع DRY_RUN المفعّل", () => {
+  // 25) مفتاح التشغيل (settings.recovery_enabled) هو مصدر الحقيقة:
+  //     OFF يوقف التخزين كليًا، وON يسمح به مهما كانت قيمة dryRun.
+  it("25. التشغيل: التخزين يعتمد على enabled وحده", () => {
     expect(canPersistCases(cfg())).toBe(true);
-    expect(canPersistCases({ ...cfg(), dryRun: false })).toBe(false);
+    expect(canPersistCases({ ...cfg(), dryRun: false })).toBe(true);
     expect(canPersistCases({ ...cfg(), enabled: false })).toBe(false);
+    expect(canPersistCases({ ...cfg(), enabled: false, dryRun: false })).toBe(false);
+    expect(DEFAULT_RECOVERY_CONFIG.enabled).toBe(false);
     expect(DEFAULT_RECOVERY_CONFIG.dryRun).toBe(true);
   });
 
@@ -571,6 +574,53 @@ describe("Recovery — Decision Engine scenarios", () => {
     const res = await e.ingest({ ...base("checkout_start"), customer: CUST });
     expect(res).toBeNull();
     expect(await store.listAll()).toHaveLength(0);
+  });
+
+  // 28) ON يعمل بــdryRun=false: كل وظائف المحرّك القائمة بلا قفل
+  it("28. ON: ingest يسجّل الحالة حتى مع dryRun=false", async () => {
+    const e = new RecoveryEngine(store, { ...cfg(), enabled: true, dryRun: false });
+    const res = await e.ingest({ ...base("checkout_start"), customer: CUST });
+    expect(res).not.toBeNull();
+    expect(await store.listAll()).toHaveLength(1);
+  });
+
+  // 29) ON: دورة التقييم والترتيب تعمل (قرار حقيقي لا قفل dryRun)
+  it("29. ON: دورة التقييم تُخرج قرارًا حقيقيًا", async () => {
+    const e = new RecoveryEngine(store, { ...cfg(), enabled: true, dryRun: false });
+    const res = await e.ingest({ ...base("checkout_start"), customer: CUST, subtotal: 400 });
+    expect(res).not.toBeNull();
+    const cycle = await e.runDryRunCycle();
+    expect(cycle.outcomes).toHaveLength(1);
+    // القرار محسوب فعلًا عبر منطق التقييم، لا محجوب بقفل التشغيل.
+    expect(cycle.outcomes[0].suppressReason).not.toBe("disabled");
+    // ونفس القرار الذي يعطيه المحرّك للحالة نفسها عند ON.
+    const same = await e.evaluate((await store.listAll())[0], {});
+    expect(cycle.outcomes[0].decision).toBe(same.decision);
+    expect(cycle.outcomes[0].suppressReason).toBe(same.suppressReason);
+  });
+
+  // 30) OFF: التقييم يُرجع حالة "معطّل" ولا يغيّر أي حالة
+  it("30. OFF: دورة التقييم محجوبة بإمكانية التشغيل", async () => {
+    await store.create(caseOf({ customerPhone: CUST.phone, cartValue: 400, firstDetectedAt: T0 - 30 * HOUR, lastMessageAt: T0 - 31 * HOUR, messageCount: 1 }));
+    const before = await store.listAll();
+    const e = new RecoveryEngine(store, { ...cfg(), enabled: false, dryRun: false });
+    const cycle = await e.runDryRunCycle();
+    expect(cycle.outcomes).toHaveLength(1);
+    expect(cycle.outcomes[0].suppressReason).toBe("disabled");
+    expect(cycle.outcomes[0].wouldSend).toBe(false);
+    expect(cycle.outcomes[0].recommendedDiscount).toBeNull();
+    const after = await store.listAll();
+    expect(after[0].score).toBe(before[0].score);
+    expect(after[0].status).toBe(before[0].status);
+  });
+
+  // 31) لا قفل على dryRun: كل دالة كتابة قائمة تعمل عند ON
+  it("31. ON: لا إرسال ولا كوبون — القرار يبقى توصية فقط", async () => {
+    const e = new RecoveryEngine(store, { ...cfg(), enabled: true, dryRun: false });
+    const c = caseOf({ customerPhone: CUST.phone, cartValue: 400 });
+    const out = await e.evaluate(c, {});
+    expect(out.wouldSend).toBe(false);
+    expect(out.recommendedDiscount).toBeNull();
   });
 });
 

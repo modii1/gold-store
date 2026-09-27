@@ -1,13 +1,15 @@
 import { getCustomerSession } from "@/lib/auth";
+import { readRecoveryEnabled } from "./toggle";
 import { canPersistCases, loadRecoveryConfig } from "./config";
 import { SupabaseRecoveryStore } from "./store";
 import { RecoveryEngine } from "./engine";
 import type { RecoveryInput, SignalType } from "./types";
 
 /**
- * استيعاب إشارة سلوكية في محرك الاسترجاع — Stage 1 / DRY_RUN.
+ * استيعاب إشارة سلوكية في محرك الاسترجاع.
  *
  * قواعد غير قابلة للكسر:
+ *  - التشغيل من مفتاح لوحة الإدارة (settings.recovery_enabled) فقط؛ OFF يوقف.
  *  - لا يُرسل أي شيء، ولا يُنشئ كوبون، ولا يمس طلبًا/عميلًا/إعدادات.
  *  - الزائر المجهول يبقى OPEN بلا محاولة تحديد هويته (لا حقل جوال جديد في checkout).
  *  - العميل المسجّل فقط هو من يمكن أن يصبح مؤهلًا للتواصل لاحقًا.
@@ -31,8 +33,11 @@ export async function maybeIngestRecoverySignal(event: {
   metadata?: Record<string, unknown>;
 }): Promise<void> {
   try {
-    // Stage 1 lock: DRY_RUN only (fail closed if dryRun=false or disabled).
-    const cfg = loadRecoveryConfig();
+    // التشغيل محكوم بمفتاح لوحة الإدارة (settings.recovery_enabled) لا بمتغيّر نشر.
+    // OFF ⇒ لا استيعاب إطلاقًا. ON ⇒ الاستيعاب يعمل، وdryRun ليس قفل تشغيل.
+    const enabled = await readRecoveryEnabled();
+    if (!enabled) return;
+    const cfg = { ...loadRecoveryConfig(), enabled };
     if (!canPersistCases(cfg)) return;
 
     const signal = INGESTIBLE[event.event_type || ""];
