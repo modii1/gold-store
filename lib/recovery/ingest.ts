@@ -16,9 +16,26 @@ import type { RecoveryInput, SignalType } from "./types";
  *  - لا يكسر المسار القائم أبدًا: أي خطأ يُبتلع.
  */
 
+/**
+ * الأحداث التي تُترجم إلى إشارة استرجاع.
+ * المفتاح = event_type الموجود أصلًا في مسار analytics، والقيمة = SignalType
+ * المدعوم أصلًا في المحرّك. لا نضيف أي حدث جديد ولا نظام analytics جديد.
+ *
+ *   add_to_cart     -> ADD_TO_CART
+ *   checkout_start  -> CHECKOUT_STARTED
+ *   payment_started -> PAYMENT_STARTED
+ *
+ * product_view / repeated_product_view غير مُدرجة عمدًا: مخطط recovery_cases
+ * لا يملك CaseType يطابقهما، فاستيعابهما ينتج حالة موسومة ADD_TO_CART وهي
+ * تسمية خاطئة. تُضافان إن أُضيف نوعهما للمخطط.
+ *
+ * purchase غير مُدرج: إغلاق الحالات يتم من المصدر الموثوق
+ * order.created (notification_events) داخل دورة التشغيل، لا من العميل.
+ */
 const INGESTIBLE: Record<string, SignalType> = {
   add_to_cart: "add_to_cart",
   checkout_start: "checkout_start",
+  payment_started: "payment_started",
 };
 
 /**

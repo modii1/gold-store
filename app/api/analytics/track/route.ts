@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { maybeIngestRecoverySignal } from "@/lib/recovery/ingest";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -10,6 +11,7 @@ const ALLOWED_EVENTS = new Set([
   "add_to_cart",
   "remove_from_cart",
   "checkout_start",
+  "payment_started",
   "purchase",
 ]);
 
@@ -70,5 +72,22 @@ export async function POST(req: NextRequest) {
     // Table may not exist yet (migration not applied). Silently ignore.
     return NextResponse.json({ ok: rows.length > 0 ? true : false });
   }
+
+  // نقطة ربط استعادة المبيعات: نفس أحداث analytics الموجودة، بلا نظام جديد.
+  // maybeIngestRecoverySignal يقرأ مفتاح التشغيل من settings ويلتهم كل خطأ،
+  // فلا يُكسر المسار القائم أبدًا. OFF ⇒ لا استيعاب إطلاقًا.
+  await Promise.all(
+    rows.map((r) =>
+      maybeIngestRecoverySignal({
+        event_type: r.event_type,
+        visitor_id: r.visitor_id,
+        session_id: r.session_id,
+        product_id: r.product_id,
+        product_slug: r.product_slug,
+        metadata: r.metadata,
+      })
+    )
+  );
+
   return NextResponse.json({ ok: true });
 }

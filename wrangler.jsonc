@@ -1,8 +1,14 @@
 {
 	"$schema": "node_modules/wrangler/config-schema.json",
-	"main": ".open-next/worker.js",
+	"main": "worker.js",
 	"name": "gold-store",
 	"compatibility_date": "2026-08-10",
+	// جدولة Cloudflare: كل 15 دقيقة POST إلى /api/recovery/run.
+	// المسار يقرأ settings.recovery_enabled ويتوقف كليًا عند OFF.
+	// يمرّر x-cron-secret من بيئة الـWorker، وإن غاب ⇒ لا يُرسل شيء (fail-closed).
+	"triggers": {
+		"crons": ["*/15 * * * *"]
+	},
 	"compatibility_flags": [
 		"nodejs_compat",
 		"global_fetch_strictly_public"
