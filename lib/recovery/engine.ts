@@ -83,35 +83,54 @@ export class RecoveryEngine {
   }
 
   /**
-   * شراء موثّق (notification_events / order.created): يغلق كل الحالات النشطة
-   * للعميل فورًا ويربط purchaseRef — مصدر الإكمال الموثوق في المشروع.
+   * شراء موثّق (notification_events / order.created) — إسناد ينص على الحالة
+   * الصحيحة فقط، لا إغلاق أعمى لكل حالات الرقم.
    *
-   * F3: purchaseRef يمكن أن يكون null — إن لم يكن order_id UUID صالحًا، تُغلق الحالة
-   * بدون مرجع الطلب (لا نكتب قيمة غير صالحة في purchase_ref).
-   * Note: هذا patch جزئي — يعتمد على update() الحفظي (F1) ألا يمسح
-   * visitor_id/session_id/case_type/score/cart/product_ids أو التواريخ.
+   * قواعد الإسناد (قابلة للتدقيق، ولا تدّعي سببية مطلقة):
+   *  1. لا يُغلق إلا حالة نشطة واحدة: الأحدث نشاطًا (الأقرب للشراء).
+   *  2. يجب أن تكون الحالة سابقة للطلب: case.lastActivityAt < orderCreatedAt.
+   *     طلب سبق اكتشاف الحالة لا يُنسب إليها.
+   *  3. purchaseRef يجب أن يكون الطلب الفعلي المرتبط بتلك الحالة.
+   *
+   * هل الشراء «استعادة» أم «تحويل طبيعي»؟
+   *  - الاستعادة تتطلب تدخّلًا موثّقًا سابقًا للشراء (recovery_contact_attempts).
+   *  - بدونه: تُغلق الحالة بحالة PURCHASED (حتى لا تظل معلّقة) لكن بلا أي
+   *    ادعاء استعادة — المقاييس لا تحسبها لأنها بلا intervention موثّق
+   *    سابق للشراء. عمدًا: يبقى purchaseRef للربط والتدقيق فقط.
    */
-  async completePurchaseByCustomer(customerPhone: string, purchaseRef: string | null): Promise<number> {
+  async completePurchaseByCustomer(
+    customerPhone: string,
+    purchaseRef: string | null,
+    opts: { orderCreatedAt?: number | null } = {}
+  ): Promise<number> {
     // Stage 1 lock: DRY_RUN (أو معطّل) = بلا أي كتابة. القراءة والتقييم مستمران،
     // لكن الإغلاق كتابة ⇒ ممنوع في DRY_RUN (fail-closed).
     if (!this.cfg.enabled || this.cfg.dryRun) return 0;
 
     const now = this.now();
-    const cases = await this.store.findActiveByCustomer(customerPhone);
-    let closed = 0;
-    for (const c of cases) {
-      await this.store.update(c.id, {
-        status: "PURCHASED",
-        completedAt: now,
-        purchaseRef,
-        nextActionAt: null,
-        decision: null,
-        decidedAt: null,
-        updatedAt: now,
-      });
-      closed++;
-    }
-    return closed;
+    const orderCreatedAt = typeof opts.orderCreatedAt === "number" ? opts.orderCreatedAt : null;
+    const candidates = await this.store.findActiveByCustomer(customerPhone);
+    if (candidates.length === 0) return 0;
+
+    // الحالة الأحدث نشاطًا فقط — لا نغلق كل حالات الرقم.
+    candidates.sort((a, b) => b.lastActivityAt - a.lastActivityAt);
+    const target = candidates[0];
+
+    // شرط الزمن: الحالة يجب أن تسبق الطلب. بدون وقت الطلب لا نُسند عمدًا
+    // (fail-safe: لا نغلق على أساس تخمين).
+    if (orderCreatedAt === null) return 0;
+    if (target.lastActivityAt >= orderCreatedAt) return 0;
+
+    await this.store.update(target.id, {
+      status: "PURCHASED",
+      completedAt: now,
+      purchaseRef,
+      nextActionAt: null,
+      decision: null,
+      decidedAt: null,
+      updatedAt: now,
+    });
+    return 1;
   }
 
   /** تقييم حالة واحدة — ناتج قرار فقط. */

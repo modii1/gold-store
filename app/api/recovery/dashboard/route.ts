@@ -5,7 +5,7 @@ import { loadRecoveryConfig } from "@/lib/recovery/config";
 import { readRecoveryEnabled } from "@/lib/recovery/toggle";
 import { maskPhone, SupabaseRecoveryStore } from "@/lib/recovery/store";
 import { RecoveryEngine } from "@/lib/recovery/engine";
-import { computeMetrics } from "@/lib/recovery/metrics";
+import { computeMetrics, isVerifiedRecovery } from "@/lib/recovery/metrics";
 import type { RecoveryOrderSummary } from "@/lib/recovery/metrics";
 import type { ContactDecision, ContactOutcome, RecoveryCase } from "@/lib/recovery/types";
 
@@ -54,15 +54,24 @@ export async function GET() {
     // Recovery-linked orders revenue (read-only).
     const refs = [...new Set(all.filter((c) => c.purchaseRef).map((c) => c.purchaseRef as string))];
     const ordersByRef = new Map<string, RecoveryOrderSummary>();
+    const orderCreatedAtByRef = new Map<string, number>();
     if (refs.length) {
       const supabase = createAdminClient();
-      const { data: orders } = await supabase.from("orders").select("id, total, discount").in("id", refs);
-      for (const o of (orders || []) as { id: string; total: number; discount: number }[]) {
+      const { data: orders } = await supabase.from("orders").select("id, total, discount, created_at").in("id", refs);
+      for (const o of (orders || []) as { id: string; total: number; discount: number; created_at?: string | null }[]) {
         ordersByRef.set(o.id, { total: Number(o.total || 0), discount: Number(o.discount || 0) });
+        if (o.created_at) {
+          const t = new Date(o.created_at).getTime();
+          if (Number.isFinite(t)) orderCreatedAtByRef.set(o.id, t);
+        }
       }
     }
 
-    const metrics = computeMetrics(all, ordersByRef);
+    // سجل التدخلات الدائم — المصدر الوحيد الذي يثبّت «تمت الاستعادة».
+    // فارغ حتى يوجد مُرسِل فعلي ⇒ recovered = 0 (وهو الصحيح اليوم).
+    const interventionsByCase = await store.listInterventions(all.map((c) => c.id));
+
+    const metrics = computeMetrics(all, ordersByRef, interventionsByCase, orderCreatedAtByRef);
     const decisionById = new Map<string, ContactDecision>(outcomes.map((o) => [o.caseId, o.decision]));
 
     return NextResponse.json({
@@ -86,6 +95,14 @@ export async function GET() {
         wouldSend: outcomes.find((o) => o.caseId === c.id)?.wouldSend || false,
         messageCount: c.messageCount,
         suppressReason: c.suppressReason,
+        // تمييز صريح للصف: شراء طبيعي مقابل استعادة مُثبتة بتدخّل سابق.
+        isVerifiedRecovery: isVerifiedRecovery({
+          status: c.status,
+          purchaseRef: c.purchaseRef,
+          orderCreatedAt: c.purchaseRef ? orderCreatedAtByRef.get(c.purchaseRef) ?? null : null,
+          interventions: interventionsByCase.get(c.id) ?? [],
+          caseCreatedAt: c.firstDetectedAt,
+        }),
       })),
       outcomes,
     });

@@ -21,6 +21,8 @@ type CaseRow = {
   wouldSend: boolean;
   messageCount: number;
   suppressReason: string | null;
+  /** شراء طبيعي (بلا تدخّل موثّق سابق) أم استعادة مُثبتة. */
+  isVerifiedRecovery: boolean;
 };
 
 type Payload = {
@@ -107,9 +109,10 @@ export function RecoveryDashboardContent() {
         { label: "عمليات غير مكتملة", value: String(m.incompleteOperations), icon: <ShoppingCart className="h-4 w-4" /> },
         { label: "دفع غير مكتمل", value: String(m.incompleteCheckouts), icon: <AlertTriangle className="h-4 w-4" /> },
         { label: "مؤهلون للخصم", value: String(m.discountEligible), icon: <Package className="h-4 w-4" /> },
-        { label: "تمت استعادتهم", value: String(m.recovered), icon: <Banknote className="h-4 w-4" /> },
+        { label: "تمت استعادتهم (بتدخّل موثّق)", value: String(m.recovered), icon: <Banknote className="h-4 w-4" /> },
         { label: "معدل الاستعادة", value: `${m.recoveryRate}%`, icon: <Receipt className="h-4 w-4" /> },
         { label: "مبيعات مستعادة", value: formatCurrency(m.recoveredRevenue), icon: <Banknote className="h-4 w-4" /> },
+        { label: "انتهت بالشراء (طبيعي)", value: String(m.naturalConversions), icon: <ShoppingCart className="h-4 w-4" /> },
         { label: "تكلفة الخصومات", value: formatCurrency(m.discountCost), icon: <Package className="h-4 w-4" /> },
         { label: "صافي المبيعات المستعادة", value: formatCurrency(m.netRecoveredRevenue), icon: <Banknote className="h-4 w-4" /> },
         { label: "رسائل مُنعت (فترة تهدئة)", value: String(m.cooldownBlocked), icon: <EyeOff className="h-4 w-4" /> },
@@ -198,7 +201,11 @@ export function RecoveryDashboardContent() {
                   {data.cases.map((c) => (
                     <tr key={c.id} className="border-b border-amber-50/60 text-stone-600">
                       <td className="px-2 py-2">{c.customer || "زائر مجهول"}</td>
-                      <td className="px-2 py-2">{STATUS_LABEL[c.status] || c.status}</td>
+                      <td className="px-2 py-2">
+                        {c.status === "PURCHASED" && !c.isVerifiedRecovery
+                          ? "انتهت بالشراء (طبيعي)"
+                          : STATUS_LABEL[c.status] || c.status}
+                      </td>
                       <td className="px-2 py-2">{c.product || "—"}</td>
                       <td className="px-2 py-2">{c.cartValue !== null ? formatCurrency(c.cartValue) : "—"}</td>
                       <td className="px-2 py-2">{c.priority}</td>
@@ -206,7 +213,13 @@ export function RecoveryDashboardContent() {
                       <td className="px-2 py-2">{c.decision ? DECISION_LABEL[c.decision] : "—"}</td>
                       <td className="max-w-[220px] truncate px-2 py-2" title={c.decisionNote || undefined}>{c.decisionNote || "—"}</td>
                       <td className="px-2 py-2">{c.discountProposal ? `${c.discountProposal.percent}% (سقف ${formatCurrency(c.discountProposal.cap)})` : "—"}</td>
-                      <td className="px-2 py-2">{c.wouldSend ? "سيُرسل (تشغيل تجريبي)" : c.suppressReason || "لا يُرسل"}</td>
+                      <td className="px-2 py-2">
+                        {c.status === "PURCHASED" && !c.isVerifiedRecovery
+                          ? "لا يوجد تدخّل استرجاع"
+                          : c.wouldSend
+                            ? "سيُرسل (تشغيل تجريبي)"
+                            : c.suppressReason || "لا يُرسل"}
+                      </td>
                     </tr>
                   ))}
                 </tbody>

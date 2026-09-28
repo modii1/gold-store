@@ -6,6 +6,7 @@ import type { RecoveryConfig } from "@/lib/recovery/config";
 import { maskPhone, resolveOrderRef, SupabaseRecoveryStore } from "@/lib/recovery/store";
 import { isCronAuthorized } from "@/lib/recovery/cron-auth";
 import { RecoveryEngine } from "@/lib/recovery/engine";
+import { RecoveryDispatcher, SupabaseRecoveryContactGateway } from "@/lib/recovery/dispatcher";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -15,7 +16,12 @@ export const runtime = "nodejs";
  * التشغيل محكوم بـsettings.recovery_enabled من لوحة الإدارة:
  *  - OFF (الافتراضي): يتوقف فورًا بلا استيعاب ولا تقييم ولا معالجة.
  *  - ON: يستوعب الإشارات، يقيّم ويرتّب، ويغلق الحالة عند شراء موثّق.
- * لا يوجد ولا يُضاف أي إرسال رسائل أو إنشاء أكواد خصم.
+ *
+ * التواصل (عند ON فقط) يمر عبر مسار WhatsApp القائم في gold-store:
+ *   notifications → صف تسليم واتساب → qr-server → 'sent'.
+ * لا Provider جديد ولا API جديدة، ولا إنشاء أكواد خصم. التسوية
+ * (recordIntervention + messageCount + lastMessageAt) لا تحدث إلا بعد قراءة
+ * delivery حالتها 'sent' وsent_at موجود من qr-server.
  */
 export async function POST(req: NextRequest) {
   // fail-closed: لا مسار مفتوح إطلاقًا — سر غير معرَّف = رفض، لا تمرير.
@@ -41,6 +47,8 @@ export async function POST(req: NextRequest) {
       skippedInvalidOrderRef: 0,
       skippedMissingOrderRef: 0,
       plannedMessages: 0,
+      dispatched: null,
+      settled: null,
       outcomes: [],
     });
   }
@@ -65,7 +73,11 @@ export async function POST(req: NextRequest) {
 
       const engine = new RecoveryEngine(store, cfg);
       const seen = new Set<string>();
-      for (const e of (events || []) as { order_id?: string | null; customer_identifier: string | null }[]) {
+      for (const e of (events || []) as {
+        order_id?: string | null;
+        customer_identifier: string | null;
+        created_at?: string | null;
+      }[]) {
         // order_id فاسد/غائب = لا نُغلق أي حالة (fail-safe). السبب: purchase مُثبت
         // في orders بجدولنا، فمعرّف طلب فارغ ليس دليل إتمام شرائية.
         if (!e.customer_identifier) continue;
@@ -87,16 +99,39 @@ export async function POST(req: NextRequest) {
         }
         if (seen.has(ref.normalized)) continue;
         seen.add(ref.normalized);
-        closedByPurchase += await engine.completePurchaseByCustomer(e.customer_identifier, ref.normalized);
+        // orderCreatedAt شرط الإسناد: لا يُغلق طلبٌ حالةَ لم تكن موجودة قبله،
+        // ولا يُنسب الشراء لحالة بلا تدخّل موثّق سابق (القياس يقرّر ذلك).
+        const orderCreatedAt = e.created_at ? new Date(e.created_at).getTime() : null;
+        closedByPurchase += await engine.completePurchaseByCustomer(e.customer_identifier, ref.normalized, {
+          orderCreatedAt,
+        });
       }
     } catch {
       /* نتجاهل: لا نكسر أي شيء */
     }
   }
 
-  // 2) دورة القرار: مخرجات فقط.
+  // 2) التسوية أولًا — قبل أي حساب قرارات في هذه الدورة.
+  //
+  //    الترتيب مقصود: التسوية تكتب messageCount/lastMessageAt لكل delivery
+  //    أكّدها qr-server بحالة 'sent'. لو حُسبت القرارات قبلها لكان engine قد
+  //    قرأ عدّادًا قديماً فيرسل رسالة ثانية فورًا بعد تأكيد الأولى.
+  //    التسوية لا تقيّد نفسها بالحالات النشطة: رسالة مؤكَّدة بعد إغلاق
+  //    الحالة بالشراء تبقى إرسالًا حقيقيًا يجب تسجيله.
+  const dispatcher = ready && cfg.enabled
+    ? new RecoveryDispatcher(store, new SupabaseRecoveryContactGateway(), cfg)
+    : null;
+  const settled = dispatcher ? await dispatcher.settle() : null;
+
+  // 3) دورة القرار: تُقرأ الآن بعد تسوية كل الإرسالات المؤكَّدة، فالقرارات
+  //    تعتمد على عدّاد وحدّاث cooldown صحيحين. التقييم نفسه بلا أي تغيير.
   const engine = new RecoveryEngine(store, cfg);
+  const activeCases = ready && cfg.enabled ? await store.listActive() : [];
   const { outcomes } = ready && cfg.enabled ? await engine.runDryRunCycle() : { outcomes: [] };
+
+  // 4) الجدولة: تنشئ notification + delivery واتساب لكل wouldSend.
+  //    هي الخطوة الوحيدة التي تُدرج، وهي لا تسجّل شيئًا كإرسال.
+  const dispatched = dispatcher ? await dispatcher.dispatch(activeCases, outcomes) : null;
 
   return NextResponse.json({
     ok: true,
@@ -107,6 +142,8 @@ export async function POST(req: NextRequest) {
     skippedInvalidOrderRef,
     skippedMissingOrderRef,
     plannedMessages: outcomes.filter((o) => o.wouldSend).length,
+    dispatched,
+    settled,
     outcomes: outcomes.slice(0, 50),
   });
 }

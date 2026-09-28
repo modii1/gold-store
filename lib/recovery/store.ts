@@ -1,6 +1,10 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { RecoveryCase } from "./types";
+import type { RecoveryIntervention } from "./metrics";
+
+/** جدول سجل التدخلات الدائم (migration-036). */
+const ATTEMPTS_TABLE = "recovery_contact_attempts";
 
 /**
  * المخزن — فصل كامل عن منطق القرار. المرحلة الأولى (بلا migration) تعمل فقط
@@ -15,6 +19,18 @@ export interface RecoveryCaseStore {
   findActiveByCustomer(phone: string): Promise<RecoveryCase[]>;
   listActive(): Promise<RecoveryCase[]>;
   listAll(limit?: number): Promise<RecoveryCase[]>;
+  /** جلب حالات محدّدة بالمعرّفات — للتسوية خارج نطاق الحالات النشطة. */
+  findByIds(ids: string[]): Promise<Map<string, RecoveryCase>>;
+  /** سجل التدخلات الدائم — مصدر الحقيقة الوحيد لإثبات الاستعادة. */
+  listInterventions(caseIds?: string[]): Promise<Map<string, RecoveryIntervention[]>>;
+  /**
+   * سجل التدخلات الدائم — مصدر الحقيقة الوحيد لإثبات الاستعادة.
+   *
+   * `id` اختياري لكنه حاسم: إن مُرِّر كـ UUID حتمي، فيصبح الـINSERT نفسه حارس
+   * التكرار على مستوى قاعدة البيانات (23505 عند التكرار) بدل مقارنة
+   * القراءة-قبل-الكتابة التي تتسابق بين عمليتي cron.
+   */
+  recordIntervention(a: { id?: string; caseId: string; channel: string; sentAt?: number; couponRef?: string | null }): Promise<boolean>;
 }
 
 export function newCaseId(): string {
@@ -79,9 +95,46 @@ export function maskPhone(phone: string | null | undefined): string | null {
 export class InMemoryRecoveryStore implements RecoveryCaseStore {
   readonly ready = true;
   private rows = new Map<string, RecoveryCase>();
+  private attempts = new Map<string, RecoveryIntervention[]>();
+  private attemptIds = new Set<string>();
 
   async create(c: RecoveryCase): Promise<void> {
     this.rows.set(c.id, c);
+  }
+
+  async findByIds(ids: string[]): Promise<Map<string, RecoveryCase>> {
+    const out = new Map<string, RecoveryCase>();
+    for (const id of ids) {
+      const row = this.rows.get(id);
+      if (row) out.set(id, row);
+    }
+    return out;
+  }
+
+  async listInterventions(caseIds?: string[]): Promise<Map<string, RecoveryIntervention[]>> {
+    const out = new Map<string, RecoveryIntervention[]>();
+    for (const [caseId, list] of this.attempts) {
+      if (caseIds && caseIds.length && !caseIds.includes(caseId)) continue;
+      out.set(caseId, [...list].sort((a, b) => a.sentAt - b.sentAt));
+    }
+    return out;
+  }
+
+  async recordIntervention(a: { id?: string; caseId: string; channel: string; sentAt?: number; couponRef?: string | null }): Promise<boolean> {
+    // حارس التكرار: نفس المعرّف = تدخّل واحد فقط، مهما تكرّرت الدورة.
+    if (a.id) {
+      if (this.attemptIds.has(a.id)) return false;
+      this.attemptIds.add(a.id);
+    }
+    const list = this.attempts.get(a.caseId) ?? [];
+    list.push({
+      caseId: a.caseId,
+      channel: a.channel,
+      sentAt: a.sentAt ?? Date.now(),
+      couponRef: a.couponRef ?? null,
+    });
+    this.attempts.set(a.caseId, list);
+    return true;
   }
 
   async update(id: string, patch: Partial<RecoveryCase>): Promise<void> {
@@ -301,6 +354,109 @@ export class SupabaseRecoveryStore implements RecoveryCaseStore {
       .order("last_activity_at", { ascending: false })
       .limit(limit);
     return ((data as Record<string, unknown>[]) || []).map(rowToCase);
+  }
+
+  /**
+   * جلب الحالات بالمعرّفات مباشرة.
+   * التسوية تحتاج هذا لا listActive: رسالة قد تُؤكَّد بعد أن أُغلقت الحالة
+   * بالشراء، فيبقى التدخل واجب التسجيل رغم أن الحالة لم تعد نشطة.
+   */
+  async findByIds(ids: string[]): Promise<Map<string, RecoveryCase>> {
+    const out = new Map<string, RecoveryCase>();
+    if (!ids.length || !this.guard()) return out;
+    const supabase = this.createClient();
+    const { data } = await supabase
+      .from(this.table)
+      .select("*")
+      .in("id", ids);
+    for (const row of (data as Record<string, unknown>[]) || []) {
+      const c = rowToCase(row);
+      out.set(c.id, c);
+    }
+    return out;
+  }
+
+  // ------------------------------------------------------------
+  // سجل التدخلات الدائم — recovery_contact_attempts (append-only)
+  //
+  // هذا هو مصدر الحقيقة الوحيد لـ "تم استرجاعها". لا يُشتق من
+  // decision / recommendedDiscount / wouldSend / nextActionAt.
+  // صفٌّ هنا يجب أن يُنشأ بعد نجاح إرسال فعلي فقط.
+  // ------------------------------------------------------------
+
+  /**
+   * كل التدخلات الموثّقة لحالات معيّنة (أو لكل الحالات إن تُركت فارغة).
+   * تُرجع خريطة caseId -> التدخلات مرتّبة زمنيًا تصاعديًا.
+   * الجدول غير موجود بعد (migration-036 غير مطبّقة) ⇒ خريطة فارغة،
+   * وهو fail-closed: recovered = 0 لا انهيار.
+   */
+  async listInterventions(caseIds?: string[]): Promise<Map<string, RecoveryIntervention[]>> {
+    const out = new Map<string, RecoveryIntervention[]>();
+    if (!this.guard()) return out;
+    try {
+      let query = this.createClient()
+        .from(ATTEMPTS_TABLE)
+        .select("case_id, channel, sent_at, coupon_ref")
+        .order("sent_at", { ascending: true });
+      if (caseIds && caseIds.length) query = query.in("case_id", caseIds);
+      const { data } = await query;
+      for (const row of (data as Record<string, unknown>[]) || []) {
+        const caseId = String(row.case_id ?? "");
+        if (!caseId) continue;
+        const sentAt = epoch(row.sent_at);
+        if (sentAt === null) continue; // بلا وقت إرسال = لا يثبت تدخلًا
+        const list = out.get(caseId) ?? [];
+        list.push({
+          caseId,
+          channel: String(row.channel ?? "unknown"),
+          sentAt,
+          couponRef: row.coupon_ref ? String(row.coupon_ref) : null,
+        });
+        out.set(caseId, list);
+      }
+    } catch (e) {
+      this.onError({ op: "update", message: e instanceof Error ? e.message : String(e) });
+    }
+    return out;
+  }
+
+  /**
+   * تسجيل تدخّل فعلي. لا يُنادى إلا بعد نجاح إرسال/إعمال حقيقي.
+   * السجل append-only: لا update ولا delete.
+   *
+   * إن مُرِّر `id` فالمفتاح الأساسي الحتمي هو ما يمنع الازدواج: عمليتان
+   * متزامنتان تأخذان decision واحدًا، وتفوز واحدة فقط بالمفتاح؛ الأخرى ترتد
+   * عند 23505 وتُعتبر "سبق تسويتها" لا خطأً.
+   */
+  async recordIntervention(a: {
+    id?: string;
+    caseId: string;
+    channel: string;
+    sentAt?: number;
+    couponRef?: string | null;
+  }): Promise<boolean> {
+    if (!this.guard()) return false;
+    try {
+      const supabase = this.createClient();
+      const row: Record<string, unknown> = {
+        case_id: a.caseId,
+        channel: a.channel,
+        sent_at: new Date(a.sentAt ?? Date.now()).toISOString(),
+        coupon_ref: a.couponRef ?? null,
+      };
+      if (a.id) row.id = a.id;
+      const { error } = await supabase.from(ATTEMPTS_TABLE).insert(row);
+      if (error) {
+        // 23505 = سبقتني دورة أخرى: نتيجة طبيعية لا خطأ.
+        if (error.code === "23505") return false;
+        this.onError({ op: "create", ...safeErrorMessage(error) });
+        return false;
+      }
+      return true;
+    } catch (e) {
+      this.onError({ op: "create", message: e instanceof Error ? e.message : String(e) });
+      return false;
+    }
   }
 }
 

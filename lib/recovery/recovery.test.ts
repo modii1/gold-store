@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { RecoveryEngine } from "./engine";
 import { casePatchToRow, caseToRow, InMemoryRecoveryStore, isValidUuid, maskPhone, resolveOrderRef, SupabaseRecoveryStore } from "./store";
 import { computeMetrics } from "./metrics";
+import type { RecoveryIntervention } from "./metrics";
 import { effectiveScore, applyAgePenalty, applyMessagePenalty } from "./scoring";
 import { buildReminderSchedule, discountProposal, evaluateContact } from "./decisions";
 import { canPersistCases, DEFAULT_RECOVERY_CONFIG } from "./config";
@@ -26,6 +27,34 @@ function cfg(overrides: Partial<RecoveryConfig> = {}): RecoveryConfig {
  * (completePurchaseByCustomer) لا يكتب إلا هنا.
  */
 const wcfg = (overrides: Partial<RecoveryConfig> = {}): RecoveryConfig => cfg({ dryRun: false, ...overrides });
+
+/** اسم حالة مُتحقَّقة مرتبطة بـ purchase_ref معيّن. */
+const verifiedCaseId = (ref: string) => `verified-${ref}`;
+
+/**
+ * يبني أدلة التدخّل + أوقات الطلب التي تجعل استعادة معيّنة صالحة.
+ * الشراء وحده لا يكفي: لا بد من تدخّل فعلي (T0+HOUR) قبل الطلب (T0+2*HOUR).
+ */
+function proofFor(ordersByRef: Map<string, { total: number; discount: number }>) {
+  const interventionsByCase = new Map<string, RecoveryIntervention[]>();
+  const orderCreatedAtByRef = new Map<string, number>();
+  for (const ref of ordersByRef.keys()) {
+    const id = verifiedCaseId(ref);
+    interventionsByCase.set(id, [{ caseId: id, channel: "sms", sentAt: T0 + HOUR, couponRef: null }]);
+    orderCreatedAtByRef.set(ref, T0 + 2 * HOUR);
+  }
+  return { interventionsByCase, orderCreatedAtByRef };
+}
+
+/** دليل تدخّل لحالة واحدة بعينها. */
+function proofOf(caseId: string, orderCreatedAt: number) {
+  return {
+    interventionsByCase: new Map<string, RecoveryIntervention[]>([
+      [caseId, [{ caseId, channel: "sms" as const, sentAt: T0 + HOUR, couponRef: null }]],
+    ]),
+    orderCreatedAtByRef: new Map<string, number>([[REAL_UUID, orderCreatedAt]]),
+  };
+}
 
 const CUST = { id: "cust-1", phone: "966500000001" };
 const REAL_UUID = "3f2504e0-4f89-11d3-9a0c-0305e82c3301";
@@ -112,7 +141,7 @@ describe("F3-edge — لا تلويث purchase_ref ولا عدّ خاطئ", () =
     const engine = new RecoveryEngine(store, wcfg(), () => T0);
     await engine.ingest({ ...base("add_to_cart"), customer: CUST });
 
-    const closed = await engine.completePurchaseByCustomer(CUST.phone, resolveOrderRef(undefined).normalized ?? null);
+    const closed = await engine.completePurchaseByCustomer(CUST.phone, resolveOrderRef(undefined).normalized ?? null, { orderCreatedAt: T0 + HOUR });
     // عقد المحرك (كما في R5b):.null يعني شراءً موثقًا بلا مرجع صالح ⇐ يُغلق بلا purchase_ref.
     expect(closed).toBe(1);
 
@@ -134,7 +163,7 @@ describe("F3-edge — لا تلويث purchase_ref ولا عدّ خاطئ", () =
     await engine.ingest({ ...base("add_to_cart"), customer: CUST });
 
     for (const v of [undefined, null, "", "   ", "not-a-uuid"]) {
-      await engine.completePurchaseByCustomer(CUST.phone, resolveOrderRef(v).normalized ?? null);
+      await engine.completePurchaseByCustomer(CUST.phone, resolveOrderRef(v).normalized ?? null, { orderCreatedAt: T0 + HOUR });
     }
 
     const row = (await store.listAll())[0];
@@ -147,7 +176,7 @@ describe("F3-edge — لا تلويث purchase_ref ولا عدّ خاطئ", () =
     await engine.ingest({ ...base("add_to_cart"), customer: CUST });
 
     const ref = resolveOrderRef(REAL_UUID);
-    const closed = await engine.completePurchaseByCustomer(CUST.phone, ref.ok ? ref.normalized : null);
+    const closed = await engine.completePurchaseByCustomer(CUST.phone, ref.ok ? ref.normalized : null, { orderCreatedAt: T0 + HOUR });
     expect(closed).toBe(1);
 
     const row = (await store.listAll())[0];
@@ -161,7 +190,7 @@ describe("F3-edge — لا تلويث purchase_ref ولا عدّ خاطئ", () =
     await engine.ingest({ ...base("add_to_cart"), customer: CUST });
 
     // بلا purchase_ref صالح
-    await engine.completePurchaseByCustomer(CUST.phone, null);
+    await engine.completePurchaseByCustomer(CUST.phone, null, { orderCreatedAt: T0 + HOUR });
     const noRef = computeMetrics(await store.listAll(), new Map());
     expect(noRef.recovered).toBe(0);
     expect(noRef.recoveredRevenue).toBe(0);
@@ -172,9 +201,11 @@ describe("F3-edge — لا تلويث purchase_ref ولا عدّ خاطئ", () =
     const store2 = new InMemoryRecoveryStore();
     const engine2 = new RecoveryEngine(store2, wcfg(), () => T0);
     await engine2.ingest({ ...base("add_to_cart"), customer: CUST });
-    await engine2.completePurchaseByCustomer(CUST.phone, REAL_UUID);
+    await engine2.completePurchaseByCustomer(CUST.phone, REAL_UUID, { orderCreatedAt: T0 + HOUR });
     const orders = new Map([[REAL_UUID, { total: 500, discount: 50 }]]);
-    const withRef = computeMetrics(await store2.listAll(), orders);
+    const c2 = (await store2.listAll())[0];
+    const proof = proofOf(c2.id, T0 + 2 * HOUR);
+    const withRef = computeMetrics(await store2.listAll(), orders, proof.interventionsByCase, proof.orderCreatedAtByRef);
     expect(withRef.recovered).toBe(1);
     expect(withRef.recoveredRevenue).toBe(500);
     expect(withRef.discountCost).toBe(50);
@@ -275,7 +306,7 @@ describe("Recovery — Decision Engine scenarios", () => {
     const e = engineAt(c);
     await e.ingest({ ...base("checkout_start"), customer: CUST, subtotal: 350 });
     now += 2 * HOUR;
-    const closed = await e.completePurchaseByCustomer(CUST.phone, "order-123");
+    const closed = await e.completePurchaseByCustomer(CUST.phone, "order-123", { orderCreatedAt: T0 + HOUR });
     expect(closed).toBe(1);
     const all = await store.listAll();
     expect(all[0].status).toBe("PURCHASED");
@@ -471,7 +502,7 @@ describe("Recovery — Decision Engine scenarios", () => {
     const c = wcfg();
     const e = engineAt(c);
     const a = await e.ingest({ ...base("checkout_start"), customer: CUST, subtotal: 400 });
-    await e.completePurchaseByCustomer(CUST.phone, "order-9");
+    await e.completePurchaseByCustomer(CUST.phone, "order-9", { orderCreatedAt: T0 + HOUR });
     now += 30 * MINUTE;
     const b = await e.ingest({ ...base("add_to_cart"), customer: CUST });
     expect(b!.id).not.toBe(a!.id);
@@ -495,29 +526,43 @@ describe("Recovery — Decision Engine scenarios", () => {
 
   // 21) استرجاع يُحسب مرة واحدة (إيراد)
   it("21. الإيراد المسترجع يُحسب مرة واحدة (فك ازدواج purchase_ref)", () => {
-    const cases: RecoveryCase[] = [
-      caseOf({ status: "PURCHASED", purchaseRef: "o1", customerPhone: CUST.phone, completedAt: T0 }),
-      caseOf({ status: "PURCHASED", purchaseRef: "o1", customerPhone: CUST.phone, completedAt: T0 }), // duplicate
-    ];
     const orders = new Map([["o1", { total: 400, discount: 40 }]]);
-    const m = computeMetrics(cases, orders);
+    const proof = proofFor(orders);
+    // نفس purchase_ref مرتين: نسخة مُتحقَّقة وأخرى بلا دليل ⇒ تُحتسب مرة واحدة.
+    const cases: RecoveryCase[] = [
+      caseOf({ id: verifiedCaseId("o1"), status: "PURCHASED", purchaseRef: "o1", customerPhone: CUST.phone, completedAt: T0 }),
+      caseOf({ id: `dup-${verifiedCaseId("o1")}`, status: "PURCHASED", purchaseRef: "o1", customerPhone: CUST.phone, completedAt: T0 }),
+    ];
+    const m = computeMetrics(cases, orders, proof.interventionsByCase, proof.orderCreatedAtByRef);
     expect(m.recovered).toBe(1);
     expect(m.recoveredRevenue).toBe(400);
     expect(m.discountCost).toBe(40);
     expect(m.netRecoveredRevenue).toBe(360);
   });
 
+  it("21b. شراء بلا أي تدخّل = انحويل طبيعي، لا استعادة", () => {
+    const cases: RecoveryCase[] = [
+      caseOf({ status: "PURCHASED", purchaseRef: "o1", customerPhone: CUST.phone, completedAt: T0 }),
+    ];
+    const orders = new Map([["o1", { total: 400, discount: 40 }]]);
+    const m = computeMetrics(cases, orders);
+    expect(m.recovered).toBe(0);
+    expect(m.recoveredRevenue).toBe(0);
+    expect(m.naturalConversions).toBe(1);
+  });
+
   // 22) تكلفة الخصم والصافي
   it("22. تكلفة الخصم والصافي صحيحان", () => {
     const cases: RecoveryCase[] = [
-      caseOf({ status: "PURCHASED", purchaseRef: "o1", customerPhone: CUST.phone, completedAt: T0 }),
-      caseOf({ status: "PURCHASED", purchaseRef: "o2", customerPhone: "966500000002", completedAt: T0 }),
+      caseOf({ id: verifiedCaseId("o1"), status: "PURCHASED", purchaseRef: "o1", customerPhone: CUST.phone, completedAt: T0 }),
+      caseOf({ id: verifiedCaseId("o2"), status: "PURCHASED", purchaseRef: "o2", customerPhone: "966500000002", completedAt: T0 }),
     ];
     const orders = new Map([
       ["o1", { total: 500, discount: 50 }],
       ["o2", { total: 200, discount: 0 }],
     ]);
-    const m = computeMetrics(cases, orders);
+    const proof = proofFor(orders);
+    const m = computeMetrics(cases, orders, proof.interventionsByCase, proof.orderCreatedAtByRef);
     expect(m.recovered).toBe(2);
     expect(m.recoveredRevenue).toBe(700);
     expect(m.discountCost).toBe(50);
@@ -526,16 +571,28 @@ describe("Recovery — Decision Engine scenarios", () => {
 
   // 23) معدل الاسترجاع
   it("23. معدل الاسترجاع = مشتريات مسترجعة / حالات مؤهلة", () => {
+    const orders = new Map([["o1", { total: 300, discount: 0 }]]);
+    const proof = proofFor(orders);
     const cases: RecoveryCase[] = [
-      caseOf({ status: "PURCHASED", purchaseRef: "o1", customerPhone: CUST.phone, completedAt: T0 }),
+      caseOf({ id: verifiedCaseId("o1"), status: "PURCHASED", purchaseRef: "o1", customerPhone: CUST.phone, completedAt: T0 }),
       caseOf({ status: "OPEN", customerPhone: "966500000003" }),
       caseOf({ status: "OPEN", customerPhone: "966500000004" }),
       caseOf({ status: "OPEN", customerPhone: "966500000005" }),
     ];
-    const orders = new Map([["o1", { total: 300, discount: 0 }]]);
-    const m = computeMetrics(cases, orders);
+    const m = computeMetrics(cases, orders, proof.interventionsByCase, proof.orderCreatedAtByRef);
     expect(m.recovered).toBe(1);
     expect(m.recoveryRate).toBe(25); // 1/4
+  });
+
+  it("23b. لا تدخلات إطلاقاً ⇒ recoveryRate = 0 ولا 100% كاذبة", () => {
+    const cases: RecoveryCase[] = [
+      caseOf({ status: "PURCHASED", purchaseRef: "o1", customerPhone: CUST.phone, completedAt: T0 }),
+      caseOf({ status: "OPEN", customerPhone: "966500000003" }),
+    ];
+    const orders = new Map([["o1", { total: 300, discount: 0 }]]);
+    const m = computeMetrics(cases, orders);
+    expect(m.recovered).toBe(0);
+    expect(m.recoveryRate).toBe(0);
   });
 
   // 24) زائر مجهول لا يدخل المقام (لا هوية = غير مؤهل للتواصل)
@@ -821,7 +878,7 @@ describe("Regression — F1: completePurchaseByCustomer لا يمسح البيا
     const detectedIso = new Date(T0 - 10 * HOUR).toISOString();
 
     const engine = new RecoveryEngine(store, wcfg(), () => T0);
-    const closed = await engine.completePurchaseByCustomer(CUST.phone, REAL_UUID);
+    const closed = await engine.completePurchaseByCustomer(CUST.phone, REAL_UUID, { orderCreatedAt: T0 + HOUR });
     expect(closed).toBe(1);
 
     const row = state.rows[0];
@@ -850,7 +907,7 @@ describe("Regression — F1: completePurchaseByCustomer لا يمسح البيا
     state.rows.push(caseToRow(caseOf({ id, customerPhone: CUST.phone, firstDetectedAt: T0, createdAt: T0 })));
 
     const engine = new RecoveryEngine(store, wcfg(), () => T0);
-    await engine.completePurchaseByCustomer(CUST.phone, REAL_UUID);
+    await engine.completePurchaseByCustomer(CUST.phone, REAL_UUID, { orderCreatedAt: T0 + HOUR });
     // تحديثات إضافية جزئية
     await store.update(id, { messageCount: 3 });
     await store.update(id, { lastMessageAt: T0, nextActionAt: T0 + HOUR });
@@ -963,7 +1020,7 @@ describe("Regression — F3: التحقق من صلاحية purchase_ref", () =>
     state.rows.push(caseToRow(caseOf({ id: REAL_UUID, customerPhone: CUST.phone, score: 30, cartValue: 250 })));
 
     const engine = new RecoveryEngine(store, wcfg(), () => T0);
-    const closed = await engine.completePurchaseByCustomer(CUST.phone, null);
+    const closed = await engine.completePurchaseByCustomer(CUST.phone, null, { orderCreatedAt: T0 + HOUR });
 
     expect(closed).toBe(1);
     const row = state.rows[0];
@@ -985,7 +1042,7 @@ describe("Regression — F3: التحقق من صلاحية purchase_ref", () =>
     // order_id من نوع text قد لا يكون uuid — نمرّره كما هو فقط إن كان صالحًا
     const rawOrderId: string = "ORD-2026-0001";
     const ref = isValidUuid(rawOrderId) ? rawOrderId : null;
-    await engine.completePurchaseByCustomer(CUST.phone, ref);
+    await engine.completePurchaseByCustomer(CUST.phone, ref, { orderCreatedAt: T0 + HOUR });
 
     const sent = state.updates[0];
     expect(sent.purchase_ref).toBeNull();
@@ -993,11 +1050,13 @@ describe("Regression — F3: التحقق من صلاحية purchase_ref", () =>
   });
 
   it("R5d. المقاييس لا تحتسب شراءً بلا purchase_ref", async () => {
+    const orders = new Map([[REAL_UUID, { total: 100, discount: 0 }]]);
+    const proof = proofFor(orders);
     const rows = [
       caseOf({ status: "PURCHASED", purchaseRef: null, customerPhone: CUST.phone, completedAt: T0 }),
-      caseOf({ status: "PURCHASED", purchaseRef: REAL_UUID, customerPhone: "966500000009", completedAt: T0 }),
+      caseOf({ id: verifiedCaseId(REAL_UUID), status: "PURCHASED", purchaseRef: REAL_UUID, customerPhone: "966500000009", completedAt: T0 }),
     ];
-    const m = computeMetrics(rows, new Map([[REAL_UUID, { total: 100, discount: 0 }]]));
+    const m = computeMetrics(rows, orders, proof.interventionsByCase, proof.orderCreatedAtByRef);
     expect(m.recovered).toBe(1);
     expect(m.recoveredRevenue).toBe(100);
   });
@@ -1120,7 +1179,7 @@ describe("Security E–G — DRY_RUN = بلا أي كتابة", () => {
     const engine = new RecoveryEngine(store, cfg(), () => T0); // dryRun: true
     await engine.ingest({ ...base("checkout_start"), customer: CUST, subtotal: 400 });
 
-    const closed = await engine.completePurchaseByCustomer(CUST.phone, REAL_UUID);
+    const closed = await engine.completePurchaseByCustomer(CUST.phone, REAL_UUID, { orderCreatedAt: T0 + HOUR });
     expect(closed).toBe(0);
 
     // الدليل الأقوى: صفر محاولة update أصلًا (لا مجرّد أثر محايد)
@@ -1142,7 +1201,7 @@ describe("Security E–G — DRY_RUN = بلا أي كتابة", () => {
     });
     const disabled = new RecoveryEngine(store, cfg({ enabled: false, dryRun: false }), () => T0);
 
-    expect(await disabled.completePurchaseByCustomer(CUST.phone, REAL_UUID)).toBe(0);
+    expect(await disabled.completePurchaseByCustomer(CUST.phone, REAL_UUID, { orderCreatedAt: T0 + HOUR })).toBe(0);
     expect(writes).toHaveLength(0);
     expect((await store.listAll())[0].status).toBe("OPEN");
   });
@@ -1152,7 +1211,7 @@ describe("Security E–G — DRY_RUN = بلا أي كتابة", () => {
     const engine = new RecoveryEngine(store, wcfg(), () => T0);
     await engine.ingest({ ...base("checkout_start"), customer: CUST, subtotal: 400 });
 
-    expect(await engine.completePurchaseByCustomer(CUST.phone, REAL_UUID)).toBe(1);
+    expect(await engine.completePurchaseByCustomer(CUST.phone, REAL_UUID, { orderCreatedAt: T0 + HOUR })).toBe(1);
     const row = (await store.listAll())[0];
     expect(row.status).toBe("PURCHASED");
     expect(row.purchaseRef).toBe(REAL_UUID);
@@ -1199,7 +1258,7 @@ describe("Security E–G — DRY_RUN = بلا أي كتابة", () => {
     expect(after.discountCount).toBe(row.discountCount);
   });
 
-  it("G2. لا يوجد مسار إرسال/كوبون في كود Recovery (فحص مصدر ثابت)", () => {
+  it("G2. لا مسار إرسال مباشر ولا كوبون في كود Recovery (فحص مصدر ثابت)", () => {
     const roots = ["lib/recovery", "app/api/recovery"];
     const files: string[] = [];
     const walk = (dir: string) => {
@@ -1212,12 +1271,28 @@ describe("Security E–G — DRY_RUN = بلا أي كتابة", () => {
     for (const r of roots) walk(join(process.cwd(), r));
     expect(files.length).toBeGreaterThan(5);
 
+    // ممنوع في كل ملفات Recovery بلا استثناء: أي استدعاء إرسال مباشر،
+    // وأي مسار كوبون. الاسترجاع لا يتصل بـWhatsApp API ولا ينشئ خصومات.
     const forbidden =
-      /sendWhatsApp|sendSms|sendSMS|sendEmail|sendMessage|twilio|createCoupon|insert\s+into\s+coupons|from\(\s*["'`]coupons["'`]\s*\)|notification_deliveries/i;
+      /sendWhatsApp|sendSms|sendSMS|sendEmail|sendMessage|twilio|createCoupon|insert\s+into\s+coupons|from\(\s*["'`]coupons["'`]\s*\)/i;
     for (const file of files) {
       const src = readFileSync(file, "utf8");
       expect(`${file}: ${forbidden.test(src) ? "MATCH" : "clean"}`).toBe(`${file}: clean`);
     }
+
+    // الاستثناء الوحيد الموافَق عليه: lib/recovery/dispatcher.ts هو المُرسِل
+    // المعتمد، وهو يخاطب notification_deliveries عبر createDeliveries
+    // الموجودة أصلًا — أي جدولة لا إرسال. لا يُسمح لأي ملف آخر بذكر الجدول،
+    // حتى لا يتفرّع مسار تواصل ثانٍ.
+    const deliveriesRef = /notification_deliveries/i;
+    const allowed = join("lib", "recovery", "dispatcher.ts");
+    for (const file of files) {
+      const usesTable = deliveriesRef.test(readFileSync(file, "utf8"));
+      if (usesTable) expect(file.endsWith(allowed)).toBe(true);
+    }
+    // حتى في المُرسِل: لا جدول coupons ولا استدعاء send مباشر.
+    const src = readFileSync(join(process.cwd(), allowed), "utf8");
+    expect(forbidden.test(src)).toBe(false);
   });
 });
 
@@ -1229,7 +1304,7 @@ describe("Security H — لا regression بعد الإصلاحين", () => {
     await engine.ingest({ ...base("add_to_cart"), customer: CUST });
 
     const ref = resolveOrderRef(REAL_UUID);
-    expect(await engine.completePurchaseByCustomer(CUST.phone, ref.ok ? ref.normalized : null)).toBe(1);
+    expect(await engine.completePurchaseByCustomer(CUST.phone, ref.ok ? ref.normalized : null, { orderCreatedAt: T0 + HOUR })).toBe(1);
     const row = (await store.listAll())[0];
     expect(row.status).toBe("PURCHASED");
     expect(row.purchaseRef).toBe(REAL_UUID);
@@ -1242,7 +1317,7 @@ describe("Security H — لا regression بعد الإصلاحين", () => {
 
     for (const bad of ["", "   ", "not-a-uuid", undefined, null]) {
       const ref = resolveOrderRef(bad);
-      await engine.completePurchaseByCustomer(CUST.phone, ref.ok ? ref.normalized : null);
+      await engine.completePurchaseByCustomer(CUST.phone, ref.ok ? ref.normalized : null, { orderCreatedAt: T0 + HOUR });
       expect((await store.listAll())[0].purchaseRef).toBeNull();
     }
     expect((await store.listAll())[0].status).toBe("PURCHASED");
@@ -1254,7 +1329,7 @@ describe("Security H — لا regression بعد الإصلاحين", () => {
     await engine.ingest({ ...base("add_to_cart"), customer: CUST });
 
     const ref = resolveOrderRef(REAL_UUID);
-    expect(await engine.completePurchaseByCustomer(CUST.phone, ref.ok ? ref.normalized : null)).toBe(0);
+    expect(await engine.completePurchaseByCustomer(CUST.phone, ref.ok ? ref.normalized : null, { orderCreatedAt: T0 + HOUR })).toBe(0);
     const row = (await store.listAll())[0];
     expect(row.purchaseRef).toBeNull();
     expect(row.status).toBe("OPEN");
@@ -1292,13 +1367,15 @@ describe("Security H — لا regression بعد الإصلاحين", () => {
     const engine = new RecoveryEngine(store, wcfg(), () => T0);
     await engine.ingest({ ...base("checkout_start"), customer: CUST, subtotal: 400 });
 
-    expect(await engine.completePurchaseByCustomer(CUST.phone, REAL_UUID)).toBe(1);
+    expect(await engine.completePurchaseByCustomer(CUST.phone, REAL_UUID, { orderCreatedAt: T0 + HOUR })).toBe(1);
     // لا حالة نشطة متبقية ⇒ محاولة ثانية لا تُغلق شيئًا
-    expect(await engine.completePurchaseByCustomer(CUST.phone, REAL_UUID)).toBe(0);
+    expect(await engine.completePurchaseByCustomer(CUST.phone, REAL_UUID, { orderCreatedAt: T0 + HOUR })).toBe(0);
 
     const all = await store.listAll();
     expect(all.filter((c) => c.purchaseRef === REAL_UUID)).toHaveLength(1);
-    const m = computeMetrics(all, new Map([[REAL_UUID, { total: 500, discount: 50 }]]));
+    const proof = proofOf(all[0].id, T0 + 2 * HOUR);
+    // الشراء بلا دليل تدخّل ليس استعادة.
+    const m = computeMetrics(all, new Map([[REAL_UUID, { total: 500, discount: 50 }]]), proof.interventionsByCase, proof.orderCreatedAtByRef);
     expect(m.recovered).toBe(1);
   });
 
