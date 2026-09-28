@@ -13,6 +13,16 @@ const ALLOWED_EVENTS = new Set([
   "checkout_start",
   "payment_started",
   "purchase",
+  // أحداث استعادة المبيعات (ربط Recovery بالتحليلات — بلا نظام جديد).
+  "recovery_candidate",
+  "recovery_scheduled",
+  "recovery_suppressed",
+  "recovery_sent",
+  "recovery_clicked",
+  "recovery_converted",
+  "discount_offered",
+  "discount_used",
+  "discount_expired",
 ]);
 
 type Incoming = {

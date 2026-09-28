@@ -1,10 +1,13 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { RecoveryCase } from "./types";
+import type { RecoveryCase, RecoveryCaseEvent, RecoveryCaseEventType } from "./types";
+import { RECOVERY_CASE_EVENT_TYPES } from "./types";
 import type { RecoveryIntervention } from "./metrics";
 
 /** جدول سجل التدخلات الدائم (migration-036). */
 const ATTEMPTS_TABLE = "recovery_contact_attempts";
+/** جدول سجل أحداث الحالة (migration-037). append-only. */
+const EVENTS_TABLE = "recovery_case_events";
 
 /**
  * المخزن — فصل كامل عن منطق القرار. المرحلة الأولى (بلا migration) تعمل فقط
@@ -31,7 +34,27 @@ export interface RecoveryCaseStore {
    * القراءة-قبل-الكتابة التي تتسابق بين عمليتي cron.
    */
   recordIntervention(a: { id?: string; caseId: string; channel: string; sentAt?: number; couponRef?: string | null }): Promise<boolean>;
+  /**
+   * سجل أحداث الحالة (recovery_case_events) — أساس «سجل الحالة التفصيلي».
+   *
+   * قاعدة الاستدعاء: بعد وقوع الفعل لا قبله. القرار (decision) لا يُسجَّل
+   * كحدث منفَّذ، ولا تُسجَّل رسالة قبل تأكيد التسليم.
+   * ولا تُسجَّل رسالة قبل تأكيد التسليم.
+   * لا يرمي أبدًا: تعذّر الكتابة = false (fail-closed) حتى لا ينكسر مسار
+   * الإرسال القائم بسبب سجل عرض.
+   */
+  appendCaseEvent(e: {
+    caseId: string;
+    eventType: RecoveryCaseEventType;
+    stageKey?: string | null;
+    templateId?: number | null;
+    summaryAr?: string | null;
+    payload?: Record<string, unknown> | null;
+  }): Promise<boolean>;
+  /** أحداث الحالات (أو كل الأحداث إن تُركت فارغة)، مرتّبة زمنيًا تصاعديًا. */
+  listCaseEvents(caseIds?: string[]): Promise<Map<string, RecoveryCaseEvent[]>>;
 }
+
 
 export function newCaseId(): string {
   try {
@@ -97,9 +120,44 @@ export class InMemoryRecoveryStore implements RecoveryCaseStore {
   private rows = new Map<string, RecoveryCase>();
   private attempts = new Map<string, RecoveryIntervention[]>();
   private attemptIds = new Set<string>();
+  private events = new Map<string, RecoveryCaseEvent[]>();
+  private eventSeq = 0;
 
   async create(c: RecoveryCase): Promise<void> {
     this.rows.set(c.id, c);
+  }
+
+  async appendCaseEvent(e: {
+    caseId: string;
+    eventType: RecoveryCaseEventType;
+    stageKey?: string | null;
+    templateId?: number | null;
+    summaryAr?: string | null;
+    payload?: Record<string, unknown> | null;
+  }): Promise<boolean> {
+    this.eventSeq += 1;
+    const list = this.events.get(e.caseId) ?? [];
+    list.push({
+      id: `evt-${this.eventSeq}`,
+      caseId: e.caseId,
+      eventType: e.eventType,
+      stageKey: e.stageKey ?? null,
+      templateId: e.templateId ?? null,
+      summaryAr: e.summaryAr ?? "",
+      payload: e.payload ?? {},
+      createdAt: Date.now(),
+    });
+    this.events.set(e.caseId, list);
+    return true;
+  }
+
+  async listCaseEvents(caseIds?: string[]): Promise<Map<string, RecoveryCaseEvent[]>> {
+    const out = new Map<string, RecoveryCaseEvent[]>();
+    for (const [caseId, list] of this.events) {
+      if (caseIds && caseIds.length && !caseIds.includes(caseId)) continue;
+      out.set(caseId, [...list].sort((a, b) => a.createdAt - b.createdAt));
+    }
+    return out;
   }
 
   async findByIds(ids: string[]): Promise<Map<string, RecoveryCase>> {
@@ -458,7 +516,97 @@ export class SupabaseRecoveryStore implements RecoveryCaseStore {
       return false;
     }
   }
+
+  // ------------------------------------------------------------
+  // سجل أحداث الحالة — recovery_case_events (append-only)
+  // ------------------------------------------------------------
+
+  /**
+   * إضافة حدث واحد للحالة.
+   *
+   * append-only بلا update ولا delete: لا corrected ولا تصحيح يدوي.
+   * إن لم يكن الجدول موجودًا (migration-037 غير مُطبَّقة) تفشل الكتابة
+   * بهدوء وتُرجع false: السجل طبقة عرض ولا يجوز أن يوقف مسار الإرسال.
+   */
+  async appendCaseEvent(e: {
+    caseId: string;
+    eventType: RecoveryCaseEventType;
+    stageKey?: string | null;
+    templateId?: number | null;
+    summaryAr?: string | null;
+    payload?: Record<string, unknown> | null;
+  }): Promise<boolean> {
+    if (!this.guard()) return false;
+    if (!e.caseId || !e.eventType) return false;
+    try {
+      const { error } = await this.createClient().from(EVENTS_TABLE).insert({
+        case_id: e.caseId,
+        event_type: e.eventType,
+        stage_key: e.stageKey ?? null,
+        template_id: e.templateId ?? null,
+        summary_ar: (e.summaryAr ?? "").slice(0, 500),
+        payload: e.payload ?? {},
+      });
+      if (error) {
+        this.onError({ op: "create", ...safeErrorMessage(error) });
+        return false;
+      }
+      return true;
+    } catch (err) {
+      this.onError({ op: "create", message: err instanceof Error ? err.message : String(err) });
+      return false;
+    }
+  }
+
+  /**
+   * قراءة أحداث الحالات. السجل غير موجود ⇒ خريطة فارغة (fail-closed).
+   */
+  async listCaseEvents(caseIds?: string[]): Promise<Map<string, RecoveryCaseEvent[]>> {
+    const out = new Map<string, RecoveryCaseEvent[]>();
+    if (!this.guard()) return out;
+    try {
+      let query = this.createClient()
+        .from(EVENTS_TABLE)
+        .select("id, case_id, event_type, stage_key, template_id, summary_ar, payload, created_at")
+        .order("created_at", { ascending: true })
+        .limit(1000);
+      if (caseIds && caseIds.length) query = query.in("case_id", caseIds);
+      const { data } = await query;
+      for (const row of (data as Record<string, unknown>[]) || []) {
+        const event = eventFromRow(row);
+        if (!event) continue;
+        const list = out.get(event.caseId) ?? [];
+        list.push(event);
+        out.set(event.caseId, list);
+      }
+    } catch (e) {
+      this.onError({ op: "update", message: e instanceof Error ? e.message : String(e) });
+    }
+    return out;
+  }
 }
+
+/** تحويل صف recovery_case_events إلى RecoveryCaseEvent (يتجاهل الصفوف الناقصة). */
+export function eventFromRow(row: Record<string, unknown>): RecoveryCaseEvent | null {
+  const caseId = String(row.case_id ?? "");
+  const eventType = String(row.event_type ?? "") as RecoveryCaseEventType;
+  if (!caseId || !RECOVERY_CASE_EVENT_TYPES.includes(eventType)) return null;
+  const createdAt = epochOrZero(row.created_at);
+  const payload = row.payload && typeof row.payload === "object" && !Array.isArray(row.payload)
+    ? (row.payload as Record<string, unknown>)
+    : {};
+  return {
+    id: String(row.id ?? `${caseId}:${eventType}:${createdAt}`),
+    caseId,
+    eventType,
+    stageKey: row.stage_key ? String(row.stage_key) : null,
+    templateId: row.template_id === null || row.template_id === undefined ? null : Number(row.template_id),
+    summaryAr: String(row.summary_ar ?? ""),
+    payload,
+    createdAt,
+  };
+}
+
 
 function epoch(v: unknown): number | null {
   if (v === null || v === undefined) return null;

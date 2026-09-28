@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { Loader2, Users, ShoppingCart, Package, Banknote, Receipt, RefreshCcw, AlertTriangle, EyeOff, Settings2, PowerOff, Power } from "lucide-react";
+import { Loader2, Users, ShoppingCart, Package, Banknote, Receipt, RefreshCcw, AlertTriangle, EyeOff, Settings2, PowerOff, Power, Database, Eye } from "lucide-react";
 import { formatCurrency } from "@/lib/format";
 import type { ContactDecision, DiscountProposal } from "@/lib/recovery/types";
 import type { RecoveryMetrics } from "@/lib/recovery/metrics";
@@ -28,6 +28,12 @@ type CaseRow = {
 type Payload = {
   storageReady: boolean;
   enabled: boolean;
+  /** الوضع الحقيقي: true = لا إرسال في هذه الدورة. */
+  dryRun: boolean;
+  /** من أين جاءت القيم: db أو env. */
+  settingsSource?: string;
+  stagesSource?: string;
+  stagesCount?: number;
   metrics: RecoveryMetrics | null;
   cases: CaseRow[];
   message?: string;
@@ -50,22 +56,102 @@ const STATUS_LABEL: Record<string, string> = {
   SUPPRESSED: "موقوفة",
 };
 
-function SystemStatus({ enabled }: { enabled: boolean }) {
+/**
+ * حالة النظام بأ truthfully: التشغيل، جاهزية التخزين، ووضع الإرسال.
+ *
+ * لماذا هذا التفصيل: «مفعّل» وحدها كانت توحي بأن كل شيء يعمل، بينما
+ * التخزين قد يكون غير مُطبَّق، والوضع قد يكون معاينة لا إرسال. ثلاثة
+ * مؤشرات منفصلة تمنع هذا الالتباس.
+ */
+function SystemStatus({
+  enabled,
+  storageReady,
+  dryRun,
+  stagesSource,
+  stagesCount,
+}: {
+  enabled: boolean;
+  storageReady: boolean;
+  dryRun: boolean;
+  stagesSource?: string;
+  stagesCount?: number;
+}) {
   const off = !enabled;
   const view = off
     ? { label: "متوقف", hint: "النظام معطّل — لا متابعة ولا توصيات.", icon: <PowerOff className="h-4 w-4" />, cls: "border-stone-200 bg-stone-50 text-stone-600" }
     : { label: "مفعّل", hint: "النظام يعمل: متابعة الحالات وتحديثها وإغلاقها عند شراء موثّق.", icon: <Power className="h-4 w-4" />, cls: "border-emerald-200 bg-emerald-50 text-emerald-800" };
 
   return (
-    <div className={`flex items-center gap-3 rounded-xl border px-4 py-3 ${view.cls}`}>
-      {view.icon}
-      <div>
-        <p className="text-sm font-bold">حالة النظام: {view.label}</p>
-        <p className="text-[11px] opacity-80">{view.hint}</p>
+    <div className="space-y-2">
+      <div className={`flex items-center gap-3 rounded-xl border px-4 py-3 ${view.cls}`}>
+        {view.icon}
+        <div>
+          <p className="text-sm font-bold">حالة النظام: {view.label}</p>
+          <p className="text-[11px] opacity-80">{view.hint}</p>
+        </div>
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        <Badge
+          tone={storageReady ? "ok" : "warn"}
+          icon={<Database className="h-3.5 w-3.5" />}
+          label={storageReady ? "التخزين جاهز" : "التخزين غير مُطبَّق"}
+          hint={
+            storageReady
+              ? "الحالات تُسجَّل في قاعدة البيانات."
+              : "لا تُخزَّن أي حالة ولا تُرسل أي رسالة حتى تطبيق جداول Recovery."
+          }
+        />
+        <Badge
+          tone={dryRun ? "warn" : "ok"}
+          icon={<Eye className="h-3.5 w-3.5" />}
+          label={dryRun ? "وضع المعاينة" : "إرسال مباشر"}
+          hint={
+            dryRun
+              ? "يُحسب كل شيء ولا يُرسل شيء. هذا الوضع يحكم الإرسال فعليًا الآن."
+              : "عند استيفاء الشروط، تُجدول رسالة عبر المسار القائم."
+          }
+        />
+        <Badge
+          tone={stagesSource === "db" ? "ok" : "info"}
+          icon={<RefreshCcw className="h-3.5 w-3.5" />}
+          label={stagesSource === "db" ? `مراحل مخصّصة (${stagesCount ?? 0})` : "مراحل افتراضية"}
+          hint={
+            stagesSource === "db"
+              ? "المراحل مقروءة من جدول المراحل في قاعدة البيانات."
+              : "لا توجد مراحل مخصّصة بعد، والنظام يستخدم الجدول الافتراضي (30د / 6س / 24س)."
+          }
+        />
       </div>
     </div>
   );
 }
+
+function Badge({
+  tone,
+  icon,
+  label,
+  hint,
+}: {
+  tone: "ok" | "warn" | "info";
+  icon: React.ReactNode;
+  label: string;
+  hint: string;
+}) {
+  const cls =
+    tone === "ok"
+      ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+      : tone === "warn"
+        ? "border-amber-200 bg-amber-50 text-amber-800"
+        : "border-stone-200 bg-stone-50 text-stone-600";
+  return (
+    <div className={`flex items-center gap-2 rounded-lg border px-3 py-1.5 ${cls}`} title={hint}>
+      {icon}
+      <span className="text-[11px] font-bold">{label}</span>
+    </div>
+  );
+}
+
 
 export function RecoveryDashboardContent() {
   const [data, setData] = useState<Payload | null>(null);
@@ -142,7 +228,13 @@ export function RecoveryDashboardContent() {
       </header>
 
       {data ? (
-        <SystemStatus enabled={data.enabled} />
+        <SystemStatus
+          enabled={data.enabled}
+          storageReady={data.storageReady}
+          dryRun={data.dryRun}
+          stagesSource={data.stagesSource}
+          stagesCount={data.stagesCount}
+        />
       ) : (
         <div className="flex items-center gap-3 rounded-xl border border-stone-200 bg-stone-50 px-4 py-3 text-sm font-semibold text-stone-600">
           <Loader2 className="h-4 w-4 animate-spin" /> جارٍ تحميل حالة النظام…

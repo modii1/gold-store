@@ -26,6 +26,8 @@ import { computeMetrics, isVerifiedRecovery } from "./metrics";
 import { loadRecoveryConfig } from "./config";
 import type { RecoveryConfig } from "./config";
 import type { RecoveryCase } from "./types";
+import type { RecoveryStage } from "./stages";
+import type { DispatchTemplate } from "./dispatch-message";
 
 const HOUR = 3_600_000;
 const T0 = 1_700_000_000_000;
@@ -82,6 +84,8 @@ function baseCase(over: Partial<RecoveryCase> = {}): RecoveryCase {
 class FakeGateway implements RecoveryContactGateway {
   notifications: Array<{ id: string; caseId: string; title: string; message: string; category: string }> = [];
   deliveries: RecoveryDeliveryRow[] = [];
+  /** قوالب recovery المربوطة بالمراحل (نشطة وغير نشطة) — مصدر readTemplates. */
+  templates: DispatchTemplate[] = [];
   private nextId = 1;
   createCalls = 0;
 
@@ -142,6 +146,10 @@ class FakeGateway implements RecoveryContactGateway {
       });
     }
     return d.deliveryId;
+  }
+
+  async readTemplates(ids: number[]): Promise<DispatchTemplate[]> {
+    return this.templates.filter((t) => ids.includes(t.id));
   }
 }
 
@@ -703,5 +711,162 @@ describe("N7. ترتيب الدورة في المسار", () => {
     // settle() بلا وسائط: النطاق يأتي من البوابة (كل الحالات)، لا من listActive.
     expect(src).toMatch(/dispatcher\.settle\(\)/);
     expect(src).not.toMatch(/settle\(activeCases\)|settle\(cases\)/);
+  });
+});
+
+// ── T: ربط القوالب بمسار الإرسال (المرحلة 4) ──────────────────────────────
+
+function stageP(over: Partial<RecoveryStage> = {}): RecoveryStage {
+  return {
+    key: "s1",
+    nameAr: "مرحلة أولى",
+    position: 1,
+    delayMinutes: 30,
+    templateId: null,
+    isActive: true,
+    isTerminal: false,
+    maxTotalMessages: null,
+    ...over,
+  };
+}
+
+function templateT(over: Partial<DispatchTemplate> = {}): DispatchTemplate {
+  return {
+    id: 101,
+    key: "welcome",
+    nameAr: "ترحيب",
+    title: "سلتك بانتظارك",
+    body: "أهلاً {{customer.name}}، سلتك بقيمة {{cart.value_formatted}} ما زالت محفوظة.",
+    isActive: true,
+    version: 1,
+    ...over,
+  };
+}
+
+async function stagedHarness(stages: RecoveryStage[], templates: DispatchTemplate[]) {
+  const store = new InMemoryRecoveryStore();
+  const gateway = new FakeGateway();
+  gateway.templates = templates;
+  const c = baseCase();
+  await store.create(c);
+  const dispatcher = new RecoveryDispatcher(store, gateway, { ...cfg, stages }, () => T0 + 30 * HOUR);
+  return { store, gateway, dispatcher, caseRow: c };
+}
+
+describe("T. ربط القوالب بمسار الإرسال", () => {
+  it("T1. قالب المرحلة الصحيحة يُصيَّر من البيانات الفعلية ويُرسل به", async () => {
+    const { store, gateway, dispatcher, caseRow } = await stagedHarness([stageP({ templateId: 101 })], [templateT()]);
+    const out = outcomeFor(caseRow);
+    expect(out.wouldSend).toBe(true);
+
+    const s = await dispatcher.dispatch([caseRow], [out]);
+
+    expect(s.queued).toBe(1);
+    expect(s.skippedTemplateInvalid).toBe(0);
+    expect(gateway.notifications).toHaveLength(1);
+    // العنوان من القالب، والرسالة من بيانات الحالة الحقيقية.
+    expect(gateway.notifications[0].title).toBe("سلتك بانتظارك");
+    expect(gateway.notifications[0].message).toContain("عميلنا");
+    expect(gateway.notifications[0].message).toContain("250");
+    // لا تدخل ولا عدّاد عند الجدولة (دلالات settled كما هي).
+    expect((await store.listInterventions([CASE_ID])).get(CASE_ID)).toBeUndefined();
+    expect(store.all()[0].messageCount).toBe(0);
+  });
+
+  it("T2. متغيرات حالة أخرى تصل للرسالة (المنتج/السلة)", async () => {
+    const { gateway, dispatcher } = await stagedHarness(
+      [stageP({ templateId: 101 })],
+      [templateT({ body: "منتجك {{product.slug}} بقيمة {{cart.value}}" })],
+    );
+    await dispatcher.dispatch([baseCase()], [outcomeFor(baseCase())]);
+
+    expect(gateway.notifications).toHaveLength(1);
+    expect(gateway.notifications[0].message).toContain("product-1");
+    expect(gateway.notifications[0].message).toContain("250");
+  });
+
+  it("T3. قالب مفقود (المرحلة مرتبطة بمعرّف غير موجود) ⇒ لا إرسال", async () => {
+    const { gateway, dispatcher, caseRow } = await stagedHarness([stageP({ templateId: 404 })], [templateT()]);
+
+    const s = await dispatcher.dispatch([caseRow], [outcomeFor(caseRow)]);
+
+    expect(s.queued).toBe(0);
+    expect(s.skippedTemplateMissing).toBe(1);
+    expect(gateway.notifications).toHaveLength(0);
+    expect(gateway.createCalls).toBe(0);
+  });
+
+  it("T4. قالب غير مفعّل ⇒ لا إرسال", async () => {
+    const { gateway, dispatcher, caseRow } = await stagedHarness(
+      [stageP({ templateId: 101 })],
+      [templateT({ isActive: false })],
+    );
+
+    const s = await dispatcher.dispatch([caseRow], [outcomeFor(caseRow)]);
+
+    expect(s.queued).toBe(0);
+    expect(s.skippedTemplateInvalid).toBe(1);
+    expect(gateway.notifications).toHaveLength(0);
+  });
+
+  it("T5. قالب معطوب (متغير غير معروف) ⇒ لا إرسال", async () => {
+    const { gateway, dispatcher, caseRow } = await stagedHarness(
+      [stageP({ templateId: 101 })],
+      [templateT({ body: "مرحباً {{not_in_dict}}" })],
+    );
+
+    const s = await dispatcher.dispatch([caseRow], [outcomeFor(caseRow)]);
+
+    expect(s.queued).toBe(0);
+    expect(s.skippedTemplateInvalid).toBe(1);
+    expect(gateway.notifications).toHaveLength(0);
+  });
+
+  it("T6. رسالة تنتج فارغة (كلها متغير خصم داخلي) ⇒ لا إرسال", async () => {
+    const { gateway, dispatcher, caseRow } = await stagedHarness(
+      [stageP({ templateId: 101 })],
+      [templateT({ body: "{{discount.percent}}" })],
+    );
+
+    const s = await dispatcher.dispatch([caseRow], [outcomeFor(caseRow)]);
+
+    expect(s.queued).toBe(0);
+    expect(s.skippedTemplateRender).toBe(1);
+    expect(gateway.notifications).toHaveLength(0);
+  });
+
+  it("T7. مرحلة بلا قالب ⇒ الرسالة الافتراضية المحايدة كما كانت", async () => {
+    const { gateway, dispatcher, caseRow } = await stagedHarness([stageP({ templateId: null })], []);
+
+    const s = await dispatcher.dispatch([caseRow], [outcomeFor(caseRow)]);
+
+    expect(s.queued).toBe(1);
+    expect(gateway.notifications).toHaveLength(1);
+    expect(gateway.notifications[0].message).toBe(buildRecoveryMessage(caseRow).message);
+    expect(gateway.notifications[0].message).not.toMatch(/%|كوبون|خصم/);
+  });
+
+  it("T8. قالب فعّال سليم مع نص يذكر الخصم الداخلي ⇒ لا يصل للعميل", async () => {
+    const { gateway, dispatcher, caseRow } = await stagedHarness(
+      [stageP({ templateId: 101 })],
+      [templateT({ body: "تذكير سلة بقيمة {{cart.value}}. خصمك المقترح {{discount.percent}}." })],
+    );
+    await dispatcher.dispatch([caseRow], [outcomeFor(caseRow)]);
+
+    expect(gateway.notifications).toHaveLength(1);
+    // internal discount token يُحذف من مسار العميل ويُسجَّل — لا يصل الرقم ولا %.
+    expect(gateway.notifications[0].message).toContain("250");
+    expect(gateway.notifications[0].message).not.toMatch(/%/);
+    expect(gateway.notifications[0].message).not.toContain("discount");
+  });
+
+  it("T9. لا مراحل محددة ⇒ fail-safe بلا إرسال", async () => {
+    const { gateway, dispatcher, caseRow } = await stagedHarness([], []);
+
+    const s = await dispatcher.dispatch([caseRow], [outcomeFor(caseRow)]);
+
+    expect(s.queued).toBe(0);
+    expect(s.skippedNoStage).toBe(1);
+    expect(gateway.notifications).toHaveLength(0);
   });
 });

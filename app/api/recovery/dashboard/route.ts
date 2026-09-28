@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
 import { getAdminSession } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { loadRecoveryConfig } from "@/lib/recovery/config";
-import { readRecoveryEnabled } from "@/lib/recovery/toggle";
+import { loadEffectiveRecoveryConfig } from "@/lib/recovery/settings-store";
 import { maskPhone, SupabaseRecoveryStore } from "@/lib/recovery/store";
 import { RecoveryEngine } from "@/lib/recovery/engine";
 import { computeMetrics, isVerifiedRecovery } from "@/lib/recovery/metrics";
@@ -16,29 +15,36 @@ export const runtime = "nodejs";
  * GET /api/recovery/dashboard — قراءة فقط. لا يكتب شيئًا.
  * يعرض: المرشحون، غير المكتمل، المؤهلون للخصم، المسترجعون، المعدل،
  * الإيراد المسترجع، تكلفة الخصومات، الصافي، والمانعون بسبب cooldown.
+ *
+ * مصدر الإعدادات نفس مصدر دورة التشغيل (loadEffectiveRecoveryConfig)،
+ * فحقل dryRun هنا هو نفسه الذي يحكم الإرسال — لا عرض لواقع آخر.
  */
 export async function GET() {
   const admin = await getAdminSession();
   if (!admin) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
   // مصدر الحقيقة للتشغيل: settings.recovery_enabled (لا متغيّرات النشر).
-  const enabled = await readRecoveryEnabled();
-  const cfg = { ...loadRecoveryConfig(), enabled };
+  const { cfg, settingsSource, stagesSource, errors } = await loadEffectiveRecoveryConfig();
   const store = new SupabaseRecoveryStore();
   const ready = await store.ensureReady();
 
   if (!ready) {
     return NextResponse.json({
-      dryRun: true,
-      disabled: true,
+      dryRun: cfg.dryRun,
+      disabled: !cfg.enabled,
       storageReady: false,
       enabled: cfg.enabled,
+      settingsSource,
+      stagesSource,
+      stagesCount: cfg.stages.length,
+      readErrors: errors,
       metrics: null,
       cases: [],
       outcomes: [],
       message: `نظام الاسترجاع في وضع الجاهزية: لا يوجد تخزين فعّال بعد. لن يتم تخزين أي حالة ولا إرسال أي رسالة. (${store.error ?? "الجدول recovery_cases غير موجود — يُحفظ حتى الموافقة على migration-034"})`,
     });
   }
+
 
   try {
     const engine = new RecoveryEngine(store, cfg);
@@ -76,10 +82,15 @@ export async function GET() {
 
     return NextResponse.json({
       dryRun: cfg.dryRun,
-    disabled: !cfg.enabled,
+      disabled: !cfg.enabled,
       storageReady: true,
       enabled: cfg.enabled,
+      settingsSource,
+      stagesSource,
+      stagesCount: cfg.stages.length,
+      readErrors: errors,
       metrics,
+
       cases: all.slice(0, 100).map((c: RecoveryCase) => ({
         id: c.id,
         // الخصوصية: لا نعرض رقم الجوال كاملًا في اللوحة (يظل masker فقط).

@@ -5,6 +5,9 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { RecoveryCaseStore } from "./store";
 import type { ContactOutcome, RecoveryCase } from "./types";
 import type { RecoveryConfig } from "./config";
+import { activeStages } from "./stages";
+import { buildDefaultRecoveryMessage, buildDispatchMessage, decisionLabelAr } from "./dispatch-message";
+import type { DispatchTemplate } from "./dispatch-message";
 
 /**
  * Recovery dispatcher - two phases over the EXISTING WhatsApp path in gold-store:
@@ -90,6 +93,11 @@ export interface RecoveryContactGateway {
   listRecoveryCaseIds(): Promise<string[]>;
   /** All whatsapp deliveries that belong to the given recovery cases. */
   listRecoveryDeliveries(caseIds: string[]): Promise<RecoveryDeliveryRow[]>;
+  /**
+   * قوالب recovery المربوطة بمراحل سترسل — قراءة بالمعرّفات (نشطة وغير
+   * نشطة). مرجع اختيار المرحلة → القالب → النص في buildDispatchMessage.
+   */
+  readTemplates(ids: number[]): Promise<DispatchTemplate[]>;
 }
 
 // ---------------------------------------------------------------
@@ -103,14 +111,11 @@ export interface RecoveryContactGateway {
  * path exists in this system and advertising an unredeemable discount would be
  * a false promise. recommendedDiscount stays an internal proposal - it is not
  * rendered into the message and never becomes a coupon_ref.
+ *
+ * This is the default for stages with no bound template (templateId = null);
+ * staged messages come from buildDispatchMessage in ./dispatch-message.
  */
-export function buildRecoveryMessage(c: RecoveryCase): { title: string; message: string } {
-  const item = c.preferredProductSlug ? ` (${c.preferredProductSlug})` : "";
-  return {
-    title: "سلتك ما زالت محفوظة",
-    message: `لاحظنا سلة غير مكتملة${item} في متجرنا، ونود إتمام طلبك. يمكنك الرجوع إلى سلتك في أي وقت لإكمال الشراء.`,
-  };
-}
+export const buildRecoveryMessage = buildDefaultRecoveryMessage;
 
 // ---------------------------------------------------------------
 // Idempotency - deterministic keys, no migration required
@@ -208,6 +213,29 @@ export class SupabaseRecoveryContactGateway implements RecoveryContactGateway {
     return { created: true, duplicate: false };
   }
 
+  async readTemplates(ids: number[]): Promise<DispatchTemplate[]> {
+    const clean = (ids || []).filter((n) => Number.isInteger(n) && n > 0);
+    if (!clean.length) return [];
+    const supabase = this.createClient();
+    const { data, error } = await supabase
+      .from("recovery_templates")
+      .select("id, key, name_ar, title, body, is_active, version")
+      .in("id", clean);
+    if (error || !data) {
+      if (error) console.error("[recovery-dispatch] template read failed:", error.message?.slice(0, 200));
+      return [];
+    }
+    return ((data as Record<string, unknown>[]) || []).map((row) => ({
+      id: Number(row.id),
+      key: String(row.key ?? ""),
+      nameAr: String(row.name_ar ?? "").trim() || String(row.key ?? ""),
+      title: String(row.title ?? ""),
+      body: String(row.body ?? ""),
+      isActive: row.is_active === true,
+      version: Number.isInteger(row.version) ? Number(row.version) : 1,
+    }));
+  }
+
   async listRecoveryCaseIds(): Promise<string[]> {
     const supabase = this.createClient();
     const { data, error } = await supabase
@@ -287,6 +315,14 @@ export type DispatchSummary = {
   skippedDuplicate: number;
   skippedNoIdentity: number;
   skippedInvalidPhone: number;
+  /** لا يمكن تحديد مرحلة الحالة (fail-safe — لا إرسال). */
+  skippedNoStage: number;
+  /** المرحلة مرتبطة بقالب غير موجود في القاعدة. */
+  skippedTemplateMissing: number;
+  /** قالب معطوب أو غير مفعّل (fail-safe — لا إرسال). */
+  skippedTemplateInvalid: number;
+  /** تعذّر بناء رسالة صحيحة (متغيرات غير معروفة / نص فارغ). */
+  skippedTemplateRender: number;
 };
 
 export class RecoveryDispatcher {
@@ -314,6 +350,10 @@ export class RecoveryDispatcher {
       skippedDuplicate: 0,
       skippedNoIdentity: 0,
       skippedInvalidPhone: 0,
+      skippedNoStage: 0,
+      skippedTemplateMissing: 0,
+      skippedTemplateInvalid: 0,
+      skippedTemplateRender: 0,
     };
     if (!this.cfg.enabled || this.cfg.dryRun) return summary;
 
@@ -326,6 +366,13 @@ export class RecoveryDispatcher {
       if (row.status === "sent") continue;
       inFlight.add(row.caseId);
     }
+
+    // قوالب المراحل المربوطة تقرأ مرة واحدة (نشطة وغير نشطة) قبل الحلقة،
+    // فيُبنى النص من الصورة النهائية التي سيُرسَل بها — بلا طلب متكرر.
+    const boundIds = outcomes.some((o) => o.wouldSend)
+      ? [...new Set(activeStages(this.cfg.stages).map((s) => s.templateId).filter((n): n is number => n !== null))]
+      : [];
+    const templates = boundIds.length ? await this.gateway.readTemplates(boundIds) : [];
 
     for (const outcome of outcomes) {
       if (!outcome.wouldSend) continue;
@@ -346,7 +393,37 @@ export class RecoveryDispatcher {
         continue;
       }
 
-      const { title, message } = buildRecoveryMessage(c);
+      const built = buildDispatchMessage({
+        case: c,
+        stages: this.cfg.stages,
+        templates,
+        discount: outcome.recommendedDiscount,
+        now: this.now(),
+        expiryHours: this.cfg.expiryHours,
+        decisionAr: decisionLabelAr(outcome.decision),
+      });
+
+      if (built.status === "block") {
+        switch (built.reason) {
+          case "no_stage":
+            summary.skippedNoStage++;
+            break;
+          case "template_missing":
+            summary.skippedTemplateMissing++;
+            break;
+          case "template_inactive":
+          case "template_invalid":
+            summary.skippedTemplateInvalid++;
+            break;
+          case "render_unknown":
+          case "empty_message":
+            summary.skippedTemplateRender++;
+            break;
+        }
+        continue;
+      }
+
+      const { title, message } = built;
       const result = await this.gateway.createWhatsAppContact({
         notificationId: deterministicNotificationId(c.id, c.messageCount),
         caseId: c.id,

@@ -1,9 +1,19 @@
 /**
  * الإعدادات الافتراضية لنظام استرجاع العملاء — كلها قابلة للتهيئة.
  * المرحلة الأولى إلزاميًا DRY_RUN: لا رسائل، لا كوبونات، لا كتابة إنتاج.
+ *
+ * ترتيب المصادر (مهم):
+ *   1) قيم بيئة النشر (RECOVERY_*) = خط الأساس، والبديل الآمن دائمًا.
+ *   2) قيم قاعدة البيانات (recovery_settings) = تجاوز لكل حقل على حدة.
+ *   3) إن لم يوجد أي مصدر = هذه القيم الافتراضية.
+ * أي حقل غير موجود/فارغ في القاعدة لا يسقط قيمة البيئة — يُترك كما هو.
  */
 
+import type { RecoveryStage } from "./stages";
+import { stagesFromReminders } from "./stages";
+
 const bool = (v: string | undefined, fallback: boolean) => (v === undefined ? fallback : v === "1" || v.toLowerCase() === "true");
+
 
 export type RecoveryConfig = {
   /** مفتاح التبديل الكلي للاستهلاك (لا يُفعَّل إلا عند الجاهزية). */
@@ -47,9 +57,22 @@ export type RecoveryConfig = {
   maxRecoveryDiscountAmount: number;
   /** النسبة المقترحة (ضمن MAX). */
   proposedRecoveryDiscountPercent: number;
+  /**
+   * خطة المراحل المقروءة من recovery_stages (migration-038).
+   *
+   * في هذه المرحلة تُقرأ وتُعرض فقط، ولا يقرأها جدول التذكيرات بعد:
+   * `loadRecoveryConfig` يملؤها بنفس القيم المشتقّة من remindersMinutes،
+   * فسلوك المحرك لم يتغيّر. ربط المراحل بالقرار يأتي في مرحلة لاحقة.
+   */
+  stages: RecoveryStage[];
 };
 
 export function loadRecoveryConfig(env: NodeJS.ProcessEnv = process.env): RecoveryConfig {
+  const remindersMinutes = [
+    num(env.RECOVERY_REMINDER_1_MIN, 30),
+    num(env.RECOVERY_REMINDER_2_MIN, 360),
+    num(env.RECOVERY_REMINDER_3_MIN, 1440),
+  ];
   return {
     enabled: bool(env.RECOVERY_ENABLED, false),
     dryRun: bool(env.RECOVERY_DRY_RUN, true),
@@ -63,7 +86,7 @@ export function loadRecoveryConfig(env: NodeJS.ProcessEnv = process.env): Recove
     },
     scoreDecayHours: num(env.RECOVERY_SCORE_DECAY_HOURS, 168),
     messagePenalty: num(env.RECOVERY_MESSAGE_PENALTY, 10),
-    remindersMinutes: [num(env.RECOVERY_REMINDER_1_MIN, 30), num(env.RECOVERY_REMINDER_2_MIN, 360), num(env.RECOVERY_REMINDER_3_MIN, 1440)],
+    remindersMinutes,
     maxMessages: num(env.RECOVERY_MAX_MESSAGES, 3),
     globalCooldownHours: num(env.RECOVERY_GLOBAL_COOLDOWN_HOURS, 24),
     expiryHours: num(env.RECOVERY_EXPIRY_HOURS, 96),
@@ -75,6 +98,7 @@ export function loadRecoveryConfig(env: NodeJS.ProcessEnv = process.env): Recove
     maxRecoveryDiscountPercent: num(env.RECOVERY_MAX_DISCOUNT_PERCENT, 10),
     maxRecoveryDiscountAmount: num(env.RECOVERY_MAX_DISCOUNT_AMOUNT, 50),
     proposedRecoveryDiscountPercent: num(env.RECOVERY_PROPOSED_DISCOUNT_PERCENT, 10),
+    stages: stagesFromReminders(remindersMinutes),
   };
 }
 
@@ -86,27 +110,133 @@ function num(v: string | undefined, fallback: number): number {
 export const DEFAULT_RECOVERY_CONFIG = loadRecoveryConfig({} as NodeJS.ProcessEnv);
 
 /**
- * قفل Stage 1 — السلوك الفعلي كما هو اليوم:
+ * قفل الكتابة — السلوك الفعلي كما هو اليوم:
  *
- * - dryRun=true (الافتراضي): وضع المراقبة. القراءة والتقييم يعملان، والكتابة
- *   المسموحة محصورة في تسجيل بيانات القرار عبر maybeIngestRecoverySignal
- *   (canPersistCases أدناه). أما مسارات الإغلاق الكتابية — مثل
- *   completePurchaseByCustomer التي تكتب status='PURCHASED' — فمحجوبة تمامًا
- *   في DRY_RUN: تُرجع 0 ولا تكتب شيئًا. لا رسائل ولا كوبونات.
- * - dryRun=false: هو الوضع الوحيد الذي يسمح بمسارات الكتابة تلك، وبشرط
- *   enabled=true. لم تُطبَّق بعد في Production ولا يوجد في المستودع أي مسار
- *   إرسال أو كوبون، فحتى هنا يبقى الإجراء محسوبًا بلا تنفيذ فعلي.
+ * - enabled=false (المفتاح من settings.recovery_enabled): يتوقف كل شيء —
+ *   لا استيعاب ولا تقييم ولا معالجة ولا كتابة. fail-closed.
+ * - enabled=true: يسمح بتسجيل الحالات وتحديثها (canPersistCases أدناه)،
+ *   وللمسارات الكتابية مثل completePurchaseByCustomer أن تكتب،
+ *   لأن dryRun صار يُحسم في resolveRecoveryDryRun أدناه لا هنا.
  *
- * مفتاح التشغيل (enabled) صار مصدر الحقيقة من لوحة الإدارة، ومصدره
- * settings.recovery_enabled في قاعدة البيانات. canPersistCases أدناه تشترط
- * enabled وحده: فـOFF يوقف كل شيء، وON يسمح بتسجيل الحالات وتحديثها.
- * أما dryRun فلم يعد قفلًا للتشغيل — إنه يبقى للقراءة فقط ولا يظهر في
- * الواجهة، ومحرّك الإغلاق الكتابي (completePurchaseByCustomer) ما زال
- * يفرض ¬dryRun كما هو دون أي تعديل.
+ * توضيح مهم بين مفتاحين كانا يختلطان:
+ *  - enabled = مفتاح التشغيل (من لوحة الإدارة، قاعدة البيانات).
+ *  - dryRun  = وضع المعاينة (يمنع الإرسال دون إيقاف التتبّع).
+ * لم يعودا متساويين، وكل مسار يستدعي resolveRecoveryDryRun بدل ترك
+ * قيمة البيئة تتسرّب إلى العرض.
  *
- * There is no send/coupon execution layer yet, so no mode can actually
- * message a customer or mint a coupon.
+ * مسار الإرسال القائم في هذا النظام هو dispatcher.ts وهو قائم
+ * (جدولة عبر notifications ثم qr-server). لا يوجد مسار كوبون إطلاقًا،
+ * ولا يُنشأ أي خصم: كل قيم الخصم اقتراح داخلي فقط.
  */
+
 export function canPersistCases(cfg: RecoveryConfig): boolean {
   return cfg.enabled;
+}
+
+// ============================================================
+// الإعدادات من قاعدة البيانات (recovery_settings) — المراحل 1
+// ============================================================
+
+/**
+ * تجاوزات اختيارية تُخزَّن في recovery_settings.config (jsonb).
+ *
+ * كل حقل `number | null | undefined`:
+ *   null/undefined = «لم يُضبط» ⇒ تُبقى قيمة البيئة (fallback آمن).
+ * كل حقل `boolean | null | undefined` بالمعنى نفسه.
+ *
+ * لا يوجد أي حقل هنا يكتب في orders/customers/products/coupons/notifications.
+ */
+export type RecoverySettings = {
+  /** وضع المعاينة: true = لا إرسال إطلاقًا مهما بلغ التقييم. */
+  dryRun?: boolean | null;
+  maxMessages?: number | null;
+  globalCooldownHours?: number | null;
+  expiryHours?: number | null;
+  scoreDecayHours?: number | null;
+  messagePenalty?: number | null;
+  discountEligibleAfterHours?: number | null;
+  discountRequiresPriorReminder?: boolean | null;
+  minCartValueForDiscount?: number | null;
+  discountCooldownHours?: number | null;
+  maxDiscountsPerCase?: number | null;
+  maxRecoveryDiscountPercent?: number | null;
+  maxRecoveryDiscountAmount?: number | null;
+  proposedRecoveryDiscountPercent?: number | null;
+  scores?: Partial<RecoveryConfig["scores"]> | null;
+};
+
+/** الأرقام المقبولة: 0 فأكثر. أي قيمة سالبة/غير منتهية تُرفض ⇒ يبقى خط الأساس. */
+function overrideNumber(value: unknown, baseline: number): number {
+  const n = typeof value === "number" ? value : typeof value === "string" ? Number(value) : Number.NaN;
+  if (!Number.isFinite(n) || n < 0) return baseline;
+  return n;
+}
+
+function overrideBool(value: unknown, baseline: boolean): boolean {
+  return typeof value === "boolean" ? value : baseline;
+}
+
+/**
+ * قاعدة واحدة لتوحيد dryRun بين مسارات النظام (الإصلاح الجوهري):
+ *
+ *   - النظام متوقف (enabled=false) ⇒ لا إرسال إطلاقًا ⇒ dryRun = true.
+ *   - النظام مفعّل + لا يوجد ضبط في القاعدة ⇒ نفّذ الموجود فعليًا
+ *     (dryRun=false). هذا هو السلوك الحالي في مسار الـcron بالضبط،
+ *     ويصلح الخلل الذي كانت لوحة الإدارة تعرض بسببه «DRY_RUN»
+ *     بينما المسار الفعلي قادر على الإرسال.
+ *   - النظام مفعّل + ضبط صريح في القاعدة ⇒ يُحترم الضبط (معاينة أو تشغيل).
+ *
+ * dryRun ليس مفتاح تشغيل: التشغيل يبقى محكومًا بـ settings.recovery_enabled.
+ */
+export function resolveRecoveryDryRun(base: RecoveryConfig, enabled: boolean, settings: RecoverySettings = {}): boolean {
+  if (!enabled) return true;
+  return overrideBool(settings.dryRun, false);
+}
+
+/**
+ * دمج إعدادات القاعدة فوق خط أساس البيئة.
+ *
+ * قواعد ثابتة:
+ *  - الحقل غير المضبوط (null/undefined/غير صالح) ⇒ خط الأساس كما هو.
+ *  - dryRun لا يُنسخ هنا: يُحسم بـresolveRecoveryDryRun وحدها.
+ *  - enabled لا يأتي من القاعدة إطلاقًا (مصدره settings.recovery_enabled).
+ *  - dryRun لا يُقرأ من القاعدة هنا (لأن enabled يُضبط بعده).
+ *  - المراحل تأتي كما هي من القاعدة، أو مشتقّة من remindersMinutes.
+ */
+export function applyRecoverySettings(
+  base: RecoveryConfig,
+  settings: RecoverySettings = {},
+  stages?: RecoveryStage[] | null,
+): RecoveryConfig {
+  const scores = { ...base.scores };
+  const rawScores = settings.scores ?? null;
+  if (rawScores && typeof rawScores === "object") {
+    for (const key of Object.keys(scores) as (keyof RecoveryConfig["scores"])[]) {
+      scores[key] = overrideNumber((rawScores as Record<string, unknown>)[key], scores[key]);
+    }
+  }
+
+  const plan = stages && stages.length ? stages : base.stages;
+
+  return {
+    ...base,
+    scores,
+    maxMessages: overrideNumber(settings.maxMessages, base.maxMessages),
+    globalCooldownHours: overrideNumber(settings.globalCooldownHours, base.globalCooldownHours),
+    expiryHours: overrideNumber(settings.expiryHours, base.expiryHours),
+    scoreDecayHours: overrideNumber(settings.scoreDecayHours, base.scoreDecayHours),
+    messagePenalty: overrideNumber(settings.messagePenalty, base.messagePenalty),
+    discountEligibleAfterHours: overrideNumber(settings.discountEligibleAfterHours, base.discountEligibleAfterHours),
+    discountRequiresPriorReminder: overrideBool(settings.discountRequiresPriorReminder, base.discountRequiresPriorReminder),
+    minCartValueForDiscount: overrideNumber(settings.minCartValueForDiscount, base.minCartValueForDiscount),
+    discountCooldownHours: overrideNumber(settings.discountCooldownHours, base.discountCooldownHours),
+    maxDiscountsPerCase: overrideNumber(settings.maxDiscountsPerCase, base.maxDiscountsPerCase),
+    maxRecoveryDiscountPercent: overrideNumber(settings.maxRecoveryDiscountPercent, base.maxRecoveryDiscountPercent),
+    maxRecoveryDiscountAmount: overrideNumber(settings.maxRecoveryDiscountAmount, base.maxRecoveryDiscountAmount),
+    proposedRecoveryDiscountPercent: overrideNumber(
+      settings.proposedRecoveryDiscountPercent,
+      base.proposedRecoveryDiscountPercent,
+    ),
+    stages: plan,
+  };
 }

@@ -74,6 +74,62 @@ export type RecoveryCase = {
 
 export type ReminderStep = { step: number; offsetMinutes: number; at: number };
 
+/**
+ * أنواع أحداث سجل الحالة (recovery_case_events — migration-037).
+ *
+ * مبدأ السجل: يُكتب بعد وقوع الفعل لا قبله.
+ *  - signal / case_created  = استيعاب.
+ *  - stage_entered         = دخول مرحلة (يُحسم بالنتيجة لا بالنية).
+ *  - evaluated / decision  = ناتج التقييم والقرار.
+ *  - message_queued        = إدراج رسالة في المسار القائم.
+ *  - delivery_status       = تغيّر حالة التسليم كما يقرؤها المسار القائم.
+ *  - message_sent          = تأكيد الإرسال (status='sent' + sent_at).
+ *  - settled               = كتابة التدخل والعدّاد بعد الإرسال المؤكد.
+ *  - suppressed            = سبب منع (cooldown/expired/anonymous…).
+ *  - closed / closed_purchase = إغلاق الحالة، والثاني مميّز بسببه.
+ */
+export type RecoveryCaseEventType =
+  | "signal"
+  | "case_created"
+  | "stage_entered"
+  | "evaluated"
+  | "decision"
+  | "message_queued"
+  | "delivery_status"
+  | "message_sent"
+  | "settled"
+  | "suppressed"
+  | "closed"
+  | "closed_purchase";
+
+export const RECOVERY_CASE_EVENT_TYPES: RecoveryCaseEventType[] = [
+  "signal",
+  "case_created",
+  "stage_entered",
+  "evaluated",
+  "decision",
+  "message_queued",
+  "delivery_status",
+  "message_sent",
+  "settled",
+  "suppressed",
+  "closed",
+  "closed_purchase",
+];
+
+export type RecoveryCaseEvent = {
+  id: string;
+  caseId: string;
+  eventType: RecoveryCaseEventType;
+  stageKey: string | null;
+  templateId: number | null;
+  /** شرح عربي جاهز للعرض — سطر واحد يقرأه الموظف دون تفسير تقني. */
+  summaryAr: string;
+  payload: Record<string, unknown>;
+  createdAt: number;
+};
+
+
 export type DiscountProposal = {
   percent: number;
   cap: number;

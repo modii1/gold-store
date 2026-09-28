@@ -2,13 +2,16 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Package, ShoppingCart, Settings, Tag, FolderOpen, LogOut, Users, Truck, Zap, PackageSearch, RotateCcw, Bell, Settings2, FileText, LayoutTemplate, RefreshCcw } from "lucide-react";
+import { LayoutDashboard, Package, ShoppingCart, Settings, Tag, FolderOpen, LogOut, Users, Truck, Zap, PackageSearch, RotateCcw, Bell, Settings2, FileText, LayoutTemplate, RefreshCcw, ListOrdered, FlaskConical } from "lucide-react";
 import { adminLogoutAction } from "@/app/actions/logout";
 
 const links = [
   { href: "/admin/dashboard", label: "الملخص", icon: LayoutDashboard },
-  { href: "/admin/recovery", label: "استعادة المبيعات", icon: RefreshCcw },
-  { href: "/admin/recovery/settings", label: "إعدادات استعادة المبيعات", icon: Settings2 },
+  { href: "/admin/recovery", label: "استعادة المبيعات", icon: RefreshCcw, matchPrefix: "/admin/recovery" },
+  { href: "/admin/recovery/settings", label: "إعدادات الاسترجاع", icon: Settings2 },
+  { href: "/admin/recovery/stages", label: "مراحل الاسترجاع", icon: ListOrdered },
+  { href: "/admin/recovery/templates", label: "قوالب الرسائل", icon: FileText },
+  { href: "/admin/recovery/simulator", label: "محاكاة الإرسال", icon: FlaskConical },
   { href: "/admin/products", label: "المنتجات", icon: Package },
   { href: "/admin/categories", label: "التصنيفات", icon: FolderOpen },
   { href: "/admin/shipping", label: "الشحن", icon: Truck },
@@ -42,7 +45,7 @@ export function AdminSidebar() {
 
       <nav className="mt-4 flex-1 space-y-1">
         {links.map((link) => {
-          const isActive = pathname === link.href;
+          const isActive = link.matchPrefix ? pathname.startsWith(link.matchPrefix) : pathname === link.href;
           const Icon = link.icon;
           return (
             <Link

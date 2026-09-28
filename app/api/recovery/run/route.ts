@@ -1,12 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { readRecoveryEnabled } from "@/lib/recovery/toggle";
-import { loadRecoveryConfig } from "@/lib/recovery/config";
-import type { RecoveryConfig } from "@/lib/recovery/config";
+import { loadEffectiveRecoveryConfig } from "@/lib/recovery/settings-store";
 import { maskPhone, resolveOrderRef, SupabaseRecoveryStore } from "@/lib/recovery/store";
 import { isCronAuthorized } from "@/lib/recovery/cron-auth";
 import { RecoveryEngine } from "@/lib/recovery/engine";
 import { RecoveryDispatcher, SupabaseRecoveryContactGateway } from "@/lib/recovery/dispatcher";
+
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -31,10 +30,13 @@ export async function POST(req: NextRequest) {
 
   // مصدر الحقيقة بعد التحقق من السر: settings.recovery_enabled (افتراضيًا OFF).
   // OFF ⇒ لا استيعاب ولا تقييم ولا معالجة ولا أي كتابة.
-  const enabled = await readRecoveryEnabled();
-  const base = loadRecoveryConfig();
-  // dryRun ليس قفل تشغيل: عند ON نعمل بالوظائف الموجودة فعليًا في المحرّك.
-  const cfg: RecoveryConfig = { ...base, enabled, dryRun: enabled ? false : base.dryRun };
+  //
+  // loadEffectiveRecoveryConfig يجمع: مفتاح التشغيل + تجاوزات
+  // recovery_settings + مراحل recovery_stages، فوق خط أساس البيئة.
+  // وحقل dryRun يُحسم بقاعدة واحدة (resolveRecoveryDryRun) كانت مختلفة
+  // بين هذا المسار ولوحة الإدارة، فكانت اللوحة تعرض «DRY_RUN» والواقع
+  // غير ذلك. الآن المساران يقرآن نفس القيمة المحسومة.
+  const { cfg, settingsSource, stagesSource } = await loadEffectiveRecoveryConfig();
 
   // OFF: توقف كامل — لا نفتح التخزين ولا نقرأ الإشارات ولا نكتب شيئًا.
   if (!cfg.enabled) {
@@ -52,6 +54,7 @@ export async function POST(req: NextRequest) {
       outcomes: [],
     });
   }
+
 
   // 1) إتمام الحالات عند شراء حقيقي: نقرأ notification_events من نوع
   //    order.created (المصدر الموثوق الوحيد — لا نلمس جدول orders ولا نعدّله).
@@ -138,6 +141,11 @@ export async function POST(req: NextRequest) {
     disabled: false,
     storageReady: ready,
     enabled: cfg.enabled,
+    // الوضع الحقيقي كما حُسم: true = لا إرسال في هذه الدورة.
+    dryRun: cfg.dryRun,
+    settingsSource,
+    stagesSource,
+    stagesCount: cfg.stages.length,
     closedByPurchase,
     skippedInvalidOrderRef,
     skippedMissingOrderRef,
