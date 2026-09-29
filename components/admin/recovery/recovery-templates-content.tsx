@@ -49,6 +49,7 @@ type TemplateCard = {
   isActive: boolean;
   valid: boolean;
   hint: string | null;
+  builtin?: boolean;
 };
 
 const NEW_KEY = "new";
@@ -70,6 +71,7 @@ function fromRows(templates: RecoveryTemplateRowView[]): TemplateCard[] {
     isActive: t.isActive,
     valid: t.valid,
     hint: t.hint,
+    builtin: t.builtin ?? false,
   }));
 }
 
@@ -172,23 +174,51 @@ export function RecoveryTemplatesContent(props: Props) {
     }
   }
 
-  async function deleteCard(id: number) {
+  async function deleteCard(id: number | null) {
     setBusy({ type: "delete", id });
     try {
-      const res = await deleteRecoveryTemplateAction(id);
-      setFeedback({ ok: res.ok, text: res.error ?? "حُذف القالب وفُكّ رباطه بالمراحل." });
-      if (res.ok) router.refresh();
+      if (id === null) {
+        const card = cards.find((c) => c.builtin && c.id === null);
+        if (!card) return;
+        const res = await saveRecoveryTemplateAction({
+          key: card.key,
+          nameAr: card.nameAr,
+          title: card.title,
+          body: card.body,
+          isActive: false,
+        });
+        setFeedback({ ok: res.ok, text: res.error ?? "أُزيل القالب الافتراضي من الإعدادات." });
+        if (res.ok) router.refresh();
+      } else {
+        const res = await deleteRecoveryTemplateAction(id);
+        setFeedback({ ok: res.ok, text: res.error ?? "حُذف القالب وفُكّ رباطه بالمراحل." });
+        if (res.ok) router.refresh();
+      }
     } finally {
       setBusy(null);
     }
   }
 
-  async function toggleCard(id: number, active: boolean) {
+  async function toggleCard(id: number | null, active: boolean) {
     setBusy({ type: "toggle", id });
     try {
-      const res = await setRecoveryTemplateActiveAction(id, active);
-      setFeedback({ ok: res.ok, text: res.error ?? (active ? "فُعّل القالب." : "عُطّل القالب.") });
-      if (res.ok) router.refresh();
+      if (id === null) {
+        const card = cards.find((c) => c.builtin && c.id === null);
+        if (!card) return;
+        const res = await saveRecoveryTemplateAction({
+          key: card.key,
+          nameAr: card.nameAr,
+          title: card.title,
+          body: card.body,
+          isActive: active,
+        });
+        setFeedback({ ok: res.ok, text: res.error ?? (active ? "فُعّل القالب." : "عُطّل القالب.") });
+        if (res.ok) router.refresh();
+      } else {
+        const res = await setRecoveryTemplateActiveAction(id, active);
+        setFeedback({ ok: res.ok, text: res.error ?? (active ? "فُعّل القالب." : "عُطّل القالب.") });
+        if (res.ok) router.refresh();
+      }
     } finally {
       setBusy(null);
     }
@@ -465,28 +495,29 @@ function TemplateCardEditor(props: {
             {card.key || "—"} {card.id !== null && <span className="mr-1 text-stone-300">· id {card.id}</span>}
           </p>
         </div>
-        {card.id !== null && (
-          <div className="flex items-center gap-1">
-            <button
-              type="button"
-              onClick={() => onToggle?.(!isActive)}
-              disabled={!storageReady || toggling}
-              className={`inline-flex h-7 w-7 items-center justify-center rounded-lg border ${isActive ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-stone-200 text-stone-400"}`}
-              title={isActive ? "تعطيل القالب" : "تفعيل القالب"}
-            >
-              {toggling ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : isActive ? <Power className="h-3.5 w-3.5" /> : <PowerOff className="h-3.5 w-3.5" />}
-            </button>
-            <button
-              type="button"
-              onClick={onDelete}
-              disabled={!storageReady || deleting}
-              className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-rose-200 bg-rose-50 text-rose-600 hover:bg-rose-100 disabled:opacity-40"
-              title="حذف القالب"
-            >
-              {deleting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
-            </button>
-          </div>
-        )}
+        <div className="flex items-center gap-1">
+          {card.builtin && (
+            <span className="rounded bg-stone-100 px-1.5 py-0.5 text-[9px] font-bold text-stone-500">افتراضي</span>
+          )}
+          <button
+            type="button"
+            onClick={() => onToggle?.(!isActive)}
+            disabled={!storageReady || toggling}
+            className={`inline-flex h-7 w-7 items-center justify-center rounded-lg border ${isActive ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-stone-200 text-stone-400"}`}
+            title={isActive ? "تعطيل القالب" : "تفعيل القالب"}
+          >
+            {toggling ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : isActive ? <Power className="h-3.5 w-3.5" /> : <PowerOff className="h-3.5 w-3.5" />}
+          </button>
+          <button
+            type="button"
+            onClick={onDelete}
+            disabled={!storageReady || deleting}
+            className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-rose-200 bg-rose-50 text-rose-600 hover:bg-rose-100 disabled:opacity-40"
+            title={card.builtin ? "إزالة من الإعدادات" : "حذف القالب"}
+          >
+            {deleting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+          </button>
+        </div>
         {onCancel && (
           <button type="button" onClick={onCancel} className="text-[11px] font-bold text-stone-400 hover:text-stone-600">
             إلغاء

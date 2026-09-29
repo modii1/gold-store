@@ -52,6 +52,7 @@ type StageCard = {
   isTerminal: boolean;
   maxTotalMessages: string;
   templateId: string;
+  builtin?: boolean;
 };
 
 type Props = {
@@ -75,6 +76,7 @@ function fromRows(rows: RecoveryStageRowView[]): StageCard[] {
     isTerminal: r.isTerminal,
     maxTotalMessages: r.maxTotalMessages === null ? "" : String(r.maxTotalMessages),
     templateId: r.templateId === null ? "" : String(r.templateId),
+    builtin: r.builtin ?? false,
   }));
 }
 
@@ -149,23 +151,63 @@ export function RecoveryStagesContent(props: Props) {
     setBusy(null);
   }
 
-  async function remove(id: number) {
+  async function remove(id: number | null) {
     if (!window.confirm("حذف هذه المرحلة؟ الحالات والبيانات لا تتأثر.")) return;
     setBusy({ type: "delete", id });
-    const result = await deleteRecoveryStageAction(id);
-    setMessage(result.ok ? { kind: "ok", text: "حُذفت المرحلة." } : { kind: "error", text: result.error ?? "تعذّر الحذف." });
-    if (result.ok) setCards((cs) => cs.filter((c) => c.id !== id));
-    setBusy(null);
-    router.refresh();
+    try {
+      if (id === null) {
+        const card = cards.find((c) => c.builtin && c.id === null);
+        if (!card) return;
+        const result = await saveRecoveryStageAction({
+          key: card.key,
+          nameAr: card.nameAr,
+          position: card.position,
+          delayMinutes: card.delayMinutes,
+          isTerminal: card.isTerminal,
+          isActive: false,
+          maxTotalMessages: card.maxTotalMessages,
+          templateId: card.templateId,
+        });
+        setMessage(result.ok ? { kind: "ok", text: "أُزيلت المرحلة الافتراضية من الإعدادات." } : { kind: "error", text: result.error ?? "تعذّر الحذف." });
+        if (result.ok) router.refresh();
+      } else {
+        const result = await deleteRecoveryStageAction(id);
+        setMessage(result.ok ? { kind: "ok", text: "حُذفت المرحلة." } : { kind: "error", text: result.error ?? "تعذّر الحذف." });
+        if (result.ok) setCards((cs) => cs.filter((c) => c.id !== id));
+        router.refresh();
+      }
+    } finally {
+      setBusy(null);
+    }
   }
 
-  async function toggleActive(id: number, active: boolean) {
+  async function toggleActive(id: number | null, active: boolean) {
     setBusy({ type: "toggle", id });
-    const result = await setRecoveryStageActiveAction(id, active);
-    if (result.ok) patch(id, { isActive: active });
-    else setMessage({ kind: "error", text: result.error ?? "تعذّر التبديل." });
-    setBusy(null);
-    router.refresh();
+    try {
+      if (id === null) {
+        const card = cards.find((c) => c.builtin && c.id === null);
+        if (!card) return;
+        const result = await saveRecoveryStageAction({
+          key: card.key,
+          nameAr: card.nameAr,
+          position: card.position,
+          delayMinutes: card.delayMinutes,
+          isTerminal: card.isTerminal,
+          isActive: active,
+          maxTotalMessages: card.maxTotalMessages,
+          templateId: card.templateId,
+        });
+        if (result.ok) router.refresh();
+        else setMessage({ kind: "error", text: result.error ?? "تعذّر التبديل." });
+      } else {
+        const result = await setRecoveryStageActiveAction(id, active);
+        if (result.ok) patch(id, { isActive: active });
+        else setMessage({ kind: "error", text: result.error ?? "تعذّر التبديل." });
+        router.refresh();
+      }
+    } finally {
+      setBusy(null);
+    }
   }
 
   async function move(index: number, dir: -1 | 1) {
@@ -359,7 +401,7 @@ export function RecoveryStagesContent(props: Props) {
                 onMove={(dir) => move(index, dir)}
                 onSave={() => saveCard(card, false)}
                 onDelete={(id) => remove(id)}
-                onToggle={(active) => toggleActive(card.id as number, active)}
+                onToggle={(active) => toggleActive(card.id, active)}
               />
             ))}
           </div>
@@ -397,7 +439,7 @@ function StageCardRow({
   onPatch: (id: number | null, p: Partial<StageCard>) => void;
   onMove: (dir: -1 | 1) => void;
   onSave: () => void;
-  onDelete: (id: number) => void;
+  onDelete: (id: number | null) => void;
   onToggle: (active: boolean) => void;
 }) {
   const { id } = card;
@@ -420,6 +462,9 @@ function StageCardRow({
           <p className="text-[10px] leading-4 text-stone-400">المفتاح: {card.key || "—"} {card.isTerminal && <span className="mr-1 rounded bg-stone-100 px-1 py-0.5 text-[10px]">نهائية</span>}</p>
         </div>
         <div className="flex items-center gap-1">
+          {card.builtin && (
+            <span className="rounded bg-stone-100 px-1.5 py-0.5 text-[9px] font-bold text-stone-500">افتراضي</span>
+          )}
           <button type="button" onClick={() => onMove(-1)} disabled={index === 0 || !storageReady} className="rounded-lg border border-stone-200 p-1.5 text-stone-500 hover:bg-stone-100 disabled:opacity-30" title="أعلى">
             <ArrowUp className="h-3.5 w-3.5" />
           </button>
@@ -435,17 +480,15 @@ function StageCardRow({
           >
             {toggling ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : card.isActive ? <Power className="h-3.5 w-3.5" /> : <PowerOff className="h-3.5 w-3.5" />}
           </button>
-          {id !== null && (
-            <button
-              type="button"
-              onClick={() => onDelete(id)}
-              disabled={!storageReady || deleting}
-              className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-rose-200 bg-rose-50 text-rose-600 hover:bg-rose-100 disabled:opacity-40"
-              title="حذف المرحلة"
-            >
-              {deleting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
-            </button>
-          )}
+          <button
+            type="button"
+            onClick={() => onDelete(id)}
+            disabled={!storageReady || deleting}
+            className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-rose-200 bg-rose-50 text-rose-600 hover:bg-rose-100 disabled:opacity-40"
+            title={card.builtin ? "إزالة من الإعدادات" : "حذف المرحلة"}
+          >
+            {deleting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+          </button>
         </div>
       </div>
 

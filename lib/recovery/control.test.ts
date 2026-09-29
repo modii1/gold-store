@@ -1125,7 +1125,7 @@ describe("S11 — كتابة القوالب (عميل وهمي)", () => {
       },
     });
     const r = await readRecoveryTemplatesAll({ createClient: db.client });
-    expect(r.templates).toHaveLength(2);
+    expect(r.templates).toHaveLength(9);
     expect(r.templates[0]?.isActive).toBe(false);
     expect(r.templates[1]?.valid).toBe(false);
     expect(r.templates[1]?.hint).toContain("مفتاح");

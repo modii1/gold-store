@@ -19,13 +19,14 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { applyRecoverySettings, loadRecoveryConfig, resolveRecoveryDryRun } from "./config";
 import type { RecoveryConfig, RecoverySettings } from "./config";
 import { readRecoveryEnabled } from "./toggle";
-import { resolveStagePlan, stageFromRow, orderStages } from "./stages";
+import { resolveStagePlan, stageFromRow, orderStages, stagesFromReminders } from "./stages";
 import type { RecoveryStage } from "./stages";
 import { parseStageInput, parseSettingsInput, stageRowHint } from "./control-schema";
 import { CONFIDENCE_SCALAR_KEYS, INTENT_NESTED_MEMBERS, INTENT_SCALAR_KEYS } from "./control-schema";
 import type { RecoveryStageWrite } from "./control-schema";
 import { parseTemplateInput, templateRowHint } from "./template-control";
 import type { RecoveryTemplateWrite } from "./template-control";
+import { MARKETING_TEMPLATES } from "./marketing";
 
 /** جدول صف الإعدادات الوحيد. */
 const SETTINGS_TABLE = "recovery_settings";
@@ -257,7 +258,7 @@ export async function loadEffectiveRecoveryConfig(
 
 /** صف مرحلة للعرض، مع تقييم صلاحيته (حتى المعطوب يُعرض ليُصلَح لا ليُخفي). */
 export type RecoveryStageRowView = {
-  id: number;
+  id: number | null;
   key: string;
   nameAr: string;
   position: number;
@@ -269,6 +270,7 @@ export type RecoveryStageRowView = {
   valid: boolean;
   /** تلميح عربي لسبب عدم الصلاحية (null إن كان سليمًا). */
   hint: string | null;
+  builtin?: boolean;
 };
 
 export type RecoveryStagesAllResult = {
@@ -284,6 +286,21 @@ const intOrNull = (v: unknown): number | null => {
   return Number.isFinite(n) ? Math.trunc(n) : null;
 };
 
+const BUILTIN_STAGES: RecoveryStageRowView[] = stagesFromReminders([30, 360, 1440]).map((s) => ({
+  id: null,
+  key: s.key,
+  nameAr: s.nameAr,
+  position: s.position,
+  delayMinutes: s.delayMinutes,
+  isActive: true,
+  isTerminal: s.isTerminal,
+  maxTotalMessages: s.maxTotalMessages,
+  templateId: s.templateId,
+  valid: true,
+  hint: null,
+  builtin: true,
+}));
+
 /**
  * كل صفوف المراحل كما هي (بما فيها غير الصالحة ليصلحها المسؤول)، مرتّبة.
  * الصف غير الصالح يُعرض مع تلميح سبب — ولا يُسقط البقية.
@@ -298,7 +315,7 @@ export async function readRecoveryStagesAll(options: RecoverySettingsStoreOption
       .order("key", { ascending: true });
     if (error) return { rows: [], source: "empty", error: safeError(error) };
 
-    const rows: RecoveryStageRowView[] = ((data as Record<string, unknown>[]) || []).map((row) => {
+    const dbRows: RecoveryStageRowView[] = ((data as Record<string, unknown>[]) || []).map((row) => {
       const parsed = stageFromRow(row);
       const hint = stageRowHint(row);
       return {
@@ -313,10 +330,17 @@ export async function readRecoveryStagesAll(options: RecoverySettingsStoreOption
         templateId: intOrNull(row.template_id),
         valid: parsed !== null && hint === null,
         hint,
+        builtin: false,
       };
     });
 
-    return { rows, source: rows.length ? "db" : "empty", error: null };
+    if (dbRows.length === 0) {
+      return { rows: BUILTIN_STAGES, source: "empty", error: null };
+    }
+
+    const dbKeys = new Set(dbRows.map((r) => r.key));
+    const builtinNotOverridden = BUILTIN_STAGES.filter((s) => !dbKeys.has(s.key));
+    return { rows: [...dbRows, ...builtinNotOverridden], source: "db", error: null };
   } catch (e) {
     return { rows: [], source: "empty", error: safeError(e) };
   }
@@ -324,13 +348,14 @@ export async function readRecoveryStagesAll(options: RecoverySettingsStoreOption
 
 /** صف قالب للعرض والاختيار (قراءة فقط حتى مرحلة القوالب). */
 export type RecoveryTemplateRow = {
-  id: number;
+  id: number | null;
   key: string;
   nameAr: string;
   title: string;
   body: string;
   isActive: boolean;
   version: number;
+  builtin?: boolean;
 };
 
 export type RecoveryTemplatesResult = {
@@ -577,6 +602,19 @@ export type RecoveryTemplatesAllResult = {
   error: string | null;
 };
 
+const BUILTIN_TEMPLATES: RecoveryTemplateRowView[] = MARKETING_TEMPLATES.map((t) => ({
+  id: null,
+  key: t.key,
+  nameAr: t.nameAr,
+  title: t.nameAr,
+  body: t.variants[0] || "",
+  isActive: true,
+  version: 1,
+  valid: true,
+  hint: null,
+  builtin: true,
+}));
+
 /** كل القوالب (نشطة وغير نشطة) مرتبة، مع تلميح صحة كل صف. */
 export async function readRecoveryTemplatesAll(options: RecoverySettingsStoreOptions = {}): Promise<RecoveryTemplatesAllResult> {
   const createClient = options.createClient ?? createAdminClient;
@@ -587,7 +625,7 @@ export async function readRecoveryTemplatesAll(options: RecoverySettingsStoreOpt
       .order("key", { ascending: true });
     if (error) return { templates: [], source: "empty", error: safeError(error) };
 
-    const templates: RecoveryTemplateRowView[] = ((data as Record<string, unknown>[]) || []).map((row) => {
+    const dbTemplates: RecoveryTemplateRowView[] = ((data as Record<string, unknown>[]) || []).map((row) => {
       const hint = templateRowHint(row);
       return {
         id: intOrNull(row.id) ?? 0,
@@ -599,9 +637,17 @@ export async function readRecoveryTemplatesAll(options: RecoverySettingsStoreOpt
         version: intOrNull(row.version) ?? 1,
         valid: hint === null,
         hint,
+        builtin: false,
       };
     });
-    return { templates, source: templates.length ? "db" : "empty", error: null };
+
+    if (dbTemplates.length === 0) {
+      return { templates: BUILTIN_TEMPLATES, source: "empty", error: null };
+    }
+
+    const dbKeys = new Set(dbTemplates.map((t) => t.key));
+    const builtinNotOverridden = BUILTIN_TEMPLATES.filter((t) => !dbKeys.has(t.key));
+    return { templates: [...dbTemplates, ...builtinNotOverridden], source: "db", error: null };
   } catch (e) {
     return { templates: [], source: "empty", error: safeError(e) };
   }

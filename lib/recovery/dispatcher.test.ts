@@ -149,7 +149,7 @@ class FakeGateway implements RecoveryContactGateway {
   }
 
   async readTemplates(ids: number[]): Promise<DispatchTemplate[]> {
-    return this.templates.filter((t) => ids.includes(t.id));
+    return this.templates.filter((t) => t.id !== null && ids.includes(t.id));
   }
 }
 

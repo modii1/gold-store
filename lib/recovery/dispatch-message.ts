@@ -23,7 +23,7 @@ import type { ContactDecision, DiscountProposal, RecoveryCase, RecoveryCouponVie
 
 /** صورة قالب تُقرأ من القاعدة (أو من الواجهة) لبناء الرسالة. */
 export type DispatchTemplate = {
-  id: number;
+  id: number | null;
   key: string;
   nameAr: string;
   title: string;
