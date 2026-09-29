@@ -2,13 +2,9 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Package, LogOut, Heart, ShoppingBag, Phone, MapPin, ExternalLink, RotateCcw, Truck, Banknote, Home, LayoutDashboard, Bell, Clock, CheckCircle2, XCircle } from "lucide-react";
-import { StoreHeader } from "@/components/storefront/header";
-import { StoreFooter } from "@/components/storefront/footer";
 import { getCustomerSession } from "@/lib/auth";
 import { customerLogoutAction } from "@/app/actions/logout";
 import { getOrdersByPhoneAction } from "@/app/actions/orders";
-import { getSettings } from "@/lib/services/settings";
-import { getCategoriesList } from "@/lib/services/products";
 import { formatDate } from "@/lib/format";
 import { Currency } from "@/components/storefront/currency";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -35,10 +31,8 @@ export default async function AccountPage() {
   const session = await getCustomerSession();
   if (!session) redirect("/login");
 
-  const [settings, categories, orders] = await Promise.all([
-    getSettings(),
-    getCategoriesList(),
-    getOrdersByPhoneAction(session.phone),
+  const [orders] = await Promise.all([
+    getOrdersByPhoneAction(),
   ]);
   let addresses: any[] = [];
   let returns: any[] = [];
@@ -88,9 +82,7 @@ export default async function AccountPage() {
   ];
 
   return (
-    <>
-      <StoreHeader settings={settings} categories={categories} />
-      <main className="flex-1 mx-auto max-w-7xl px-4 md:px-6 py-8">
+    <main className="flex-1 mx-auto max-w-7xl px-4 md:px-6 py-8">
         {/* Greeting */}
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
@@ -241,7 +233,5 @@ export default async function AccountPage() {
           </div>
         </div>
       </main>
-      <StoreFooter settings={settings} />
-    </>
   );
 }

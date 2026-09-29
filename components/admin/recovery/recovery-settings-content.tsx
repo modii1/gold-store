@@ -59,6 +59,11 @@ function initialDraft(cfg: RecoveryConfig): Record<string, string> {
       out[f.key] = String(cfg.scores[scoreKey as keyof RecoveryConfig["scores"]] ?? "");
     } else if (f.kind === "boolean") {
       out[f.key] = record[f.key] === true ? "true" : "false";
+    } else if (f.key.startsWith("intent.") || f.key.startsWith("confidence.")) {
+      const parts = f.key.split(".");
+      let val: unknown = cfg;
+      for (const p of parts) val = (val as Record<string, unknown>)?.[p];
+      out[f.key] = String(val ?? "");
     } else {
       out[f.key] = String(record[f.key] ?? "");
     }
