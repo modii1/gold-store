@@ -13,13 +13,13 @@
 
 import { stagesFromReminders, orderStages, activeStages } from "./stages";
 import type { RecoveryStage } from "./stages";
-import type { RecoverySettings } from "./config";
+import type { ConfidenceConfig, IntentConfig, RecoverySettings } from "./config";
 
 // ---------------------------------------------------------------
 // الحقول القابلة للضبط — مصدر واحد للتعريف عرضًا وتحققًا وتذييلًا
 // ---------------------------------------------------------------
 
-export type SettingGroup = "messaging" | "timing" | "discount" | "scores" | "mode";
+export type SettingGroup = "messaging" | "timing" | "discount" | "scores" | "mode" | "intelligence";
 
 export type SettingFieldMeta = {
   /** مفتاح الإعداد (أو scores.<name>). */
@@ -51,6 +51,7 @@ export const SETTING_GROUPS: { key: SettingGroup; labelAr: string; hintAr: strin
     hintAr: "اقتراح تحليلي للمراجعة الداخلية فقط — لا يُرسل للعميل ولا يُنشأ كود.",
   },
   { key: "scores", labelAr: "أوزان الإشارات", hintAr: "تُستخدم لترتيب الأولوية فقط، وليست احتمال شراء." },
+  { key: "intelligence", labelAr: "نموذج النية والثقة", hintAr: "درجة النية 0-100 ومستواها، ومدى اكتمال البيانات التي تدعم القرار." },
 ];
 
 export const SETTING_FIELDS: SettingFieldMeta[] = [
@@ -230,10 +231,254 @@ export const SETTING_FIELDS: SettingFieldMeta[] = [
     group: "scores",
     kind: "score",
   },
+  {
+    key: "intent.strengthBase.add_to_cart",
+    labelAr: "نية: إضافة للسلة",
+    helpAr: "درجة النية من أقوى إشارة (إضافة إلى السلة) — ليس احتمال شراء.",
+    group: "intelligence",
+    kind: "number",
+    min: 0,
+    max: 1000,
+    unitAr: "نقطة",
+  },
+  {
+    key: "intent.strengthBase.checkout_start",
+    labelAr: "نية: بدء إتمام الطلب",
+    helpAr: "درجة النية من بدء إتمام الطلب (أقوى من السلة).",
+    group: "intelligence",
+    kind: "number",
+    min: 0,
+    max: 1000,
+    unitAr: "نقطة",
+  },
+  {
+    key: "intent.strengthBase.payment_started",
+    labelAr: "نية: بدء الدفع",
+    helpAr: "درجة النية من الوصول لصفحة الدفع (أقوى إشارة مسجّلة).",
+    group: "intelligence",
+    kind: "number",
+    min: 0,
+    max: 1000,
+    unitAr: "نقطة",
+  },
+  {
+    key: "intent.repeatedViewDelta",
+    labelAr: "نية: مشاهدة متكررة (الفرق)",
+    helpAr: "نقاط لكل مشاهدة مميّزة متكررة للمنتج المفضّل عبر الجلسات.",
+    group: "intelligence",
+    kind: "number",
+    min: 0,
+    max: 500,
+    unitAr: "نقطة",
+  },
+  {
+    key: "intent.repeatedViewCap",
+    labelAr: "نية: سقف المشاهدات المتكررة",
+    helpAr: "الحد الأعلى لمساهمة المشاهدات المتكررة (منع التضخيم).",
+    group: "intelligence",
+    kind: "number",
+    min: 0,
+    max: 1000,
+    unitAr: "نقطة",
+  },
+  {
+    key: "intent.sessionDelta",
+    labelAr: "نية: جلسة مميّزة (الفرق)",
+    helpAr: "نقاط لكل جلسة إضافية شهدت نشاطًا للحالة (بعد الأولى).",
+    group: "intelligence",
+    kind: "number",
+    min: 0,
+    max: 500,
+    unitAr: "نقطة",
+  },
+  {
+    key: "intent.sessionCap",
+    labelAr: "نية: سقف الجلسات",
+    helpAr: "الحد الأعلى لمساهمة الجلسات المميّزة.",
+    group: "intelligence",
+    kind: "number",
+    min: 0,
+    max: 1000,
+    unitAr: "نقطة",
+  },
+  {
+    key: "intent.cartItemDelta",
+    labelAr: "نية: صنف سلة (الفرق)",
+    helpAr: "نقاط لكل صنف معروف في السلة.",
+    group: "intelligence",
+    kind: "number",
+    min: 0,
+    max: 500,
+    unitAr: "نقطة",
+  },
+  {
+    key: "intent.cartItemCap",
+    labelAr: "نية: سقف الأصناف",
+    helpAr: "الحد الأعلى لمساهمة عدد الأصناف في السلة.",
+    group: "intelligence",
+    kind: "number",
+    min: 0,
+    max: 1000,
+    unitAr: "نقطة",
+  },
+  {
+    key: "intent.freshnessHalfLifeHours",
+    labelAr: "نية: نصف عمر الحداثة",
+    helpAr: "بعد كم ساعة تنخفض الأثر للنصف (كلما زاد الفعل أقوى على مدى أطول).",
+    group: "intelligence",
+    kind: "number",
+    min: 1,
+    max: 8760,
+    unitAr: "ساعة",
+  },
+  {
+    key: "confidence.identifiedWeight",
+    labelAr: "ثقة: عميل معرّف",
+    helpAr: "وزن كون العميل مسجّلًا ومحدد الهوية.",
+    group: "intelligence",
+    kind: "number",
+    min: 0,
+    max: 100,
+    unitAr: "نقطة",
+  },
+  {
+    key: "confidence.signalWeight",
+    labelAr: "ثقة: إشارات مميّزة",
+    helpAr: "نقاط لكل إشارة مميّزة خلال الحالة (بلا عدّ مزدوج).",
+    group: "intelligence",
+    kind: "number",
+    min: 0,
+    max: 100,
+    unitAr: "نقطة",
+  },
+  {
+    key: "confidence.signalCap",
+    labelAr: "ثقة: سقف الإشارات",
+    helpAr: "الحد الأعلى لمساهمة الإشارات المميّزة.",
+    group: "intelligence",
+    kind: "number",
+    min: 0,
+    max: 500,
+    unitAr: "نقطة",
+  },
+  {
+    key: "confidence.hasProductWeight",
+    labelAr: "ثقة: المنتج معلوم",
+    helpAr: "وزن معرفة المنتج المفضّل للحالة.",
+    group: "intelligence",
+    kind: "number",
+    min: 0,
+    max: 100,
+    unitAr: "نقطة",
+  },
+  {
+    key: "confidence.cartValueWeight",
+    labelAr: "ثقة: قيمة السلة معلومة",
+    helpAr: "وزن معرفة قيمة السلة.",
+    group: "intelligence",
+    kind: "number",
+    min: 0,
+    max: 100,
+    unitAr: "نقطة",
+  },
+  {
+    key: "confidence.sessionWeight",
+    labelAr: "ثقة: جلسة (فرق)",
+    helpAr: "نقاط لكل جلسة مميّزة إضافية تثبت تكرار الاهتمام.",
+    group: "intelligence",
+    kind: "number",
+    min: 0,
+    max: 100,
+    unitAr: "نقطة",
+  },
+  {
+    key: "confidence.sessionCap",
+    labelAr: "ثقة: سقف الجلسات",
+    helpAr: "الحد الأعلى لمساهمة الجلسات.",
+    group: "intelligence",
+    kind: "number",
+    min: 0,
+    max: 500,
+    unitAr: "نقطة",
+  },
+  {
+    key: "confidence.stalenessHours",
+    labelAr: "ثقة: بداية التقادم",
+    helpAr: "بعد كم ساعة من آخر نشاط تُخصم نقاط التقادم.",
+    group: "intelligence",
+    kind: "number",
+    min: 1,
+    max: 8760,
+    unitAr: "ساعة",
+  },
+  {
+    key: "confidence.stalenessPenalty",
+    labelAr: "ثقة: خصم التقادم",
+    helpAr: "كم تُخصم عند تجاوز فترة الحداثة (دون الوصول للتقادم الشديد).",
+    group: "intelligence",
+    kind: "number",
+    min: 0,
+    max: 100,
+    unitAr: "نقطة",
+  },
+  {
+    key: "confidence.extremeStaleHours",
+    labelAr: "ثقة: التقادم الحاد",
+    helpAr: "بعد هذا الحد تُحبس الثقة في المستوى الأدنى — لا ثقة عالية ببيانات معتّقة.",
+    group: "intelligence",
+    kind: "number",
+    min: 1,
+    max: 8760,
+    unitAr: "ساعة",
+  },
 ];
 
 /** أسماء أعضاء scores المعروفة (يُستخدم للتحقق من إدخال النموذج). */
 export const SCORE_KEYS = ["product_view", "repeated_product_view", "add_to_cart", "checkout_start", "payment_started", "purchase"] as const;
+
+/** مفاتيح مقصورة النية العددية المسطّحة (تُكتب في jsonb داخل intent.*). */
+export const INTENT_SCALAR_KEYS = [
+  "repeatedViewDelta",
+  "repeatedViewCap",
+  "sessionDelta",
+  "sessionCap",
+  "cartItemDelta",
+  "cartItemCap",
+  "freshnessHalfLifeHours",
+] as const;
+
+/** المجموعات المتداخلة داخل مقصورة النية وأعضاء كل منها. */
+export const INTENT_NESTED_MEMBERS: Record<"strengthBase" | "levels", readonly string[]> = {
+  strengthBase: ["add_to_cart", "checkout_start", "payment_started", "purchase"],
+  levels: ["veryLow", "low", "medium", "high"],
+};
+
+/** مفاتيح مقصورة الثقة العددية المسطّحة (تُكتب في jsonb داخل confidence.*). */
+export const CONFIDENCE_SCALAR_KEYS = [
+  "identifiedWeight",
+  "signalWeight",
+  "signalCap",
+  "hasProductWeight",
+  "cartValueWeight",
+  "sessionWeight",
+  "sessionCap",
+  "stalenessHours",
+  "stalenessPenalty",
+  "extremeStaleHours",
+  "maxScoreForExtremeStale",
+  "levelLow",
+  "levelHigh",
+] as const;
+
+/**
+ * مسار إسقاط المفاتيح المسطّحة في النموذج (intent.x / confidence.x)
+ * إلى مسار متداخل باسم القسم والمسار الداخلي المتبقّي.
+ */
+const FLAT_NEST_MAP: Record<string, { section: "intent" | "confidence"; path: string }> = {};
+for (const f of SETTING_FIELDS) {
+  if (f.key.startsWith("intent.")) FLAT_NEST_MAP[f.key] = { section: "intent", path: f.key.slice("intent.".length) };
+  if (f.key.startsWith("confidence.")) FLAT_NEST_MAP[f.key] = { section: "confidence", path: f.key.slice("confidence.".length) };
+}
 
 const NUM_KEYS = SETTING_FIELDS.filter((f) => f.kind === "number").map((f) => f.key);
 const BOOL_KEYS = SETTING_FIELDS.filter((f) => f.kind === "boolean").map((f) => f.key);
@@ -254,7 +499,9 @@ export function isKnownSettingKey(key: string): boolean {
 export function parseSettingsInput(raw: Record<string, unknown>): { ok: boolean; settings: RecoverySettings; errors: string[] } {
   const settings: RecoverySettings = {};
   const errors: string[] = [];
-  const scoresRaw: Record<string, unknown> = {};
+  const scoresRaw: Record<string, number> = {};
+  const intentRaw: Record<string, number> = {};
+  const confRaw: Record<string, number> = {};
 
   for (const [key, value] of Object.entries(raw)) {
     // «scores» المضمّنة (كائن) تُفكّ إلى أعضائها الستة المعروفة.
@@ -272,6 +519,12 @@ export function parseSettingsInput(raw: Record<string, unknown>): { ok: boolean;
           scoresRaw[sf] = n;
         }
       }
+      continue;
+    }
+
+    // «intent» المضمّنة (كائن) — تعامل كـ scores تمامًا.
+    if ((key === "intent" || key === "confidence") && value && typeof value === "object" && !Array.isArray(value)) {
+      collectCompartment(key, value as Record<string, unknown>, key === "intent" ? intentRaw : confRaw, errors);
       continue;
     }
 
@@ -343,6 +596,9 @@ export function parseSettingsInput(raw: Record<string, unknown>): { ok: boolean;
           settings.scoreDecayHours = num;
           break;
       }
+      // مفاتيح النموذج المسطّحة لنموذجي النية والثقة (intent.* / confidence.*).
+      const nest = FLAT_NEST_MAP[key];
+      if (nest) (nest.section === "intent" ? intentRaw : confRaw)[nest.path] = num;
     }
   }
 
@@ -355,7 +611,60 @@ export function parseSettingsInput(raw: Record<string, unknown>): { ok: boolean;
     if (Object.keys(scores).length) settings.scores = scores as RecoverySettings["scores"];
   }
 
+  if (Object.keys(intentRaw).length) settings.intent = materializeNested(intentRaw) as Partial<IntentConfig>;
+  if (Object.keys(confRaw).length) settings.confidence = materializeNested(confRaw) as Partial<ConfidenceConfig>;
+
   return { ok: errors.length === 0, settings, errors };
+}
+
+/**
+ * جمع مقصورة كائن (intent/confidence) إلى خريطة مسارات نقاط.
+ * المفاتيح المعروفة فقط تُقبل؛ غير المعروف خطأ صريح كبقية النموذج.
+ */
+function collectCompartment(
+  section: string,
+  box: Record<string, unknown>,
+  out: Record<string, number>,
+  errors: string[]
+): void {
+  const scalarKeys = section === "intent" ? (INTENT_SCALAR_KEYS as readonly string[]) : (CONFIDENCE_SCALAR_KEYS as readonly string[]);
+  const nested = section === "intent" ? INTENT_NESTED_MEMBERS : null;
+  for (const [k, v] of Object.entries(box)) {
+    if ((scalarKeys as readonly string[]).includes(k)) {
+      const meta = SETTING_FIELDS.find((f) => f.key === `${section}.${k}`);
+      const n = meta ? parseNumber(v, meta.min ?? 0, meta.max) : validateFiniteNonNeg(v);
+      if (n === null) errors.push(`«${section}.${k}» يجب أن تكون رقمًا غير سالب`);
+      else out[k] = n;
+      continue;
+    }
+    if (nested && k in nested && v && typeof v === "object" && !Array.isArray(v)) {
+      const group = k as keyof typeof nested;
+      for (const m of nested[group]) {
+        const n = parseFinite((v as Record<string, unknown>)[m]);
+        if (n === null || n < 0) errors.push(`«${section}.${group}.${m}» يجب أن تكون رقمًا غير سالب`);
+        else out[`${group}.${m}`] = n;
+      }
+      continue;
+    }
+    errors.push(`حقل غير معروف في نموذج النية/الثقة: ${section}.${k}`);
+  }
+}
+
+/** تحويل خريطة مسارات نقطية (a.b.c ⇒ متداخل) إلى كائن مفلطح بنتائج سليمة. */
+function materializeNested(paths: Record<string, number>): Record<string, number | Record<string, number>> {
+  const out: Record<string, number | Record<string, number>> = {};
+  for (const [path, n] of Object.entries(paths)) {
+    const parts = path.split(".");
+    if (parts.length === 1) {
+      out[parts[0]] = n;
+    } else {
+      const group = parts[0];
+      const existing = (out[group] as Record<string, number> | undefined) ?? {};
+      existing[parts[1]] = n;
+      out[group] = existing;
+    }
+  }
+  return out;
 }
 
 function parseNumber(value: unknown, min: number, max: number | undefined): number | null {
@@ -371,6 +680,12 @@ function parseFinite(value: unknown): number | null {
   if (typeof value !== "string" || value.trim() === "") return null;
   const n = Number(value.trim());
   return Number.isFinite(n) ? n : null;
+}
+
+/** رقم نهائي غير سالب (للمفاتيح بلا حقل عرض في SETTING_FIELDS). */
+function validateFiniteNonNeg(value: unknown): number | null {
+  const n = parseFinite(value);
+  return n !== null && n >= 0 ? n : null;
 }
 
 function parseBool(value: unknown): boolean | null {

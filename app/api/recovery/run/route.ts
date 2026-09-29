@@ -5,6 +5,10 @@ import { maskPhone, resolveOrderRef, SupabaseRecoveryStore } from "@/lib/recover
 import { isCronAuthorized } from "@/lib/recovery/cron-auth";
 import { RecoveryEngine } from "@/lib/recovery/engine";
 import { RecoveryDispatcher, SupabaseRecoveryContactGateway } from "@/lib/recovery/dispatcher";
+import { collectRecoveryEvidence, defaultEvidenceWindowHours } from "@/lib/recovery/evidence";
+import { runRecoveryPipeline } from "@/lib/recovery/pipeline";
+import { createIncentive } from "@/lib/recovery/incentive";
+import { supabaseIncentiveStore } from "@/lib/recovery/incentive-store";
 
 
 export const dynamic = "force-dynamic";
@@ -18,9 +22,21 @@ export const runtime = "nodejs";
  *
  * التواصل (عند ON فقط) يمر عبر مسار WhatsApp القائم في gold-store:
  *   notifications → صف تسليم واتساب → qr-server → 'sent'.
- * لا Provider جديد ولا API جديدة، ولا إنشاء أكواد خصم. التسوية
+ * لا Provider جديد ولا API جديدة. التسوية
  * (recordIntervention + messageCount + lastMessageAt) لا تحدث إلا بعد قراءة
  * delivery حالتها 'sent' وsent_at موجود من qr-server.
+ *
+ * G6-C: الاسترجاع ينشئ الآن قسائم حقيقية عبر بوابة واحدة (lib/recovery/
+ * incentive.ts) — واحدة لكل حالة، مربوطة بجوالها، بسقف مبلغ، ولمرة واحدة.
+ * الإنشاء لا يحصل إلا عند `RECOMMEND_INCENTIVE`، والاستبدال لا يحصل هنا
+ * إطلاقًا (checkout وحده يستبدل، بعد إنشاء طلب حقيقي).
+ *
+ * G4 — دورة القرار صارت السلسلة الجديدة كاملة بدل ContactOutcome القديم:
+ *   analytics_events (قراءة) → Evidence → Intent → Confidence → Decision
+ *   → Marketing → Execution Guard → ContactOutcome (adapter) → dispatcher.
+ * sourceOfTruth للإرسال هو Execution Guard وحده: هل أرسل؟ = guard.allowed.
+ * المحرك القديم (evaluateContact) لم يُحذف — ما زال يخدم لوحة الاسترجاع —
+ * لكنه لم يعد يُستشار في هذه الدورة، فلا يوجد مصدران متنافسان للقرار.
  */
 export async function POST(req: NextRequest) {
   // fail-closed: لا مسار مفتوح إطلاقًا — سر غير معرَّف = رفض، لا تمرير.
@@ -117,25 +133,86 @@ export async function POST(req: NextRequest) {
   // 2) التسوية أولًا — قبل أي حساب قرارات في هذه الدورة.
   //
   //    الترتيب مقصود: التسوية تكتب messageCount/lastMessageAt لكل delivery
-  //    أكّدها qr-server بحالة 'sent'. لو حُسبت القرارات قبلها لكان engine قد
-  //    قرأ عدّادًا قديماً فيرسل رسالة ثانية فورًا بعد تأكيد الأولى.
+  //    أكّدها qr-server بحالة 'sent'. لو حُسبت القرارات قبلها لقرأت السلسلة
+  //    عدّادًا قديمًا فيُرسَل ثاني فور تأكيد الأولى، ويتجاوز cooldown.
   //    التسوية لا تقيّد نفسها بالحالات النشطة: رسالة مؤكَّدة بعد إغلاق
   //    الحالة بالشراء تبقى إرسالًا حقيقيًا يجب تسجيله.
-  const dispatcher = ready && cfg.enabled
-    ? new RecoveryDispatcher(store, new SupabaseRecoveryContactGateway(), cfg)
+  //
+  //    لحظة واحدة تُمرَّر للـdispatcher وللخطوات أدناه، فيُعاد بناء نص الرسالة
+  //    بنفس المدخلات التي فحصها Execution Guard ⇒ ما يُفحص هو ما يُدرَج.
+  const cycleNow = Date.now();
+  const gateway = ready && cfg.enabled ? new SupabaseRecoveryContactGateway() : null;
+  const dispatcher = ready && cfg.enabled && gateway
+    ? new RecoveryDispatcher(store, gateway, cfg, () => cycleNow)
     : null;
   const settled = dispatcher ? await dispatcher.settle() : null;
 
-  // 3) دورة القرار: تُقرأ الآن بعد تسوية كل الإرسالات المؤكَّدة، فالقرارات
-  //    تعتمد على عدّاد وحدّاث cooldown صحيحين. التقييم نفسه بلا أي تغيير.
-  const engine = new RecoveryEngine(store, cfg);
-  const activeCases = ready && cfg.enabled ? await store.listActive() : [];
-  const { outcomes } = ready && cfg.enabled ? await engine.runDryRunCycle() : { outcomes: [] };
+  // G6-C: عدّاد أسباب عدم إنشاء/استخدام القسيمة (بلا PII وبلا كود).
+  const skippedIncentives: Record<string, number> = {};
+  // G6-D: سبب فشل الإنشاء الأخير — يُمرَّر للتسويق ليميّز «فشل الإنشاء» عن
+  // «لا قسيمة متاحة». بلا كود ولا جوال ولا معرّف.
+  let couponFailure: string | null = null;
+  const incentiveStore = supabaseIncentiveStore();
 
-  // 4) الجدولة: تنشئ notification + delivery واتساب لكل wouldSend.
+  // 3) دورة القرار: السلسلة الجديدة كاملة (Evidence → … → Execution Guard).
+  //    تُقرأ بعد التسوية، فالقرارات تعتمد على عدّاد وحدّاث cooldown صحيحين.
+  //    القراءة والأنواع فقط — ولا إدراج ولا delivery ولا كتابة حالة.
+  //
+  //    G6-C: وحد الاسترجاع يمرّ ببوابة القسيمة. هي التي تقرر (أ) هل هذه
+  //    الحالة مرشّحة فعلًا بكوبون، و(ب) تنشئ قسيمة واحدة مربوطة بالحالة إن
+  //    لم تكن موجودة. لا تُنشأ قسيمة عند تصفّح أو سلة أو دفع وحده، ولا
+  //    تُستهلك أي قسيمة هنا: الاستبدال يحدث في checkout بعد طلب حقيقي.
+  const pipeline = ready && cfg.enabled && gateway
+    ? await runRecoveryPipeline({
+        cfg,
+        store,
+        gateway,
+        // analytics_events قراءة فقط (service role) — نفس آلية G1 المختبَرة،
+        // بلا كتابة وبلا هوية مخترَعة: الهوية من سياق الحالة لا من الأحداث.
+        readEvidence: ({ c, asOf, identity }) =>
+          collectRecoveryEvidence(
+            c.visitorId,
+            {
+              asOf,
+              windowHours: defaultEvidenceWindowHours(cfg),
+              identity,
+              preferredProductId: c.preferredProductId ?? null,
+            },
+            cfg
+          ),
+        resolveCoupon: async (c, context) => {
+          const result = await createIncentive(
+            {
+              c,
+              cfg,
+              // المحرك وحده يقرر وجود الحافز في هذه الدورة: لا تصفّح ولا
+              // إضافة للسلة ولا بدء دفع يكفي.
+              incentiveCandidate: context.decision.decision === "RECOMMEND_INCENTIVE",
+              now: context.now,
+            },
+            incentiveStore
+          );
+          // سبب التخطي يُعدّ للتشخيص فقط — بلا كود ولا جوال ولا معرّف.
+          if (!result.ok) {
+            skippedIncentives[result.reason] = (skippedIncentives[result.reason] ?? 0) + 1;
+            couponFailure = result.reason;
+            return null;
+          }
+          return result.coupon;
+        },
+        couponFailure,
+        now: () => cycleNow,
+      })
+    : null;
+
+  // 4) الجدولة: نفس الـdispatcher الموجودة، بنفس الصفوف التي حُوِّم عليها
+  //    (فالنص المُفحص والمُدرَج نصوص واحدة) ونتائج الـadapter وحدها.
   //    هي الخطوة الوحيدة التي تُدرج، وهي لا تسجّل شيئًا كإرسال.
-  const dispatched = dispatcher ? await dispatcher.dispatch(activeCases, outcomes) : null;
+  const dispatched = dispatcher && pipeline
+    ? await dispatcher.dispatch(pipeline.cases, pipeline.outcomes)
+    : null;
 
+  const outcomes = pipeline ? pipeline.outcomes : [];
   return NextResponse.json({
     ok: true,
     disabled: false,
@@ -149,9 +226,20 @@ export async function POST(req: NextRequest) {
     closedByPurchase,
     skippedInvalidOrderRef,
     skippedMissingOrderRef,
-    plannedMessages: outcomes.filter((o) => o.wouldSend).length,
+    plannedMessages: pipeline ? pipeline.counters.allowed : 0,
+    // ملخّص Execution Guard: ماذا رُفض ولماذا (بلا PII وبلا نص رسالة).
+    pipeline: pipeline
+      ? {
+          considered: pipeline.counters.considered,
+          allowed: pipeline.counters.allowed,
+          renderBlocked: pipeline.counters.renderBlocked,
+          blockedBy: pipeline.counters.blockedBy,
+        }
+      : null,
     dispatched,
     settled,
+    // G6-C: كم حالة لم تُنشأ لها قسيمة ولماذا — أسماء أسباب فقط.
+    incentives: skippedIncentives,
     outcomes: outcomes.slice(0, 50),
   });
 }

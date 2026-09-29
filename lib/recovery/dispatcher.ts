@@ -398,6 +398,9 @@ export class RecoveryDispatcher {
         stages: this.cfg.stages,
         templates,
         discount: outcome.recommendedDiscount,
+        // G6-C: نفس القسيمة التي فُحص نصها في الـpipeline — لا يُعاد بناء نص
+        // حافز بلا كود، ولا يُختلق كود من خارج الـoutcome.
+        coupon: outcome.coupon ?? null,
         now: this.now(),
         expiryHours: this.cfg.expiryHours,
         decisionAr: decisionLabelAr(outcome.decision),
@@ -415,6 +418,7 @@ export class RecoveryDispatcher {
           case "template_invalid":
             summary.skippedTemplateInvalid++;
             break;
+          case "coupon_required":
           case "render_unknown":
           case "empty_message":
             summary.skippedTemplateRender++;
@@ -550,8 +554,9 @@ export class RecoveryDispatcher {
         caseId: row.caseId,
         channel: row.channel,
         sentAt,
-        // No real coupon path exists - never invent a reference.
-        couponRef: null,
+        // G6-C: القسيمة المعروضة في الرسالة نفسها، كما سجّلها createIncentive
+        // على الحالة. لا شيء يُخترع: لا قسيمة ⇒ null كما كان.
+        couponRef: known.discountRef ?? null,
       });
 
       if (!recorded) {
@@ -589,7 +594,7 @@ export class RecoveryDispatcher {
       }
 
       const list = existing.get(row.caseId) ?? [];
-      list.push({ caseId: row.caseId, channel: row.channel, sentAt, couponRef: null });
+      list.push({ caseId: row.caseId, channel: row.channel, sentAt, couponRef: known.discountRef ?? null });
       existing.set(row.caseId, list);
 
       // lastMessageAt is set to sent_at, so cooldown and maxMessages are

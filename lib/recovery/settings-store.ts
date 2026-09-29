@@ -22,6 +22,7 @@ import { readRecoveryEnabled } from "./toggle";
 import { resolveStagePlan, stageFromRow, orderStages } from "./stages";
 import type { RecoveryStage } from "./stages";
 import { parseStageInput, parseSettingsInput, stageRowHint } from "./control-schema";
+import { CONFIDENCE_SCALAR_KEYS, INTENT_NESTED_MEMBERS, INTENT_SCALAR_KEYS } from "./control-schema";
 import type { RecoveryStageWrite } from "./control-schema";
 import { parseTemplateInput, templateRowHint } from "./template-control";
 import type { RecoveryTemplateWrite } from "./template-control";
@@ -137,11 +138,49 @@ export async function readRecoverySettings(
       }
       if (Object.keys(clean).length) settings.scores = clean as unknown as RecoverySettings["scores"];
     }
+    const intent = copyRecoveryCompartment(config, "intent", INTENT_SCALAR_KEYS, INTENT_NESTED_MEMBERS);
+    if (Object.keys(intent).length) settings.intent = intent as unknown as RecoverySettings["intent"];
+    const confidence = copyRecoveryCompartment(config, "confidence", CONFIDENCE_SCALAR_KEYS, null);
+    if (Object.keys(confidence).length) settings.confidence = confidence as unknown as RecoverySettings["confidence"];
     const hasAny = Object.keys(settings).length > 0;
     return { settings, source: hasAny ? "db" : "empty", error: null };
   } catch (e) {
     return { settings: {}, source: "empty", error: safeError(e) };
   }
+}
+
+/**
+ * نسخ مقصورة (intent/confidence) من jsonb الإعدادات — ينسخ القيم الرقمية
+ * المعروفة فقط، وبالشكل المتداخل (members داخل groups كـ strengthBase).
+ * أي قيمة غير رقمية/غير معروفة تُتجاهل: لا تُنشر إلى المحرك أبدًا.
+ */
+function copyRecoveryCompartment(
+  config: Record<string, unknown>,
+  section: string,
+  scalarKeys: readonly string[],
+  nested: Record<string, readonly string[]> | null,
+): Record<string, number | Record<string, number>> {
+  const box = config[section];
+  if (!box || typeof box !== "object" || Array.isArray(box)) return {};
+  const raw = box as Record<string, unknown>;
+  const out: Record<string, number | Record<string, number>> = {};
+  for (const k of scalarKeys) {
+    const v = raw[k];
+    if (typeof v === "number" && Number.isFinite(v)) out[k] = v;
+  }
+  if (nested) {
+    for (const [group, members] of Object.entries(nested)) {
+      const g = raw[group];
+      if (!g || typeof g !== "object" || Array.isArray(g)) continue;
+      const clean: Record<string, number> = {};
+      for (const m of members) {
+        const v = (g as Record<string, unknown>)[m];
+        if (typeof v === "number" && Number.isFinite(v)) clean[m] = v;
+      }
+      if (Object.keys(clean).length) out[group] = clean;
+    }
+  }
+  return out;
 }
 
 /**

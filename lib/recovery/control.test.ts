@@ -63,7 +63,7 @@ import {
 } from "./variables";
 import { InMemoryRecoveryStore, eventFromRow } from "./store";
 import { maskPhone } from "./store";
-import type { RecoveryCase } from "./types";
+import type { RecoveryCase, RecoveryCouponView } from "./types";
 import type { RecoveryStage } from "./stages";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -428,7 +428,7 @@ describe("S5 — قاموس المتغيرات والتصيير الآمن", () 
     const v = validateTemplate("{{customer.name}} {{nope}} {{discount.value}}");
     expect(v.ok).toBe(false);
     expect(v.unknown).toEqual(["nope"]);
-    expect(v.blockedInternal).toEqual(["discount.value"]);
+    expect(v.couponGated).toContain("discount.value");
   });
 
   it("S5.10 findVariable يعيد التعريف أو null", () => {
@@ -1145,5 +1145,118 @@ describe("S11 — كتابة القوالب (عميل وهمي)", () => {
     expect(r.bindings[9]).toHaveLength(2);
     expect(r.bindings[9]?.map((b) => b.key)).toEqual(["first", "second"]);
     expect(r.bindings[10]).toBeUndefined();
+  });
+
+  // ============================================================
+  // G6-D: discount.* variables — مقفولة بلا قسيمة
+  // ============================================================
+  describe("G6-D — discount.* variables", () => {
+    const coupon: RecoveryCouponView = {
+      code: "RC7K4M9QX2",
+      type: "percent",
+      value: 10,
+      computedValue: 40,
+      expiresAt: "2026-10-02T00:00:00.000Z",
+    };
+
+    it("discount.code/type/value/expires_at تُعرض مع قسيمة", () => {
+      const out = renderTemplate(
+        "كودك {{discount.code}} — {{discount.type}} {{discount.value}} حتى {{discount.expires_at}}",
+        {},
+        { coupon }
+      );
+      expect(out.text).toBe("كودك RC7K4M9QX2 — نسبة 10% حتى 2026/10/02");
+      expect(out.blockedCoupon).toEqual([]);
+    });
+
+    it("بلا قسيمة ⇒ discount.* تُحجب والقالب كله يُرفض", () => {
+      const out = renderTemplate(
+        "كودك {{discount.code}} — {{discount.type}} {{discount.value}} حتى {{discount.expires_at}}",
+        {},
+        { coupon: null }
+      );
+      expect(out.blockedCoupon).toContain("discount.code");
+      expect(out.blockedCoupon).toContain("discount.type");
+      expect(out.blockedCoupon).toContain("discount.value");
+      expect(out.blockedCoupon).toContain("discount.expires_at");
+      expect(out.text).toBe("كودك  —   حتى ");
+    });
+
+    it("discount.value لا يتسرب من الاقتراح الداخلي بلا قسيمة", () => {
+      const values = buildRecoveryVariables({
+        case: {
+          id: "case-1",
+          customerId: "cust-1",
+          customerPhone: "966533220646",
+          visitorId: "v",
+          sessionId: "s",
+          caseType: "ADD_TO_CART",
+          status: "OPEN",
+          score: 40,
+          cartValue: 400,
+          productIds: ["p1"],
+          preferredProductId: "p1",
+          preferredProductSlug: "mini-bag",
+          firstDetectedAt: 0,
+          lastActivityAt: 0,
+          lastMessageAt: null,
+          messageCount: 0,
+          discountCount: 0,
+          lastDiscountAt: null,
+          nextActionAt: null,
+          lastReminderStep: 0,
+          completedAt: null,
+          purchaseRef: null,
+          discountRef: null,
+          suppressReason: null,
+          decision: null,
+          decidedAt: null,
+          createdAt: 0,
+          updatedAt: 0,
+        },
+        discount: { percent: 10, value: 40, cap: 50 },
+        coupon: null,
+      });
+      expect(values["discount.value"]).toBeUndefined();
+      expect(values["discount.proposal_value"]).toBe("40");
+    });
+
+    it("discount.value يعرض قيمة القسيمة لا الاقتراح عند وجود قسيمة", () => {
+      const values = buildRecoveryVariables({
+        case: {
+          id: "case-1",
+          customerId: "cust-1",
+          customerPhone: "966533220646",
+          visitorId: "v",
+          sessionId: "s",
+          caseType: "ADD_TO_CART",
+          status: "OPEN",
+          score: 40,
+          cartValue: 400,
+          productIds: ["p1"],
+          preferredProductId: "p1",
+          preferredProductSlug: "mini-bag",
+          firstDetectedAt: 0,
+          lastActivityAt: 0,
+          lastMessageAt: null,
+          messageCount: 0,
+          discountCount: 0,
+          lastDiscountAt: null,
+          nextActionAt: null,
+          lastReminderStep: 0,
+          completedAt: null,
+          purchaseRef: null,
+          discountRef: null,
+          suppressReason: null,
+          decision: null,
+          decidedAt: null,
+          createdAt: 0,
+          updatedAt: 0,
+        },
+        discount: { percent: 10, value: 40, cap: 50 },
+        coupon,
+      });
+      expect(values["discount.value"]).toBe("10%");
+    });
   });
 });

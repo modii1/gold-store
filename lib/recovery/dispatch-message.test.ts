@@ -13,7 +13,7 @@
 import { describe, it, expect } from "vitest";
 import { buildDefaultRecoveryMessage, buildDispatchMessage, decisionLabelAr, renderDispatchTrace } from "./dispatch-message";
 import type { DispatchTemplate } from "./dispatch-message";
-import type { RecoveryCase } from "./types";
+import type { RecoveryCase, RecoveryCouponView } from "./types";
 import type { RecoveryStage } from "./stages";
 
 const T0 = 1_700_000_000_000;
@@ -76,6 +76,17 @@ function templateT(over: Partial<DispatchTemplate> = {}): DispatchTemplate {
     isActive: true,
     version: 1,
     ...over,
+  };
+}
+
+/** قسيمة كاملة كما تنتجها البوابة — لا شكل ناقص. */
+function couponView(code: string): RecoveryCouponView {
+  return {
+    code,
+    type: "percent",
+    value: 10,
+    computedValue: 50,
+    expiresAt: new Date(T0 + 48 * 3_600_000).toISOString(),
   };
 }
 
@@ -176,6 +187,102 @@ describe("buildDispatchMessage — fail-safe (بلا إرسال)", () => {
     const out = buildDispatchMessage({ case: baseCase(), stages, templates: [templateT({ body: "{{discount.percent}}" })] });
     expect(sent(out)).toBe(false);
     expect(out).toMatchObject({ status: "block", reason: "empty_message" });
+  });
+
+  it("قالب فيه {{coupon.*}} بلا قسيمة حقيقية ⇒ coupon_required (لا نص ناقص ولا كود مختلَق)", () => {
+    const stages = [stageP(1, { templateId: 101 })];
+    const out = buildDispatchMessage({
+      case: baseCase(),
+      stages,
+      templates: [templateT({ body: "استخدم الكود {{coupon.code}} الآن" })],
+      coupon: null,
+    });
+    expect(sent(out)).toBe(false);
+    expect(out).toMatchObject({ status: "block", reason: "coupon_required" });
+  });
+
+  it("قالب فيه {{coupon.*}} مع قسيمة ⇒ الكود الفعلي يصل النص", () => {
+    const stages = [stageP(1, { templateId: 101 })];
+    const out = buildDispatchMessage({
+      case: baseCase(),
+      stages,
+      templates: [templateT({ body: "استخدم الكود {{coupon.code}} — {{coupon.value}}% حتى {{coupon.expires_at}}" })],
+      coupon: couponView("GOLDTEN001"),
+    });
+    expect(out.status).toBe("send");
+    if (out.status === "send") {
+      expect(out.message).toContain("GOLDTEN001");
+      expect(out.message).toContain("10%");
+      expect(out.message).not.toContain("{{");
+    }
+  });
+});
+
+describe("G6-C — نص الحافز (من كتالوج Marketing) يمرّ بنفس الفحوص", () => {
+  const stages = [stageP(1, { templateId: 101 })];
+  const incentive = (body: string) => ({ body, title: "حافز" });
+
+  it("قالب مرحلة محايد + قرار حافز ⇒ النص الحافز هو المُرسل (لا استرجاع بلا كود)", () => {
+    const out = buildDispatchMessage({
+      case: baseCase(),
+      stages,
+      templates: [templateT({ body: "سلتك محفوظة، أكملي الطلب." })],
+      coupon: couponView("GOLDTEN001"),
+      incentiveBody: incentive("استخدم الكود {{coupon.code}} عند الطلب. {{links.checkout}}"),
+    });
+    expect(out.status).toBe("send");
+    if (out.status === "send") {
+      expect(out.message).toContain("GOLDTEN001");
+      expect(out.message).not.toContain("سلتك محفوظة");
+    }
+  });
+
+  it("نص حافز يحتاج قسيمة وهي غائبة ⇒ coupon_required", () => {
+    const out = buildDispatchMessage({
+      case: baseCase(),
+      stages,
+      templates: [templateT()],
+      coupon: null,
+      incentiveBody: incentive("استخدم الكود {{coupon.code}}."),
+    });
+    expect(out).toMatchObject({ status: "block", reason: "coupon_required" });
+  });
+
+  it("نص حافز فيه رمز مجهول ⇒ render_unknown (نفس حكم القوالب)", () => {
+    const out = buildDispatchMessage({
+      case: baseCase(),
+      stages,
+      templates: [templateT()],
+      coupon: couponView("GOLDTEN001"),
+      incentiveBody: incentive("استخدم {{not_in_dict}}."),
+    });
+    expect(out).toMatchObject({ status: "block", reason: "render_unknown" });
+  });
+
+  it("نص حافز فارغ بعد التصيير ⇒ empty_message", () => {
+    const out = buildDispatchMessage({
+      case: baseCase(),
+      stages,
+      templates: [templateT()],
+      coupon: couponView("GOLDTEN001"),
+      incentiveBody: incentive("{{discount.percent}}"),
+    });
+    expect(out).toMatchObject({ status: "block", reason: "empty_message" });
+  });
+
+  it("بلا incentiveBody ⇒ مسار المرحلة كما هو (القسيمة وحدها لا تُحقن)", () => {
+    const out = buildDispatchMessage({
+      case: baseCase(),
+      stages,
+      templates: [templateT({ body: "سلتك محفوظة." })],
+      coupon: couponView("GOLDTEN001"),
+      incentiveBody: null,
+    });
+    expect(out.status).toBe("send");
+    if (out.status === "send") {
+      expect(out.message).toBe("سلتك محفوظة.");
+      expect(out.message).not.toContain("GOLDTEN001");
+    }
   });
 });
 

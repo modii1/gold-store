@@ -698,10 +698,15 @@ describe("N7. ترتيب الدورة في المسار", () => {
   it("N7. التسوية تُستدعى قبل حساب قرارات الدورة نفسها", () => {
     const src = readFileSync(join(process.cwd(), "app", "api", "recovery", "run", "route.ts"), "utf8");
     const settleAt = src.indexOf("dispatcher.settle()");
-    const decideAt = src.indexOf("runDryRunCycle()");
+    // G4: دورة القرار صارت سلسلة الذكاء الجديدة (Evidence → … → Execution
+    // Guard) بدل ContactOutcome القديم. الترتيب المقصود لم يتغيّر: التسوية
+    // أولًا، ثم القراءة والقرار.
+    const decideAt = src.indexOf("runRecoveryPipeline(");
     expect(settleAt).toBeGreaterThan(-1);
     expect(decideAt).toBeGreaterThan(-1);
-    // لو انقلبا لعاد الخلل: engine يقرأ messageCount قديمًا فيرسل رسالة ثانية
+    // المسار القديم لم يعد يُستشار في دورة التشغيل (لا مصدران متنافسان).
+    expect(src).not.toContain("runDryRunCycle()");
+    // لو انقلبا لعاد الخلل: القراءة تقرأ messageCount قديمًا فيرسل رسالة ثانية
     // فور تأكيد الأولى، ويتجاوز cooldown في الدورة نفسها.
     expect(settleAt).toBeLessThan(decideAt);
   });

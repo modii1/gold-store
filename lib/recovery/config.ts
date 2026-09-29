@@ -65,7 +65,73 @@ export type RecoveryConfig = {
    * فسلوك المحرك لم يتغيّر. ربط المراحل بالقرار يأتي في مرحلة لاحقة.
    */
   stages: RecoveryStage[];
+  /**
+   * نموذج النية (Phase 2): درجة 0..100 ومستواها، ودلالة أنها ترتيب
+   * إشارات لا احتمال شراء. كل مساهمة مقصوصة بسقف صريح (لا عدّ مزدوج).
+   */
+  intent: IntentConfig;
+  /** نموذج الثقة (Phase 3): مقدار اكتمال البيانات التي تدعم القرار. */
+  confidence: ConfidenceConfig;
 };
+
+/**
+ * إعدادات نموذج النية — أوزان وحدود خالصة، لا تقترب أبدًا من العميل.
+ *
+ * كل مسار من مسارات المساهمة:
+ *  - strengthBase: أقصى إشارة مسجّلة (سلة، إتمام، دفع).
+ *  - مشاهدات متكررة: ×repeatedViewDelta وبسقف repeatedViewCap فرصة كاملة.
+ *  - جلسات مميّزة: ×sessionDelta وبسقف sessionCap.
+ *  - سلة/أصناف: شرائح قيمة cartTiers + نقاط لكل صنف بسقف cartItemCap.
+ *  - حداثة: نصْف الحياة freshnessHalfLifeHours، ولا يهبط الأثر دون minFadeFactor.
+ *  - levels: عتبات المستويات الخمسة (VERY_LOW..EXTREME).
+ */
+export type IntentConfig = {
+  strengthBase: {
+    add_to_cart: number;
+    checkout_start: number;
+    payment_started: number;
+    purchase: number;
+  };
+  repeatedViewDelta: number;
+  repeatedViewCap: number;
+  sessionDelta: number;
+  sessionCap: number;
+  cartTiers: { value: number; gain: number }[];
+  cartItemDelta: number;
+  cartItemCap: number;
+  freshnessHalfLifeHours: number;
+  minFadeFactor: number;
+  levels: { veryLow: number; low: number; medium: number; high: number };
+};
+
+/**
+ * إعدادات نموذج الثقة — وزن كل دليل في اكتمال البيانات التي تدعم القرار.
+ *
+ * الثقة تُضعف القرار لا تعلّمه: البيانات الناقصة تخفض الثقة حتى مع نية عالية،
+ * وليست شرطًا يوقف الحساب إلا عند التقادم الشديد (maxScoreForExtremeStale).
+ */
+export type ConfidenceConfig = {
+  identifiedWeight: number;
+  signalWeight: number;
+  signalCap: number;
+  hasProductWeight: number;
+  cartValueWeight: number;
+  sessionWeight: number;
+  sessionCap: number;
+  stalenessHours: number;
+  stalenessPenalty: number;
+  extremeStaleHours: number;
+  maxScoreForExtremeStale: number;
+  levelLow: number;
+  levelHigh: number;
+};
+
+/** شرائح قيمة السلة الافتراضية لأثر النية (لا تأتي من بيئة؛ ضبط داخلي). */
+const DEFAULT_INTENT_CART_TIERS = [
+  { value: 1500, gain: 15 },
+  { value: 500, gain: 10 },
+  { value: 150, gain: 5 },
+];
 
 export function loadRecoveryConfig(env: NodeJS.ProcessEnv = process.env): RecoveryConfig {
   const remindersMinutes = [
@@ -99,7 +165,50 @@ export function loadRecoveryConfig(env: NodeJS.ProcessEnv = process.env): Recove
     maxRecoveryDiscountAmount: num(env.RECOVERY_MAX_DISCOUNT_AMOUNT, 50),
     proposedRecoveryDiscountPercent: num(env.RECOVERY_PROPOSED_DISCOUNT_PERCENT, 10),
     stages: stagesFromReminders(remindersMinutes),
+    intent: {
+      strengthBase: {
+        add_to_cart: num(env.RECOVERY_INTENT_STRENGTH_ATC, 20),
+        checkout_start: num(env.RECOVERY_INTENT_STRENGTH_CHECKOUT, 45),
+        payment_started: num(env.RECOVERY_INTENT_STRENGTH_PAYMENT, 65),
+        purchase: num(env.RECOVERY_INTENT_STRENGTH_PURCHASE, 0),
+      },
+      repeatedViewDelta: num(env.RECOVERY_INTENT_REPEATED_VIEW_DELTA, 6),
+      repeatedViewCap: num(env.RECOVERY_INTENT_REPEATED_VIEW_CAP, 24),
+      sessionDelta: num(env.RECOVERY_INTENT_SESSION_DELTA, 6),
+      sessionCap: num(env.RECOVERY_INTENT_SESSION_CAP, 12),
+      cartTiers: tiersDefault(),
+      cartItemDelta: num(env.RECOVERY_INTENT_CART_ITEM_DELTA, 4),
+      cartItemCap: num(env.RECOVERY_INTENT_CART_ITEM_CAP, 8),
+      freshnessHalfLifeHours: num(env.RECOVERY_INTENT_FRESHNESS_HALF_LIFE_HOURS, 12),
+      minFadeFactor: 0.2,
+      levels: {
+        veryLow: num(env.RECOVERY_INTENT_LEVEL_VERY_LOW, 30),
+        low: num(env.RECOVERY_INTENT_LEVEL_LOW, 50),
+        medium: num(env.RECOVERY_INTENT_LEVEL_MEDIUM, 70),
+        high: num(env.RECOVERY_INTENT_LEVEL_HIGH, 85),
+      },
+    },
+    confidence: {
+      identifiedWeight: num(env.RECOVERY_CONF_IDENTIFIED_WEIGHT, 35),
+      signalWeight: num(env.RECOVERY_CONF_SIGNAL_WEIGHT, 12),
+      signalCap: num(env.RECOVERY_CONF_SIGNAL_CAP, 40),
+      hasProductWeight: num(env.RECOVERY_CONF_PRODUCT_WEIGHT, 10),
+      cartValueWeight: num(env.RECOVERY_CONF_CART_VALUE_WEIGHT, 8),
+      sessionWeight: num(env.RECOVERY_CONF_SESSION_WEIGHT, 6),
+      sessionCap: num(env.RECOVERY_CONF_SESSION_CAP, 12),
+      stalenessHours: num(env.RECOVERY_CONF_STALENESS_HOURS, 48),
+      stalenessPenalty: num(env.RECOVERY_CONF_STALENESS_PENALTY, 15),
+      extremeStaleHours: num(env.RECOVERY_CONF_EXTREME_STALE_HOURS, 120),
+      maxScoreForExtremeStale: num(env.RECOVERY_CONF_MAX_SCORE_STALE, 39),
+      levelLow: num(env.RECOVERY_CONF_LEVEL_LOW, 40),
+      levelHigh: num(env.RECOVERY_CONF_LEVEL_HIGH, 70),
+    },
   };
+}
+
+/** شرائح القيمة الافتراضية — نسخة مستقلة في كل استدعاء (لا تشير إلى نفس المصفوفة). */
+function tiersDefault(): { value: number; gain: number }[] {
+  return DEFAULT_INTENT_CART_TIERS.map((t) => ({ ...t }));
 }
 
 function num(v: string | undefined, fallback: number): number {
@@ -163,6 +272,10 @@ export type RecoverySettings = {
   maxRecoveryDiscountAmount?: number | null;
   proposedRecoveryDiscountPercent?: number | null;
   scores?: Partial<RecoveryConfig["scores"]> | null;
+  /** تجاوزات نموذج النية (كل حقل غير مُضبَط = يُبقى خط الأساس). */
+  intent?: Partial<IntentConfig> | null;
+  /** تجاوزات نموذج الثقة (كل حقل غير مُضبَط = يُبقى خط الأساس). */
+  confidence?: Partial<ConfidenceConfig> | null;
 };
 
 /** الأرقام المقبولة: 0 فأكثر. أي قيمة سالبة/غير منتهية تُرفض ⇒ يبقى خط الأساس. */
@@ -174,6 +287,62 @@ function overrideNumber(value: unknown, baseline: number): number {
 
 function overrideBool(value: unknown, baseline: boolean): boolean {
   return typeof value === "boolean" ? value : baseline;
+}
+
+/** دمج خريطة أرقام (strengthBase/levels/scores…) فوق خط أساس — القيم غير الصالحة تُسقَط. */
+function mergeNumberRecord<T extends string>(
+  base: Record<T, number>,
+  partial: Record<string, unknown> | null | undefined,
+): Record<T, number> {
+  const out: Record<T, number> = { ...base };
+  if (!partial || typeof partial !== "object" || Array.isArray(partial)) return out;
+  for (const [key, value] of Object.entries(partial)) {
+    const k = key as T;
+    if (!(k in out)) continue;
+    out[k] = overrideNumber(value, out[k]);
+  }
+  return out;
+}
+
+/**
+ * دمج تجاوزات نموذج النية. cartTiers لا تُتجاوز من القاعدة (شكله مصفوفة
+ * وعرضها غير مدعوم) — تبقى من خط الأساس حصريًا.
+ */
+function mergeIntent(base: IntentConfig, intent: Partial<IntentConfig> | null | undefined): IntentConfig {
+  if (!intent || typeof intent !== "object") return base;
+  return {
+    ...base,
+    strengthBase: mergeNumberRecord(base.strengthBase, (intent as Record<string, unknown>).strengthBase as Record<string, unknown> | null),
+    repeatedViewDelta: overrideNumber(intent.repeatedViewDelta, base.repeatedViewDelta),
+    repeatedViewCap: overrideNumber(intent.repeatedViewCap, base.repeatedViewCap),
+    sessionDelta: overrideNumber(intent.sessionDelta, base.sessionDelta),
+    sessionCap: overrideNumber(intent.sessionCap, base.sessionCap),
+    cartItemDelta: overrideNumber(intent.cartItemDelta, base.cartItemDelta),
+    cartItemCap: overrideNumber(intent.cartItemCap, base.cartItemCap),
+    freshnessHalfLifeHours: overrideNumber(intent.freshnessHalfLifeHours, base.freshnessHalfLifeHours),
+    levels: mergeNumberRecord(base.levels, (intent as Record<string, unknown>).levels as Record<string, unknown> | null),
+  };
+}
+
+/** دمج تجاوزات نموذج الثقة. */
+function mergeConfidence(base: ConfidenceConfig, confidence: Partial<ConfidenceConfig> | null | undefined): ConfidenceConfig {
+  if (!confidence || typeof confidence !== "object") return base;
+  return {
+    ...base,
+    identifiedWeight: overrideNumber(confidence.identifiedWeight, base.identifiedWeight),
+    signalWeight: overrideNumber(confidence.signalWeight, base.signalWeight),
+    signalCap: overrideNumber(confidence.signalCap, base.signalCap),
+    hasProductWeight: overrideNumber(confidence.hasProductWeight, base.hasProductWeight),
+    cartValueWeight: overrideNumber(confidence.cartValueWeight, base.cartValueWeight),
+    sessionWeight: overrideNumber(confidence.sessionWeight, base.sessionWeight),
+    sessionCap: overrideNumber(confidence.sessionCap, base.sessionCap),
+    stalenessHours: overrideNumber(confidence.stalenessHours, base.stalenessHours),
+    stalenessPenalty: overrideNumber(confidence.stalenessPenalty, base.stalenessPenalty),
+    extremeStaleHours: overrideNumber(confidence.extremeStaleHours, base.extremeStaleHours),
+    maxScoreForExtremeStale: overrideNumber(confidence.maxScoreForExtremeStale, base.maxScoreForExtremeStale),
+    levelLow: overrideNumber(confidence.levelLow, base.levelLow),
+    levelHigh: overrideNumber(confidence.levelHigh, base.levelHigh),
+  };
 }
 
 /**
@@ -238,5 +407,7 @@ export function applyRecoverySettings(
       base.proposedRecoveryDiscountPercent,
     ),
     stages: plan,
+    intent: mergeIntent(base.intent, settings.intent),
+    confidence: mergeConfidence(base.confidence, settings.confidence),
   };
 }

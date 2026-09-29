@@ -102,7 +102,7 @@ export function SettingsForm({ settings }: { settings: Settings }) {
   const [logo, setLogo] = useState<string | null>(settings.store_logo);
   const [hero, setHero] = useState<string | null>(settings.hero_image);
   const [heroMobile, setHeroMobile] = useState<string | null>(settings.hero_image_mobile);
-  const [currencyMark, setCurrencyMark] = useState<string | null>(settings.currency_mark_url || "/currency-mark.svg");
+  const [currencyMark, setCurrencyMark] = useState<string | null>(settings.currency_mark_url ?? null);
   const [freeShippingEnabled, setFreeShippingEnabled] = useState(settings.free_shipping_threshold > 0);
   const [freeShippingThreshold, setFreeShippingThreshold] = useState(settings.free_shipping_threshold > 0 ? settings.free_shipping_threshold : 200);
 
@@ -153,14 +153,17 @@ export function SettingsForm({ settings }: { settings: Settings }) {
           <p className="mt-0.5 text-xs text-stone-500">حدّد المقاسات التي تُخفى فيها النصوص فوق الصورة لتظهر نظيفة.</p>
           <div className="mt-3 grid gap-3 sm:grid-cols-3">
             <label className="flex items-center gap-3 rounded-xl border border-stone-200 bg-white p-4 text-sm font-semibold text-stone-700">
+              <input type="hidden" name="hero_hide_mobile" value="off" />
               <input name="hero_hide_mobile" type="checkbox" defaultChecked={settings.hero_hide_mobile === true} className="h-5 w-5 accent-[#B08D57]" />
               الجوال (أقل من 768px)
             </label>
             <label className="flex items-center gap-3 rounded-xl border border-stone-200 bg-white p-4 text-sm font-semibold text-stone-700">
+              <input type="hidden" name="hero_hide_tablet" value="off" />
               <input name="hero_hide_tablet" type="checkbox" defaultChecked={settings.hero_hide_tablet === true} className="h-5 w-5 accent-[#B08D57]" />
               التابلت (768px - 1023px)
             </label>
             <label className="flex items-center gap-3 rounded-xl border border-stone-200 bg-white p-4 text-sm font-semibold text-stone-700">
+              <input type="hidden" name="hero_hide_desktop" value="off" />
               <input name="hero_hide_desktop" type="checkbox" defaultChecked={settings.hero_hide_desktop === true} className="h-5 w-5 accent-[#B08D57]" />
               الكمبيوتر (1024px فأكثر)
             </label>
@@ -188,6 +191,7 @@ export function SettingsForm({ settings }: { settings: Settings }) {
             <p className="mt-1 text-xs text-stone-500">أدخل ارتفاع الهيرو بالبكسل (مثال: 700).</p>
           </div>
           <label className="flex items-center gap-3 rounded-xl border border-stone-200 p-4 text-sm font-semibold text-stone-700 self-start">
+            <input type="hidden" name="hero_show_cta" value="off" />
             <input name="hero_show_cta" type="checkbox" defaultChecked={settings.hero_show_cta !== false} className="h-5 w-5 accent-[#B08D57]" />
             إظهار زر «تسوقي الآن»
           </label>
@@ -491,6 +495,7 @@ export function SettingsForm({ settings }: { settings: Settings }) {
         <div className="grid gap-5 md:grid-cols-2 md:items-end">
           <ImagePicker label="صورة العملة" name="currency_mark_url" value={currencyMark} onChange={setCurrencyMark} />
           <label className="flex items-center gap-3 rounded-xl border border-stone-200 p-4 text-sm font-semibold text-stone-700">
+            <input type="hidden" name="show_currency_mark" value="off" />
             <input name="show_currency_mark" type="checkbox" defaultChecked={settings.show_currency_mark !== false} className="h-5 w-5 accent-[#B08D57]" />
             إظهار صورة العملة بجانب الأسعار
           </label>
@@ -667,14 +672,17 @@ export function SettingsForm({ settings }: { settings: Settings }) {
           <p className="text-sm font-semibold text-stone-700 mb-2">إظهار الأقسام</p>
           <div className="flex flex-wrap gap-3">
             <label className="flex items-center gap-3 rounded-xl border border-stone-200 bg-white p-4 text-sm font-semibold text-stone-700">
+              <input type="hidden" name="footer_show_brand" value="off" />
               <input name="footer_show_brand" type="checkbox" defaultChecked={settings.footer_show_brand !== false} className="h-5 w-5 accent-[#B08D57]" />
               الشعار والوصف
             </label>
             <label className="flex items-center gap-3 rounded-xl border border-stone-200 bg-white p-4 text-sm font-semibold text-stone-700">
+              <input type="hidden" name="footer_show_links" value="off" />
               <input name="footer_show_links" type="checkbox" defaultChecked={settings.footer_show_links !== false} className="h-5 w-5 accent-[#B08D57]" />
               الروابط
             </label>
             <label className="flex items-center gap-3 rounded-xl border border-stone-200 bg-white p-4 text-sm font-semibold text-stone-700">
+              <input type="hidden" name="footer_show_contact" value="off" />
               <input name="footer_show_contact" type="checkbox" defaultChecked={settings.footer_show_contact !== false} className="h-5 w-5 accent-[#B08D57]" />
              بيانات التواصل
             </label>

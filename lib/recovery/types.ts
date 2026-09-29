@@ -137,6 +137,21 @@ export type DiscountProposal = {
 };
 
 /**
+ * G6-C: العرض الآمن للقسيمة داخل الاسترجاع.
+ *
+ * لا صف قاعدة ولا معرّفات داخلية: الكود (مطَبَّع)، نوع الخصم، قيمته، الخصم
+ * الفعلي على سلة الحالة، وتاريخ الانتهاء. هذه هي القيم الوحيدة المسموح
+ * بتمريرها إلى التسويق والقوالب — لا `recovery_case_id` ولا `customer_identifier`.
+ */
+export type RecoveryCouponView = {
+  code: string;
+  type: "percent" | "fixed";
+  value: number;
+  computedValue: number;
+  expiresAt: string | null;
+};
+
+/**
  * ناتج تقييم حالة واحدة — "ما الذي سيفعله النظام لو لم يكن DRY_RUN".
  */
 export type ContactOutcome = {
@@ -146,6 +161,12 @@ export type ContactOutcome = {
   suppressReason?: string;
   recommendedAction: string;
   recommendedDiscount: DiscountProposal | null;
+  /**
+   * G6-C: القسيمة الحقيقية المعروضة في رسالة هذه الحالة، أو null.
+   * الـdispatcher يستخدمها لإعادة بناء النص نفسه؛ بدونها لا تُعاد كلمة
+   * «خصم» ولا كود مختلَق إلى الرسالة.
+   */
+  coupon?: RecoveryCouponView | null;
   nextActionAt: number | null;
 };
 

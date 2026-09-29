@@ -439,7 +439,8 @@ describe("Recovery — Decision Engine scenarios", () => {
     await store.update(created!.id, { lastMessageAt: now - 31 * HOUR, messageCount: 1, lastDiscountAt: now - 200 * HOUR, discountCount: 1 });
     const cur = (await store.listActive())[0];
     const out = await e.evaluate(cur, {});
-    // maxDiscountsPerCase=1已经达到 → لا خصم
+    // maxDiscountsPerCase=1: قسيمة واحدة لكل حالة استرجاع؛ موثّق في قرار
+    // المحرك وفي migration-041 (unique على recovery_case_id).
     expect(out.decision).not.toBe("DISCOUNT_ELIGIBLE");
   });
 
@@ -1271,14 +1272,38 @@ describe("Security E–G — DRY_RUN = بلا أي كتابة", () => {
     for (const r of roots) walk(join(process.cwd(), r));
     expect(files.length).toBeGreaterThan(5);
 
-    // ممنوع في كل ملفات Recovery بلا استثناء: أي استدعاء إرسال مباشر،
-    // وأي مسار كوبون. الاسترجاع لا يتصل بـWhatsApp API ولا ينشئ خصومات.
+    // ممنوع في كل ملفات Recovery بلا استثناء: أي استدعاء إرسال مباشر.
+    // الاسترجاع لا يتصل بـWhatsApp API ولا Provider آخر.
     const forbidden =
-      /sendWhatsApp|sendSms|sendSMS|sendEmail|sendMessage|twilio|createCoupon|insert\s+into\s+coupons|from\(\s*["'`]coupons["'`]\s*\)/i;
+      /sendWhatsApp|sendSms|sendSMS|sendEmail|sendMessage|twilio|createCoupon|insert\s+into\s+coupons/i;
     for (const file of files) {
       const src = readFileSync(file, "utf8");
       expect(`${file}: ${forbidden.test(src) ? "MATCH" : "clean"}`).toBe(`${file}: clean`);
     }
+
+    // G6-C: الاستثناء الوحيد المُوسَّع — البوابة وحدها تكتب `coupons`.
+    // lib/recovery/incentive.ts (المنطق الخالص) وlib/recovery/incentive-store.ts
+    // (adapter بخدمة service role) هما الوحيدان المسموح لهما بذكر الجدول،
+    // وبـunique على recovery_case_id في migration-041. أي ملف ثالث يذكر
+    // الجدول = مسار إنشاء قسيمة ثانٍ، وهو ممنوع.
+    const couponsRef = /from\(\s*["'`]coupons["'`]\s*\)|insert\s+into\s+coupons/i;
+    const couponAllowed = [
+      join("lib", "recovery", "incentive.ts"),
+      join("lib", "recovery", "incentive-store.ts"),
+    ];
+    for (const file of files) {
+      if (couponsRef.test(readFileSync(file, "utf8"))) {
+        expect(couponAllowed.some((a) => file.endsWith(a))).toBe(true);
+      }
+    }
+    // والبوابة نفسها لا ترسل ولا تنشئ بأسلوب آخر (بلا SQL مباشر).
+    const gatewaySrc = readFileSync(join(process.cwd(), join("lib", "recovery", "incentive-store.ts")), "utf8");
+    expect(forbidden.test(gatewaySrc)).toBe(false);
+    // والمنطق الخالص لا يعرف القاعدة أصلًا.
+    const pureSrc = readFileSync(join(process.cwd(), join("lib", "recovery", "incentive.ts")), "utf8");
+    expect(couponsRef.test(pureSrc)).toBe(false);
+    expect(pureSrc).not.toContain("createAdminClient");
+    expect(pureSrc).not.toContain("createClient");
 
     // الاستثناء الوحيد الموافَق عليه: lib/recovery/dispatcher.ts هو المُرسِل
     // المعتمد، وهو يخاطب notification_deliveries عبر createDeliveries

@@ -19,7 +19,7 @@ import type { RecoveryStage } from "./stages";
 import { buildRecoveryVariables, renderTemplate } from "./variables";
 import type { RenderResult } from "./variables";
 import { templateRowHint } from "./template-control";
-import type { ContactDecision, DiscountProposal, RecoveryCase } from "./types";
+import type { ContactDecision, DiscountProposal, RecoveryCase, RecoveryCouponView } from "./types";
 
 /** صورة قالب تُقرأ من القاعدة (أو من الواجهة) لبناء الرسالة. */
 export type DispatchTemplate = {
@@ -35,8 +35,9 @@ export type DispatchTemplate = {
 /**
  * الرسالة الافتراضية المحايدة — النص الثابت الحالي.
  *
- * لا يذكر نسبة خصم ولا كوبون (لا يوجد مسار كوبون في النظام)، و
- * recommendedDiscount يبقى اقتراحًا داخليًا لا يُصيَّر في النص أبدًا.
+ * لا تذكر نسبة خصم ولا كوبون، وrecommendedDiscount يبقى اقتراحًا داخليًا لا
+ * يُصيَّر في النص أبدًا. الرسالة التي تَعِد بخصم لا تأتي من هنا: لا بدّ لها من
+ * قالب مرتبط بقسيمة حقيقية.
  */
 export function buildDefaultRecoveryMessage(c: RecoveryCase): { title: string; message: string } {
   const item = c.preferredProductSlug ? ` (${c.preferredProductSlug})` : "";
@@ -52,7 +53,9 @@ export type DispatchMessageBlockReason =
   | "template_inactive"
   | "template_invalid"
   | "render_unknown"
-  | "empty_message";
+  | "empty_message"
+  /** G6-C: القالب يَعِد بقسيمة ولا توجد قسيمة حقيقية لهذه الحالة. */
+  | "coupon_required";
 
 export type DispatchMessageOutcome =
   | {
@@ -91,6 +94,18 @@ export function buildDispatchMessage(input: {
   /** كل القوالب المعروفة (نشطة وغير نشطة) — البحث بالمعرّف. */
   templates: DispatchTemplate[];
   discount?: DiscountProposal | null;
+  /** G6-C: القسيمة المعروضة (من الخادم) — تُصيَّر {{coupon.*}}. */
+  coupon?: RecoveryCouponView | null;
+  /**
+   * G6-C: نص الحافز من كتالوج Marketing.
+   *
+   * الحافز ليس رسالة مرحلة: قوالب المراحل رسائل استرجاع محايدة (سلتك محفوظة،
+   * أكملي الطلب) ولا يصح أن تُقحم قسيمة في كل رسالة مرحلة. فحين يوصي محرك
+   * القرار بالحافز وتمر قسيمة حقيقية، يُبنى النص من قالب الحافز — نفس
+   * الدالة ونفس المتغيرات ونفس الفحوص أدناه. الحارس يبقى الفيصل: إن لم يظهر
+   * الكود في النص الناتج، يُمنع الإرسال.
+   */
+  incentiveBody?: { body: string; title: string } | null;
   now?: number;
   expiryHours?: number;
   decisionAr?: string | null;
@@ -101,8 +116,15 @@ export function buildDispatchMessage(input: {
     return {
       status: "block",
       reason: "no_stage",
-      reasonAr: "لا يمكن تحديد المرحلة الحالية للحالة — لا إرسال (fail-safe).",
+      reasonAr: "لا توجد مرحلة مطابقة لعدد الرسائل — لا إرسال (fail-safe).",
     };
+  }
+
+  // G6-C — مسار الحافز: النص يأتي من كتالوج Marketing لا من قالب المرحلة،
+  // لكن يمرّ بنفس المتغيرات ونفس الفحوص. لا يُغني ذلك عن الحارس.
+  if (input.incentiveBody) {
+    const body = input.incentiveBody;
+    return renderIncentiveBody({ ...input, stage, label: body.title, incentiveBody: body });
   }
 
   // لا قالب مربوط بالمرحلة ⇒ الرسالة الافتراضية المحايدة، كما كان الحال دائمًا.
@@ -149,6 +171,7 @@ export function buildDispatchMessage(input: {
     stageIndex: stage.position,
     stageTotal: input.stages.length,
     discount: input.discount ?? null,
+    coupon: input.coupon ?? null,
     now: input.now,
     expiryHours: input.expiryHours,
     decisionAr: input.decisionAr ?? null,
@@ -156,12 +179,21 @@ export function buildDispatchMessage(input: {
 
   // مسار العميل: discount.* داخلي يُحذف ويُسجَّل، والرموز غير المعروفة
   // لو وُجدت (مع ذلك) تمنع بناء رسالة صحيحة ⇒ لا إرسال.
-  const rendered = renderTemplate(template.body, values);
+  // G6-C: قالب فيه {{coupon.*}} بلا قسيمة حقيقية يُحجب كاملًا — لا نص ناقص
+  // ولا كود مختلَق يصل العميل.
+  const rendered = renderTemplate(template.body, values, { coupon: input.coupon ?? null });
   if (rendered.unknown.length) {
     return {
       status: "block",
       reason: "render_unknown",
       reasonAr: `متغيرات غير معروفة في القالب (${rendered.unknown.join("، ")}) — لا إرسال.`,
+    };
+  }
+  if (rendered.blockedCoupon.length) {
+    return {
+      status: "block",
+      reason: "coupon_required",
+      reasonAr: `القالب «${template.nameAr}» يحتاج قسيمة حقيقية لهذه الحالة ولا توجد (${rendered.blockedCoupon.join("، ")}) — لا إرسال.`,
     };
   }
 
@@ -178,6 +210,63 @@ export function buildDispatchMessage(input: {
   return { status: "send", title, message, usedTemplate: true };
 }
 
+/**
+ * G6-C: تصيير نص الحافز بنفس قواعد تصيير القوالب.
+ *
+ * الفحوص هنا ليست مكرَّرة من باب الحذر: هي نفس الفحوص التي يمرّ بها قالب
+ * المرحلة، ووجودها يمنع أن يصبح مسار الحافز أضعف من المسار العادي (قالب
+ * فيه رمز مجهول، أو قسيمة مطلوبة بلا قسيمة، أو نص فارغ).
+ */
+function renderIncentiveBody(input: {
+  case: RecoveryCase;
+  stages: RecoveryStage[];
+  discount?: DiscountProposal | null;
+  coupon?: RecoveryCouponView | null;
+  incentiveBody: { body: string; title: string };
+  stage: RecoveryStage;
+  label: string;
+  now?: number;
+  expiryHours?: number;
+  decisionAr?: string | null;
+}): DispatchMessageOutcome {
+  const { stage } = input;
+  const values = buildRecoveryVariables({
+    case: input.case,
+    stage,
+    stageIndex: stage.position,
+    stageTotal: input.stages.length,
+    discount: input.discount ?? null,
+    coupon: input.coupon ?? null,
+    now: input.now,
+    expiryHours: input.expiryHours,
+    decisionAr: input.decisionAr ?? null,
+  });
+  const rendered = renderTemplate(input.incentiveBody.body, values, { coupon: input.coupon ?? null });
+  if (rendered.unknown.length) {
+    return {
+      status: "block",
+      reason: "render_unknown",
+      reasonAr: `متغيرات غير معروفة في نص الحافز (${rendered.unknown.join("، ")}) — لا إرسال.`,
+    };
+  }
+  if (rendered.blockedCoupon.length) {
+    return {
+      status: "block",
+      reason: "coupon_required",
+      reasonAr: `نص الحافز يحتاج قسيمة حقيقية لهذه الحالة ولا توجد (${rendered.blockedCoupon.join("، ")}) — لا إرسال.`,
+    };
+  }
+  const message = rendered.text.trim();
+  if (!message) {
+    return {
+      status: "block",
+      reason: "empty_message",
+      reasonAr: "نص الحافز فارغ بعد التصيير — لا إرسال.",
+    };
+  }
+  return { status: "send", title: input.label.trim(), message, usedTemplate: true };
+}
+
 /** القيم والمصفّف الفعليان لحالة ما — للعرض في المحاكاة دون إعادة حساب. */
 export type DispatchRenderTrace = {
   values: Record<string, string>;
@@ -189,6 +278,8 @@ export function renderDispatchTrace(input: {
   stages: RecoveryStage[];
   templates: DispatchTemplate[];
   discount?: DiscountProposal | null;
+  /** G6-C: القسيمة المعروضة في المعاينة (تصل من production فقط، لا قيم وهمية). */
+  coupon?: RecoveryCouponView | null;
   now?: number;
   expiryHours?: number;
   decisionAr?: string | null;
@@ -203,9 +294,10 @@ export function renderDispatchTrace(input: {
     stageIndex: stage.position,
     stageTotal: input.stages.length,
     discount: input.discount ?? null,
+    coupon: input.coupon ?? null,
     now: input.now,
     expiryHours: input.expiryHours,
     decisionAr: input.decisionAr ?? null,
   });
-  return { values, render: renderTemplate(template.body, values) };
+  return { values, render: renderTemplate(template.body, values, { coupon: input.coupon ?? null }) };
 }

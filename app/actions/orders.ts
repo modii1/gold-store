@@ -10,6 +10,26 @@ import { emitNotification } from "@/lib/notifications/engine";
 import { sendCustomerWhatsApp } from "@/lib/customer-messaging";
 import { isFreeShippingEligible } from "@/lib/shipping/types";
 import { getSettings } from "@/lib/services/settings";
+import {
+  COUPON_EMPTY_MESSAGE,
+  couponRejectMessage,
+  discountForCoupon,
+  evaluateCoupon,
+  normalizeCouponCode,
+} from "@/lib/coupons/policy";
+import type { BoundCouponRecord } from "@/lib/coupons/policy";
+import { redeemCouponForOrder } from "@/lib/coupons/redeem";
+import type { AtomicRedeemRow, CouponRedeemStore } from "@/lib/coupons/redeem";
+import type { CouponUsageStore } from "@/lib/coupons/usage";
+import {
+  buildOrderPricing,
+  looksLikeUuid,
+  PRICING_MESSAGES,
+  verifySubmittedSubtotal,
+  type CatalogLoader,
+  type CatalogProduct,
+  type CatalogVariant,
+} from "@/lib/orders/pricing";
 import type { Coupon, Carrier, PaymentMethod, Order } from "@/types";
 
 export async function getCheckoutData() {
@@ -57,30 +77,55 @@ export async function getCheckoutData() {
   };
 }
 
-export async function getOrdersByPhoneAction(phone: string): Promise<Order[]> {
-  const trimmed = phone.trim();
-  if (!trimmed) return [];
-  const supabase = await createClient();
-  const { data } = await supabase
+/**
+ * G6-B / S2 — كل قراءة `orders` تمرّ بـservice role بعد إفلاس الجوال من التوقيع.
+ * `public select orders` (RLS) كان يعني أن أي زائر يمرّر رقم جوال فيACTION
+ * يسترجع طلبات غيره كاملة (اسم، عنوان، عنوان وطني، إحداثيات، ملاحظات، كود خصم).
+ * السلوك المرئي لم يتغيّر: صفحة الحساب تستدعيها بـsession.phone دائمًا.
+ */
+export async function getOrdersByPhoneAction(): Promise<Order[]> {
+  const session = await getCustomerSession();
+  if (!session) return [];
+
+  const admin = createAdminClient();
+  const { data } = await admin
     .from("orders")
     .select("*")
-    .eq("customer_identifier", trimmed)
+    .eq("customer_identifier", session.phone)
     .order("created_at", { ascending: false })
     .limit(20);
   return (data as Order[]) || [];
 }
 
-export async function validateCouponAction(code: string, subtotal: number): Promise<Coupon | { error: string }> {
-  const trimmed = code.trim();
-  if (!trimmed) return { error: "أدخلي كود الخصم" };
+/**
+ * فحص الكود على الخادم (المعاينة عند الضغط، ثم يُعاد الفحص نفسه عند الإرسال).
+ *
+ * G6-A: (1) الكود يُطبَّع (trim + uppercase) فيتصرف gold10 كـ GOLD10؛
+ * (2) starts_at صار مفحوصًا (كان عمودًا مهملًا)؛
+ * (3) كل أسباب الرفض ترجع للعميل برسالة واحدة — التحقق لم يعد oracle يكشف
+ *     وجود الكود أو حالته؛ السبب الدقيق يبقى داخليًا في السجل بلا الكود.
+ */
+export async function validateCouponAction(
+  code: string,
+  subtotal: number,
+  customerIdentifier?: string | null
+): Promise<Coupon | { error: string }> {
+  const normalized = normalizeCouponCode(code);
+  if (!normalized) return { error: COUPON_EMPTY_MESSAGE };
   const supabase = createAdminClient();
-  const { data } = await supabase.from("coupons").select("*").eq("code", trimmed).maybeSingle();
-  if (!data) return { error: "كود الخصم غير صحيح" };
-  const c = data as Coupon;
-  if (!c.is_active) return { error: "كود الخصم غير فعال" };
-  if (c.ends_at && new Date(c.ends_at) < new Date()) return { error: "انتهت صلاحية الكود" };
-  if (c.usage_limit !== null && c.used_count >= c.usage_limit) return { error: "استُهلك الكود" };
-  if (c.min_order > 0 && subtotal < c.min_order) return { error: `الحد الأدنى للطلب ${c.min_order.toLocaleString("en-US")}` };
+  const { data } = await supabase.from("coupons").select("*").eq("code", normalized).maybeSingle();
+  if (!data) {
+    console.warn("[coupon] rejected", { reason: "not_found" });
+    return { error: couponRejectMessage() };
+  }
+  const c = data as Coupon & BoundCouponRecord;
+  // G6-C: القسيمة المربوطة تُفحص بمالكها المشتق من الخادم. المعاينة في
+  // السلة لا تمرّر معرّفًا (فلا تكشف شيئًا)، والنقطة الحاسمة في إنشاء الطلب.
+  const result = evaluateCoupon(c, { now: Date.now(), subtotal, customerIdentifier: customerIdentifier ?? null });
+  if (!result.ok) {
+    console.warn("[coupon] rejected", { reason: result.reason });
+    return { error: couponRejectMessage() };
+  }
   return c;
 }
 
@@ -104,12 +149,13 @@ export async function createOrderAction(formData: FormData) {
   const shippingId = formData.get("shipping_method") as string;
   const paymentName = (formData.get("payment_method") as string) || null;
   const transferReceiptUrl = (formData.get("transfer_receipt_url") as string)?.trim() || null;
-  const couponCode = (formData.get("coupon_code") as string)?.trim() || null;
+  const couponCode = normalizeCouponCode(formData.get("coupon_code") as string) || null;
 
-  const items = JSON.parse((formData.get("items") as string) || "[]");
-  const subtotal = parseFloat(formData.get("subtotal") as string);
+  const items = parseCartItems(formData.get("items"));
+  // G6-B / S6: الرقم المرسل لم يعد مصدرًا للخصم ولا للشحن ولا لعتبة الحد الأدنى —
+  // يُستخدم للمقارنة فقط مع ما يحسبه الخادم من `products`/`product_variants`.
+  const submittedSubtotal = Number(formData.get("subtotal"));
   const shippingCost = parseFloat(formData.get("shipping_cost") as string) || 0;
-  const discount = parseFloat(formData.get("discount") as string) || 0;
 
   if (!name) return { error: "الاسم مطلوب" };
 
@@ -128,7 +174,30 @@ export async function createOrderAction(formData: FormData) {
   // رقم الاتصال المعروض لشركة الشحن/OTO يبقى كما أدخله العميل (يُوحَّد فقط
   // للعملاء الجدد) حتى لا يتأثر نظام الشحن برقم الحساب.
   const contactPhone = session ? rawPhone : phone;
-  if (!items || items.length === 0) return { error: "السلة فارغة" };
+  if (!Array.isArray(items) || items.length === 0) return { error: "السلة فارغة" };
+
+  const admin = createAdminClient();
+
+  // G6-B / S6 — مصدر الحقيقة الخادم. يفشل مغلقًا: أي عنصر لا يُسعَّر من
+  // الكتالوج ⇒ لا طلب (لا رجوع إلى رقم العميل أبدًا). لا migration ولا RPC.
+  const pricing = await buildOrderPricing(items, supabaseCatalogLoader(admin));
+  if (!pricing.ok) {
+    console.warn("[checkout] pricing rejected", { reason: pricing.reason });
+    return { error: PRICING_MESSAGES[pricing.reason] };
+  }
+  // `priceSnapshot` (الأسعار على الخادم) متاح في نفس النتيجة لكنه لا يُكتب في
+  // الطلب: جدول orders لا يملك عمودًا له، و`items` المخزَّنة رقم العميل وقد
+  // تم التحقق منه ضمن 1 هللة. حفظ snapshot مستقل يحتاج migration.
+  const { subtotal } = pricing;
+  const submitted = verifySubmittedSubtotal(submittedSubtotal, subtotal);
+  if (!submitted.ok) {
+    console.warn("[checkout] subtotal mismatch", {
+      reason: submitted.reason,
+      submitted: Number.isFinite(submittedSubtotal) ? submittedSubtotal : null,
+      server: subtotal,
+    });
+    return { error: PRICING_MESSAGES[submitted.reason] };
+  }
 
   const supabase = await createClient();
   const storeSettings = await getSettings();
@@ -145,8 +214,7 @@ export async function createOrderAction(formData: FormData) {
         // وإلا يُنشأ الطلب بلا خيار توصيل ولا يُرسل إلى OTO من لوحة الشحن.
         shippingOptionId = optionId;
         try {
-          const supabaseAdmin = createAdminClient();
-          const { data: cfg } = await supabaseAdmin.from("oto_config").select("is_connected, origin_city, origin_country").eq("id", 1).maybeSingle();
+          const { data: cfg } = await admin.from("oto_config").select("is_connected, origin_city, origin_country").eq("id", 1).maybeSingle();
           if ((cfg as any)?.is_connected) {
             const rates = await getOtoRates({
               destinationCity: city || "",
@@ -188,21 +256,26 @@ export async function createOrderAction(formData: FormData) {
 
   if (isFreeShippingEligible(subtotal, storeSettings.free_shipping_threshold)) finalShipping = 0;
 
-  // Validate coupon server-side
+  // Validate coupon server-side (re-checked on submit, not trusted from preview).
+  // The discount is recomputed here from the coupon row; the client's own
+  // discount number is never used.
+  // G6-C: `phone` هو المعرّف المشتق من الخادم (جلسة أو جوال مُطبَّع)، وهو
+  // الذي تُفحص عليه قسيمة الاسترجاع المربوطة — لا رقم يرسله العميل.
   let finalDiscount = 0;
   if (couponCode) {
-    const coupon = await validateCouponAction(couponCode, subtotal);
+    const coupon = await validateCouponAction(couponCode, subtotal, phone);
     if ("error" in coupon) return coupon;
-    finalDiscount = coupon.type === "percent" ? (subtotal * coupon.value) / 100 : coupon.value;
-    finalDiscount = Math.min(finalDiscount, subtotal);
+    finalDiscount = discountForCoupon(coupon, subtotal);
   }
 
   const total = subtotal + finalShipping - finalDiscount;
+  const grossTotal = subtotal + finalShipping;
   const orderNumber = (crypto.getRandomValues(new Uint32Array(1))[0] % 999999) + 1;
 
   // Guard against double-submit: if this customer just placed an identical order
   // within the last 20 seconds, return the existing order instead of creating a duplicate.
-  const { data: latestOrder } = await supabase
+  // G6-B / S3: service role — لم يعد يحتاج `public insert orders` ولا `public select orders`.
+  const { data: latestOrder } = await admin
     .from("orders")
     .select("id, order_number, total, items, created_at")
     .eq("customer_identifier", phone)
@@ -222,7 +295,7 @@ export async function createOrderAction(formData: FormData) {
     }
   }
 
-  const { data: inserted, error } = await supabase
+  const { data: inserted, error } = await admin
     .from("orders")
     .insert({
       customer_name: name,
@@ -238,10 +311,14 @@ export async function createOrderAction(formData: FormData) {
        longitude,
        maps_url: mapsUrl,
       items,
-      total: Math.max(0, total),
+      // G6-C: يُدرَج الطلب أولًا **بقيمة السلة كاملة** ثم تُستبدل القسيمة
+      // وتُحدَّث القيمة بعد نجاح الاستبدال. الترتيب مقصود: لا يوجد في أي
+      // لحظة طلبٌ يحمل خصمًا وقسيمةٌ غير مستهلكة. الإدراج بالقيمة المخفَّضة
+      // ثم محاولة الاستبدال بعده يخلّف طلبًا بخصم لا تسنده قسيمة إن فشل.
+      total: Math.max(0, grossTotal),
       shipping_cost: finalShipping,
-      discount: finalDiscount,
-      coupon_code: couponCode,
+      discount: 0,
+      coupon_code: null,
       shipping_method: shippingName,
       delivery_option_id: shippingOptionId,
       payment_method: paymentName,
@@ -255,7 +332,44 @@ export async function createOrderAction(formData: FormData) {
 
   if (error) return { error: error.message };
 
+  // G6-C — استبدال القسيمة بعد حفظ الطلب لا قبله (لا استهلاك مبكر).
+  // الترتيب: طلب بقيمته كاملة ← استبدال ← تحديث (الإجمالي، الخصم، الكود).
+  //   · فشل الاستبدال        ⇒ الطلب بقيمته كاملة وبلا قسيمة مستهلكة.
+  //   · نجاح الاستبدال وفشل التحديث ⇒ قسيمة مستهلكة بلا خصم مطبَّق: ضرر
+  //     للعميل لا للمتجر، ويُسجَّل للمراجعة. عكسُه (خصم بلا استبدال) هو
+  //     الخلل المالي الحقيقي، ولهذا الترتيب هو المختار.
+  //   · الاستهداف النهائي معروف: RPC واحد يدرج الطلب ويستبدل القسيمة في
+  //     معاملة واحدة — migration-041 مسودة لم تُنفَّذ بعد.
+  if (couponCode && finalDiscount > 0) {
+    const redeemed = await redeemCouponForOrder(couponRedeemStore(admin), {
+      code: couponCode,
+      subtotal,
+      customerIdentifier: phone,
+      now: Date.now(),
+    });
+    const orderId = (inserted as { id: string }).id;
+    if (!redeemed.ok) {
+      // بلا كود ولا PII في السجلّ: السبب الداخلي فقط.
+      console.warn("[coupon] redeem failed — order kept at full price", { reason: redeemed.reason, mode: redeemed.mode });
+    } else {
+      const appliedDiscount = Math.max(0, Math.min(redeemed.discount, finalDiscount));
+      if (Math.abs(redeemed.discount - finalDiscount) > 0.01) {
+        // تباين بين الفحص المسبق والقاعدة: يُسجَّل بلا كود ولا PII.
+        console.warn("[coupon] discount mismatch", { mode: redeemed.mode });
+      }
+      const { error: updateError } = await admin
+        .from("orders")
+        .update({ total: Math.max(0, grossTotal - appliedDiscount), discount: appliedDiscount, coupon_code: couponCode })
+        .eq("id", orderId);
+      if (updateError) {
+        // قسيمة مستهلكة وطلب بقيمته كاملة: يُسجَّل للمراجعة اليدوية.
+        console.warn("[coupon] order total update failed after redeem", { mode: redeemed.mode });
+      }
+    }
+  }
+
   // Notification Engine — order created (non-blocking, never fails checkout)
+  // G6-C: يُبلَّغ بالقيمة النهائية (بعد الخصم) لا بقيمة الإدراج الأولية.
   await emitNotification({
     source: "system",
     externalEventId: `order.created.${inserted.id}`,
@@ -267,7 +381,7 @@ export async function createOrderAction(formData: FormData) {
       customer_name: name,
       customer_phone: contactPhone,
       order_number: orderNumber,
-      order_total: Math.max(0, total),
+      order_total: Math.max(0, grossTotal - (couponCode && finalDiscount > 0 ? finalDiscount : 0)),
     },
   });
 
@@ -285,17 +399,150 @@ export async function createOrderAction(formData: FormData) {
     revalidatePath("/account");
   }
 
-  if (couponCode && finalDiscount > 0) {
-    const admin = createAdminClient();
-    const { data: c } = await admin.from("coupons").select("used_count").eq("code", couponCode).maybeSingle();
-    if (c) {
-      await admin.from("coupons").update({ used_count: (c.used_count ?? 0) + 1 }).eq("code", couponCode);
-    }
-  }
+  // G6-C: الاستبدال تم أعلاه مباشرة بعد الإدراج (انظر الملاحظة هناك). لا
+  // استبدال مكرر هنا ولا تسجيل للكود في السجلّات.
 
   revalidatePath("/admin/orders");
   revalidatePath("/admin/dashboard");
   return { success: true, orderNumber };
+}
+
+/**
+ * JSON.parse كان يرمي استثناءً على حمولة تالفة (500 في مسار الطلب). الآن الفشل
+ * يُعامَل كسلة فارغة فيُرفض الطلب برسالة واضحة بدل 500.
+ */
+function parseCartItems(raw: FormDataEntryValue | null): unknown {
+  if (typeof raw !== "string" || !raw.trim()) return [];
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * G6-B / S6 — جلب كتالوج السلة عبر service role.
+ * `product_variants` و`products` لهما RLS بلا سياسات (service role فقط)، فلا
+ * حاجة لأي public policy لهذا الاستعلام. المعرّفات غير المطابقة لشكل UUID
+ * تُستبعد من الاستعلام عمدًا حتى لا يُنتج PostgREST خطأ 400 يُربك التشخيص؛
+ *عودتها `unknown_product` من التسعير النقي.
+ */
+function supabaseCatalogLoader(admin: ReturnType<typeof createAdminClient>): CatalogLoader {
+  return async ({ productIds, variantIds }) => {
+    const products = productIds.filter(looksLikeUuid);
+    const variants = variantIds.filter(looksLikeUuid);
+
+    const [productResult, variantResult] = await Promise.all([
+      products.length
+        ? admin.from("products").select("id, price, sale_price").in("id", products)
+        : Promise.resolve({ data: [] as CatalogProduct[], error: null }),
+      variants.length
+        ? admin.from("product_variants").select("id, product_id, price, sale_price").in("id", variants)
+        : Promise.resolve({ data: [] as CatalogVariant[], error: null }),
+    ]);
+
+    if (productResult.error) {
+      console.warn("[checkout] catalog products query failed", { code: productResult.error.code });
+    }
+    if (variantResult.error) {
+      console.warn("[checkout] catalog variants query failed", { code: variantResult.error.code });
+    }
+
+    return {
+      products: (productResult.data ?? []) as CatalogProduct[],
+      variants: (variantResult.data ?? []) as CatalogVariant[],
+    };
+  };
+}
+
+/**
+ * Adaptation of the coupon table to CouponUsageStore: readByCode + a
+ * compare-and-set write (`used_count = next` only when the stored value is
+ * still `observed`). The WHERE clause is what makes the read→write pair safe
+ * against a lost update; no new SQL and no migration involved.
+ */
+function couponUsageStore(admin: ReturnType<typeof createAdminClient>): CouponUsageStore {
+  return {
+    async readByCode(code: string) {
+      const { data } = await admin
+        .from("coupons")
+        .select("id, code, usage_limit, used_count")
+        .eq("code", code)
+        .maybeSingle();
+      return (data as Awaited<ReturnType<CouponUsageStore["readByCode"]>>) ?? null;
+    },
+    async compareAndSet(id: string, observedUsedCount: number, nextUsedCount: number) {
+      const { data, error } = await admin
+        .from("coupons")
+        .update({ used_count: nextUsedCount })
+        .eq("id", id)
+        .eq("used_count", observedUsedCount)
+        .select("id");
+      if (error) return false;
+      return Array.isArray(data) && data.length > 0;
+    },
+  };
+}
+
+/**
+ * G6-C — adapter الاستبدال.
+ *
+ * `redeem_coupon` تعمل بمعاملات صريحة وتعيد الصف بعد الزيادة في معاملة واحدة
+ * (SECURITY DEFINER + FOR UPDATE). غيابها (migration لم تُنفَّذ) يُكتشف مرة
+ * واحدة ويُسجَّل كـwarning، ثم يسلك المسار الاحتياطي CAS الموجود أصلًا — مع
+ * موسوم `mode: "cas"` حتى لا يُقرأ كتomic.
+ */
+function couponRedeemStore(admin: ReturnType<typeof createAdminClient>): CouponRedeemStore {
+  let atomic: boolean | null = null;
+  const usage = couponUsageStore(admin);
+  return {
+    async atomicAvailable() {
+      if (atomic !== null) return atomic;
+      const { error } = await admin.rpc("redeem_coupon", {
+        p_code: "__probe__",
+        p_subtotal: 0,
+        p_customer_identifier: "",
+        p_now: new Date(0).toISOString(),
+      });
+      // 404 / PGRST202 = الدالة غير موجودة بعد ⇒ لا atomic.
+      const missing =
+        error === null
+          ? false
+          : [404, "PGRST202", "does not exist", "function_not_found"].some((token) =>
+              String(error.code ?? "").includes(String(token)) ||
+              String(error.message ?? "").includes(String(token)) ||
+              String(error.hint ?? "").includes(String(token))
+            );
+      if (missing) console.warn("[coupon] redeem_coupon unavailable — using CAS fallback");
+      atomic = !missing;
+      return atomic;
+    },
+    async redeemAtomic(input) {
+      const { data, error } = await admin.rpc("redeem_coupon", {
+        p_code: input.code,
+        p_subtotal: input.subtotal,
+        p_customer_identifier: input.customerIdentifier,
+        p_now: new Date(input.now).toISOString(),
+      });
+      if (error) {
+        const reason = error.code === "P0001" ? "invalid" : "unavailable";
+        return { ok: false, reason };
+      }
+      const row = Array.isArray(data) ? (data[0] as AtomicRedeemRow | undefined) : (data as AtomicRedeemRow | null);
+      if (!row) return { ok: false, reason: "missing" };
+      return { ok: true, row };
+    },
+    async readByCode(code) {
+      const { data } = await admin
+        .from("coupons")
+        .select("code, type, value, max_discount, min_order, starts_at, ends_at, usage_limit, used_count, is_active, customer_identifier")
+        .eq("code", code)
+        .maybeSingle();
+      return (data as BoundCouponRecord | null) ?? null;
+    },
+    usage,
+  };
 }
 
 /**
@@ -381,8 +628,9 @@ export async function getCustomerOrderDetailsAction(orderId: string) {
   const session = await getCustomerSession();
   if (!session) return { error: "غير مصرح" };
 
-  const supabase = await createClient();
-  const { data: order } = await supabase
+  // G6-B / S2: service role + تحقق الملكية من الجلسة (كان الرfh العام يجلب أي طلب).
+  const admin = createAdminClient();
+  const { data: order } = await admin
     .from("orders")
     .select("*")
     .eq("id", orderId)
@@ -391,7 +639,6 @@ export async function getCustomerOrderDetailsAction(orderId: string) {
 
   if (!order) return { error: "الطلب غير موجود" };
 
-  const admin = createAdminClient();
   const shipments = await admin
     .from("shipments")
     .select("*")
@@ -415,8 +662,9 @@ export async function cancelOrderAction(orderId: string) {
   const session = await getCustomerSession();
   if (!session) return { error: "غير مصرح" };
 
-  const customerClient = await createClient();
-  const { data: order } = await customerClient
+  // G6-B / S2: القراءة بـservice role مع فلتر الملكية (كتابة الإلغاء كانت دائمًا service role).
+  const admin = createAdminClient();
+  const { data: order } = await admin
     .from("orders")
     .select("id, status")
     .eq("id", orderId)
@@ -428,7 +676,6 @@ export async function cancelOrderAction(orderId: string) {
     return { error: "لا يمكن إلغاء الطلب في هذه المرحلة" };
   }
 
-  const admin = createAdminClient();
   const { error } = await admin.from("orders").update({ status: "cancelled" }).eq("id", orderId);
   if (error) return { error: error.message };
 
